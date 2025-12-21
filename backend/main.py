@@ -8,6 +8,10 @@ from prometheus_client import make_asgi_app
 
 from shared.config.settings import get_settings
 from shared.logging.config import init_logging, get_logger
+from shared.api import api_router
+from shared.middleware.tenant import TenantContextMiddleware
+from shared.middleware.compliance import ComplianceMiddleware
+from shared.middleware.security import SecurityConfig, create_security_middleware_stack
 
 # Initialize logging
 init_logging()
@@ -43,6 +47,16 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Configure security middleware
+security_config = SecurityConfig()
+security_config.enable_rate_limiting = True
+security_config.enable_input_validation = True
+security_config.enable_security_headers = True
+security_config.enable_request_logging = True
+
+# Apply security middleware stack
+app = create_security_middleware_stack(app, security_config)
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -51,6 +65,15 @@ app.add_middleware(
     allow_methods=settings.api.cors_methods,
     allow_headers=settings.api.cors_headers,
 )
+
+# Add tenant context middleware
+app.add_middleware(TenantContextMiddleware)
+
+# Add compliance middleware
+app.add_middleware(ComplianceMiddleware)
+
+# Include API routers
+app.include_router(api_router)
 
 # Add Prometheus metrics endpoint
 metrics_app = make_asgi_app()

@@ -2,7 +2,20 @@
 
 ## Performance Requirements & SLAs
 
-### Production Response Time Targets
+### Multi-Tenant Performance Requirements & SLAs
+
+**Per-Tenant Performance Targets:**
+- **Premium Tenants**: < 100ms API response time, 99.9% uptime
+- **Standard Tenants**: < 200ms API response time, 99.5% uptime  
+- **Free Tenants**: < 500ms API response time, 99% uptime
+
+**Resource Isolation Performance:**
+- **Database Queries**: Automatic tenant_id filtering with < 5ms overhead
+- **Cache Operations**: Tenant-scoped cache keys with < 1ms lookup
+- **Memory Usage**: Per-tenant memory limits with automatic cleanup
+- **CPU Allocation**: Fair scheduling across tenants with priority queuing
+
+**Production Response Time Targets**
 - **API Endpoints**: < 200ms for 95th percentile
 - **Agent Creation**: < 2 seconds end-to-end
 - **Workflow Execution Start**: < 500ms
@@ -43,6 +56,101 @@
 ## Performance Architecture Patterns
 
 ### Caching Strategy Implementation
+
+**Multi-Tenant Caching Architecture:**
+```python
+from functools import wraps
+import asyncio
+from typing import Any, Callable, Optional
+import redis.asyncio as redis
+
+class TenantAwareCache:
+    def __init__(self):
+        self.l1_cache = {}  # In-memory cache per tenant
+        self.l2_cache = redis.Redis(host='redis', decode_responses=True)
+        self.cache_stats = {'hits': 0, 'misses': 0}
+    
+    def get_tenant_cache_key(self, tenant_id: str, key: str) -> str:
+        """Generate tenant-scoped cache key"""
+        return f"tenant:{tenant_id}:{key}"
+    
+    async def get_tenant_scoped(self, tenant_id: str, key: str) -> Optional[Any]:
+        """Get cached value with automatic tenant scoping"""
+        cache_key = self.get_tenant_cache_key(tenant_id, key)
+        
+        # L1 Cache check (tenant-scoped)
+        tenant_l1 = self.l1_cache.get(tenant_id, {})
+        if key in tenant_l1:
+            self.cache_stats['hits'] += 1
+            return tenant_l1[key]
+        
+        # L2 Cache check
+        value = await self.l2_cache.get(cache_key)
+        if value:
+            # Promote to L1 cache
+            if tenant_id not in self.l1_cache:
+                self.l1_cache[tenant_id] = {}
+            self.l1_cache[tenant_id][key] = value
+            self.cache_stats['hits'] += 1
+            return value
+        
+        self.cache_stats['misses'] += 1
+        return None
+    
+    async def set_tenant_scoped(self, tenant_id: str, key: str, value: Any, ttl: int = 300):
+        """Set cached value with tenant scoping"""
+        cache_key = self.get_tenant_cache_key(tenant_id, key)
+        
+        # Set in both layers
+        if tenant_id not in self.l1_cache:
+            self.l1_cache[tenant_id] = {}
+        self.l1_cache[tenant_id][key] = value
+        await self.l2_cache.setex(cache_key, ttl, value)
+    
+    async def invalidate_tenant_cache(self, tenant_id: str):
+        """Invalidate all cache entries for a specific tenant"""
+        # Clear L1 cache for tenant
+        if tenant_id in self.l1_cache:
+            del self.l1_cache[tenant_id]
+        
+        # Clear L2 cache for tenant
+        pattern = f"tenant:{tenant_id}:*"
+        keys = await self.l2_cache.keys(pattern)
+        if keys:
+            await self.l2_cache.delete(*keys)
+
+def tenant_cached(ttl: int = 300, cache_key_func: Optional[Callable] = None):
+    """Decorator for caching function results with tenant scoping"""
+    def decorator(func: Callable):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            # Extract tenant_id from arguments
+            tenant_id = kwargs.get('tenant_id') or (args[0] if args else None)
+            if not tenant_id:
+                raise ValueError("tenant_id required for tenant-scoped caching")
+            
+            cache = TenantAwareCache()
+            
+            if cache_key_func:
+                cache_key = cache_key_func(*args, **kwargs)
+            else:
+                cache_key = f"{func.__name__}:{hash(str(args[1:]) + str(kwargs))}"
+            
+            # Try cache first
+            cached_result = await cache.get_tenant_scoped(tenant_id, cache_key)
+            if cached_result is not None:
+                return cached_result
+            
+            # Execute function and cache result
+            result = await func(*args, **kwargs)
+            await cache.set_tenant_scoped(tenant_id, cache_key, result, ttl)
+            return result
+        
+        return wrapper
+    return decorator
+```
+
+**Caching Strategy Implementation:**
 ```python
 from functools import wraps
 import asyncio

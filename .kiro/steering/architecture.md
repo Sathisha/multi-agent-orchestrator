@@ -180,6 +180,25 @@ const handleAgentCreationError = (error: ApiError): UserFriendlyError => {
 
 ### Scalability Architecture
 
+**Multi-Tenant Scaling Patterns:**
+```python
+# Tenant-aware auto-scaling
+class TenantAwareScaler:
+    def __init__(self):
+        self.tenant_metrics = {}
+        self.scaling_policies = {}
+    
+    async def scale_tenant_resources(self, tenant_id: str, resource_type: str):
+        """Scale resources based on tenant-specific usage patterns"""
+        tenant_usage = await self.get_tenant_usage(tenant_id)
+        scaling_policy = self.scaling_policies.get(tenant_id, self.default_policy)
+        
+        if tenant_usage.exceeds_threshold(scaling_policy.scale_up_threshold):
+            await self.scale_up_tenant_resources(tenant_id, resource_type)
+        elif tenant_usage.below_threshold(scaling_policy.scale_down_threshold):
+            await self.scale_down_tenant_resources(tenant_id, resource_type)
+```
+
 **Horizontal Scaling Patterns:**
 ```yaml
 # Auto-scaling configuration

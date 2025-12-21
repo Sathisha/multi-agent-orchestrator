@@ -59,6 +59,42 @@ class AuthenticationService:
 ```
 
 ### Data Classification & Protection
+
+**Multi-Tenant Data Isolation:**
+```python
+# Multi-tenant data classification system
+class TenantDataClassification(Enum):
+    TENANT_PUBLIC = "tenant_public"      # Visible within tenant
+    TENANT_INTERNAL = "tenant_internal"  # Restricted within tenant
+    TENANT_CONFIDENTIAL = "tenant_confidential"  # Highly restricted within tenant
+    CROSS_TENANT = "cross_tenant"        # System admin only
+
+class TenantDataProtectionService:
+    def __init__(self):
+        self.encryption_keys = {}  # Per-tenant encryption keys
+    
+    async def store_tenant_data(self, tenant_id: str, data: Any, classification: TenantDataClassification) -> str:
+        """Store data with tenant-specific encryption and access controls"""
+        if classification in [TenantDataClassification.TENANT_CONFIDENTIAL]:
+            # Use tenant-specific encryption key
+            tenant_key = await self.get_tenant_encryption_key(tenant_id)
+            encrypted_data = await self.encrypt_data(data, tenant_key)
+            storage_id = await self.store_encrypted(encrypted_data, classification, tenant_id)
+        else:
+            storage_id = await self.store_plaintext(data, classification, tenant_id)
+        
+        await self.audit_tenant_data_access("STORE", storage_id, classification, tenant_id)
+        return storage_id
+    
+    async def enforce_tenant_isolation(self, requesting_tenant_id: str, resource_tenant_id: str):
+        """Ensure tenant can only access their own resources"""
+        if requesting_tenant_id != resource_tenant_id:
+            raise TenantIsolationViolation(
+                f"Tenant {requesting_tenant_id} attempted to access resources of tenant {resource_tenant_id}"
+            )
+```
+
+**Data Classification & Protection:**
 ```python
 # Data classification system
 class DataClassification(Enum):

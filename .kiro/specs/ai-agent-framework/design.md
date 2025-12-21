@@ -15,13 +15,14 @@ The system is built around five core principles:
 
 ### High-Level Architecture
 
-The framework employs a distributed microservices architecture with the following key components:
+The framework employs a distributed microservices architecture with multi-tenant capabilities, providing complete data isolation and tenant-specific customization while maintaining shared infrastructure efficiency. The architecture supports both single-tenant and multi-tenant deployment modes with the following key components:
 
 ```mermaid
 graph TB
     subgraph "Frontend Layer"
         UI[Web UI]
         API[API Gateway]
+        TM[Tenant Middleware]
     end
     
     subgraph "Core Services"
@@ -29,6 +30,7 @@ graph TB
         WO[Workflow Orchestrator]
         TR[Tool Registry]
         MM[Memory Manager]
+        TS[Tenant Service]
     end
     
     subgraph "Security & Governance"
@@ -45,7 +47,7 @@ graph TB
     end
     
     subgraph "Data Layer"
-        DB[(Primary Database)]
+        DB[(Multi-Tenant Database)]
         CACHE[(Redis Cache)]
         LOGS[(Log Store)]
         METRICS[(Metrics Store)]
@@ -58,9 +60,11 @@ graph TB
     end
     
     UI --> API
-    API --> AM
-    API --> WO
-    API --> AUTH
+    API --> TM
+    TM --> AM
+    TM --> WO
+    TM --> AUTH
+    TM --> TS
     
     AM --> AE
     WO --> BPMN
@@ -77,6 +81,7 @@ graph TB
     MM --> CACHE
     AUDIT --> LOGS
     WO --> METRICS
+    TS --> DB
     
     AE --> LLM
     MCP --> TOOLS
@@ -192,6 +197,65 @@ containerization:
 
 **✅ Final Recommendation:**
 Replace Grafana with Apache Superset, and all technology choices will be completely safe for commercial monetization with no licensing restrictions.
+
+### Multi-Tenant Architecture
+
+The AI Agent Framework implements a comprehensive multi-tenant architecture that enables serving multiple organizations from a single deployment while maintaining complete data isolation, security, and customization capabilities.
+
+**Tenant Isolation Strategy:**
+- **Data Isolation**: Row-level security with tenant_id foreign keys on all tenant-scoped resources
+- **Configuration Isolation**: Tenant-specific settings, branding, and feature configurations
+- **Resource Isolation**: Per-tenant resource quotas and usage tracking
+- **Security Isolation**: Tenant-scoped authentication, authorization, and audit trails
+
+**Tenant Context Management:**
+```typescript
+interface TenantContext {
+  tenantId: string
+  subdomain: string
+  branding: TenantBranding
+  subscription: SubscriptionPlan
+  resourceLimits: ResourceQuotas
+  complianceSettings: ComplianceConfig
+}
+
+interface TenantMiddleware {
+  extractTenantContext(request: Request): Promise<TenantContext>
+  validateTenantAccess(user: User, tenant: string): Promise<boolean>
+  enforceTenantIsolation(query: DatabaseQuery): DatabaseQuery
+}
+```
+
+**Multi-Tenant Database Design:**
+- **System Entities**: Global resources managed by system administrators
+- **Tenant Entities**: Resources scoped to specific tenants with automatic filtering
+- **Shared Resources**: Common configurations with tenant-specific overrides
+- **Audit Separation**: Tenant-scoped audit logs with cross-tenant administrative access
+
+**Tenant Discovery Mechanisms:**
+1. **Subdomain Routing**: tenant1.platform.com → tenant context
+2. **Header-Based**: X-Tenant-ID header for API requests
+3. **JWT Claims**: Tenant information embedded in authentication tokens
+4. **URL Path**: /tenant/{tenant-id}/api/... routing pattern
+
+**Resource Management:**
+```typescript
+interface ResourceQuotas {
+  maxAgents: number
+  maxWorkflows: number
+  maxConcurrentExecutions: number
+  storageLimit: number
+  apiCallsPerMonth: number
+  customToolsLimit: number
+}
+
+interface TenantMetrics {
+  currentUsage: ResourceUsage
+  historicalTrends: UsageTrend[]
+  costAnalysis: CostBreakdown
+  performanceMetrics: PerformanceData
+}
+```
 
 **Frontend Layer:**
 - **Web UI**: 
@@ -516,12 +580,86 @@ interface ValidationResult {
 
 ## Data Models
 
+### Multi-Tenant Entities
+
+**Tenant:**
+```typescript
+interface Tenant {
+  id: string
+  name: string
+  subdomain: string
+  status: TenantStatus
+  subscription: SubscriptionPlan
+  resourceLimits: ResourceQuotas
+  branding: TenantBranding
+  complianceSettings: ComplianceConfig
+  createdAt: Date
+  updatedAt: Date
+}
+
+interface TenantBranding {
+  logoUrl?: string
+  primaryColor: string
+  secondaryColor: string
+  customCss?: string
+  faviconUrl?: string
+  companyName: string
+}
+
+interface SubscriptionPlan {
+  planId: string
+  planName: string
+  features: string[]
+  limits: ResourceQuotas
+  billingCycle: 'monthly' | 'yearly'
+  price: number
+  currency: string
+}
+
+interface ResourceQuotas {
+  maxAgents: number
+  maxWorkflows: number
+  maxConcurrentExecutions: number
+  storageLimit: number
+  apiCallsPerMonth: number
+  customToolsLimit: number
+  maxUsers: number
+}
+```
+
+**Tenant User Management:**
+```typescript
+interface TenantUser {
+  id: string
+  tenantId: string
+  userId: string
+  role: TenantRole
+  invitedBy?: string
+  invitedAt?: Date
+  joinedAt?: Date
+  status: 'invited' | 'active' | 'suspended'
+}
+
+interface TenantInvitation {
+  id: string
+  tenantId: string
+  email: string
+  role: TenantRole
+  invitedBy: string
+  invitedAt: Date
+  expiresAt: Date
+  token: string
+  status: 'pending' | 'accepted' | 'expired'
+}
+```
+
 ### Core Entities
 
 **Agent:**
 ```typescript
 interface Agent {
   id: string
+  tenantId: string  // Multi-tenant support
   name: string
   description: string
   type: AgentType
@@ -550,6 +688,7 @@ interface AgentConfig {
 ```typescript
 interface Workflow {
   id: string
+  tenantId: string  // Multi-tenant support
   name: string
   description: string
   bpmnXml: string
@@ -580,8 +719,8 @@ interface User {
   id: string
   username: string
   email: string
-  roles: Role[]
-  permissions: Permission[]
+  globalRoles: Role[]  // System-wide roles
+  tenantMemberships: TenantUser[]  // Tenant-specific roles
   createdAt: Date
   lastLogin: Date
 }
@@ -592,6 +731,7 @@ interface Role {
   description: string
   permissions: Permission[]
   isSystemRole: boolean
+  tenantId?: string  // null for system roles, tenant-specific otherwise
 }
 
 interface Permission {
@@ -599,15 +739,30 @@ interface Permission {
   resource: string
   action: string
   conditions?: Record<string, any>
+  tenantId?: string  // null for system permissions
 }
 ```
 
 ### Database Schema Design
 
 **Primary Database (PostgreSQL):**
-- **agents**: Agent definitions and configurations
-- **workflows**: BPMN workflows and metadata
-- **executions**: Workflow execution history and state
+
+**Multi-Tenant Tables:**
+- **tenants**: Tenant definitions, branding, and subscription information
+- **tenant_users**: Many-to-many relationship between users and tenants with roles
+- **tenant_invitations**: Pending invitations for users to join tenants
+- **resource_quotas**: Per-tenant resource limits and usage tracking
+- **tenant_configurations**: Tenant-specific system configurations
+
+**Tenant-Scoped Tables:**
+- **agents**: Agent definitions and configurations (with tenant_id FK)
+- **workflows**: BPMN workflows and metadata (with tenant_id FK)
+- **executions**: Workflow execution history and state (with tenant_id FK)
+- **memories**: Agent memory storage (with tenant_id FK)
+- **audit_logs**: Tenant-scoped audit trails (with tenant_id FK)
+- **tools**: Custom tool definitions (with tenant_id FK)
+
+**System Tables:**
 - **users**: User accounts and authentication data
 - **roles_permissions**: RBAC configuration
 - **audit_logs**: Comprehensive audit trail
@@ -738,6 +893,18 @@ ed on the prework analysis, I've identified the testable acceptance criteria and
 **Property 24: Observability and Monitoring**
 *For any* system operation, appropriate metrics should be collected, logs should support multiple formats, and distributed tracing should link related operations
 **Validates: Requirements 18.2, 18.3, 18.4**
+
+**Property 25: Complete Tenant Data Isolation**
+*For any* tenant operation, all data queries, agent executions, and resource access should be automatically filtered to the tenant's scope with no cross-tenant data leakage
+**Validates: Requirements 19.2, 20.3**
+
+**Property 26: Tenant Context Consistency**
+*For any* user request, the system should correctly identify tenant context and maintain it consistently across all operations and service calls
+**Validates: Requirements 19.3, 21.1, 21.4**
+
+**Property 27: Resource Quota Enforcement**
+*For any* tenant resource usage, the system should enforce configured quotas and prevent tenants from exceeding their allocated limits
+**Validates: Requirements 19.5**
 
 ## Error Handling
 
