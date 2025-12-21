@@ -1,0 +1,23 @@
+version: '3.8'
+
+# Development overrides for docker-compose.yml
+services:
+  backend:
+    volumes:
+      - ./backend:/app
+      - /app/__pycache__  # Exclude pycache
+      - /app/.pytest_cache  # Exclude pytest cache
+    environment:
+      - API_RELOAD=true
+      - LOG_FORMAT=console
+    command: python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  postgres:
+    environment:
+      - POSTGRES_HOST_AUTH_METHOD=trust  # Development only
+    ports:
+      - "5432:5432"
+
+  redis:
+    ports:
+      - "6379:6379"

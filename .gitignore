@@ -165,6 +165,15 @@ credentials/
 test-results/
 coverage/
 .pytest_cache/
+.hypothesis/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.cache
+nosetests.xml
+pytest.xml
 
 # Production builds
 /backend/dist/
@@ -172,6 +181,64 @@ coverage/
 
 # Docker volumes
 docker-volumes/
+postgres-data/
+redis-data/
+chroma-data/
+
+# Alembic
+/backend/alembic/versions/*.py
+!/backend/alembic/versions/__init__.py
+
+# Monitoring and metrics
+prometheus-data/
+grafana-data/
+superset-data/
+
+# Logs and monitoring
+*.log.*
+logs/
+monitoring/
+metrics/
+
+# Temporary development files
+*.tmp
+*.temp
+.DS_Store
+.vscode/settings.json
+.vscode/launch.json
+
+# AI/ML model files
+*.pkl
+*.joblib
+*.h5
+*.pb
+models/
+checkpoints/
+
+# Vector database files
+*.faiss
+*.index
+vector-store/
+
+# LLM provider cache
+llm-cache/
+.openai_cache/
+.anthropic_cache/
+
+# Agent execution artifacts
+agent-logs/
+execution-traces/
+workflow-state/
+
+# Development databases
+dev.db
+test.db
+*.sqlite-journal
+
+# Backup and migration files
+backup/
+migrations/backup/
+*.sql.bak
 
 # Terraform
 *.tfstate
@@ -179,5 +246,175 @@ docker-volumes/
 .terraform/
 .terraform.lock.hcl
 
-# Kubernetes secrets
+# Kubernetes secrets and configs
 k8s-secrets/
+kubeconfig
+*.kubeconfig
+
+# Deployment packages
+deployment-packages/
+*.tar.gz
+*.zip
+
+# Performance profiling
+*.prof
+*.pstats
+profiling/
+
+# Security scanning results
+security-reports/
+vulnerability-scans/
+
+# Local development overrides
+docker-compose.local.yml
+docker-compose.override.local.yml
+.env.override
+
+# IDE and editor specific
+*.sublime-project
+*.sublime-workspace
+.vscode/
+.idea/
+*.vim
+.netrwhist
+
+# OS specific
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.Trash-*
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# Poetry
+poetry.lock
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# AI Agent Framework specific
+# =========================
+
+# Agent configuration backups
+agent-configs-backup/
+*.agent.bak
+
+# Workflow execution state
+workflow-executions/
+bpmn-state/
+
+# Memory system data
+memory-snapshots/
+conversation-history/
+semantic-cache/
+
+# Tool registry cache
+tool-cache/
+mcp-server-cache/
+
+# Guardrails training data
+guardrails-models/
+content-filter-cache/
+
+# Audit logs (keep structure, ignore data)
+audit-logs/*.log
+audit-logs/archive/
+
+# Performance benchmarks
+benchmarks/results/
+load-test-results/
+
+# Development utilities
+dev-scripts/local/
+*.dev.py
+*.debug.py
+
+# Local configuration overrides
+config/local/
+settings.local.py
+*.local.env
+
+# Temporary agent templates
+templates/temp/
+*.template.tmp
+
+# BPMN designer temp files
+*.bpmn.tmp
+workflow-designer-cache/
+
+# Frontend development
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.nuxt/
+frontend/dist/
+frontend/build/
+
+# Backend development
+backend/__pycache__/
+backend/.pytest_cache/
+backend/htmlcov/
+backend/*.egg-info/
+
+# Shared library cache
+shared/__pycache__/
+
+# Infrastructure development
+infrastructure/terraform/.terraform/
+infrastructure/kubernetes/secrets/
+infrastructure/docker/volumes/
+
+# Documentation builds
+docs/_build/
+docs/.doctrees/
+
+# Monitoring dashboards (local development)
+dashboards/local/
+grafana-dashboards/local/
+
+# SSL certificates (development only)
+certs/dev/
+*.dev.crt
+*.dev.key
+
+# Local database dumps
+*.dump
+*.backup.sql
+db-backups/local/

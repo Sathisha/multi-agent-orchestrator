@@ -47,9 +47,101 @@ ai-agent-framework/
 
 ## 🚀 Getting Started
 
-1. **Review Specifications**: Check `.kiro/specs/ai-agent-framework/` for requirements and design
-2. **Implementation Plan**: See `tasks.md` for the complete implementation roadmap
-3. **Development Setup**: Follow the infrastructure setup in the tasks
+### Prerequisites
+
+- **Docker**: Install Docker Desktop or Docker Engine
+- **Docker Compose**: Included with Docker Desktop, or install separately
+
+### Quick Start
+
+1. **Clone and Setup**:
+   ```bash
+   git clone <repository-url>
+   cd ai-agent-framework
+   ```
+
+2. **Run Setup Script** (Linux/Mac):
+   ```bash
+   ./scripts/docker-setup.sh
+   ```
+
+3. **Manual Setup** (Windows or alternative):
+   ```bash
+   # Copy environment file
+   copy .env.example .env
+   
+   # Build and start services
+   make setup
+   ```
+
+4. **Start Development**:
+   ```bash
+   # Start API server
+   make api
+   
+   # In another terminal, run tests
+   make test
+   ```
+
+5. **Access the Application**:
+   - API: http://localhost:8000
+   - API Documentation: http://localhost:8000/docs
+   - Health Check: http://localhost:8000/health
+
+### Development Commands
+
+```bash
+# Essential commands
+make help          # Show all available commands
+make setup         # Complete setup (build, start, migrate)
+make start         # Start core services (postgres, redis)
+make api           # Start API server with hot reload
+make test          # Run all tests in Docker
+make logs          # View backend service logs
+make shell         # Open shell in backend container
+
+# Code quality
+make format        # Format code with black and isort
+make lint          # Lint code with flake8 and mypy
+make test-coverage # Run tests with coverage report
+
+# Database operations
+make migrate                           # Run migrations
+make migration MESSAGE="description"   # Create new migration
+
+# Service management
+make start-all     # Start all services (including optional)
+make stop          # Stop all services
+make clean         # Clean up containers and volumes
+```
+
+### Docker-First Development
+
+This project uses a **Docker-first development approach**:
+
+- ✅ All development and testing happens in Docker containers
+- ✅ No need to install Python, dependencies, or databases on your host
+- ✅ Consistent environment across all developers and deployment targets
+- ✅ Easy setup and teardown of development environment
+
+### Project Structure
+
+```
+ai-agent-framework/
+├── backend/                        # Python FastAPI services
+│   ├── main.py                     # Main application entry point
+│   ├── requirements.txt            # Python dependencies
+│   ├── alembic/                    # Database migrations
+│   ├── shared/                     # Shared utilities and models
+│   └── tests/                      # Test suite
+├── infrastructure/                 # Docker and deployment configs
+│   └── docker/                     # Docker service configurations
+├── scripts/                        # Development helper scripts
+├── docker-compose.yml              # Main service definitions
+├── docker-compose.override.yml     # Development overrides
+├── Makefile                        # Development commands
+└── .env.example                    # Environment configuration template
+```
 
 ## 📄 License
 
