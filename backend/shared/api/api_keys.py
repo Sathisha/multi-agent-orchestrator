@@ -15,11 +15,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.shared.database import get_database_session
-from backend.shared.services.api_key import APIKeyService
-from backend.shared.api.auth import get_current_user
-from backend.shared.schemas.auth import UserResponse
-from backend.shared.models.api_key import (
+from ..database.connection import get_async_db
+from ..services.api_key import APIKeyService
+from .auth import get_current_user
+from ..schemas.auth import UserResponse
+from ..models.api_key import (
     APIKeyRequest, APIKeyResponse, APIKeyCreateResponse,
     APIKeyUpdateRequest, APIKeyUsageResponse, APIKeyListResponse
 )
@@ -31,7 +31,7 @@ router = APIRouter(prefix="/api/v1/api-keys", tags=["api-keys"])
 async def create_api_key(
     api_key_data: APIKeyRequest,
     current_user: UserResponse = Depends(get_current_user),
-    db: AsyncSession = Depends(get_database_session)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Create a new API key for the current user.
@@ -67,7 +67,7 @@ async def list_api_keys(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     current_user: UserResponse = Depends(get_current_user),
-    db: AsyncSession = Depends(get_database_session)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     List all API keys for the current user.
@@ -92,7 +92,7 @@ async def list_api_keys(
 async def get_api_key(
     api_key_id: UUID,
     current_user: UserResponse = Depends(get_current_user),
-    db: AsyncSession = Depends(get_database_session)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get details of a specific API key.
@@ -122,7 +122,7 @@ async def update_api_key(
     api_key_id: UUID,
     api_key_update: APIKeyUpdateRequest,
     current_user: UserResponse = Depends(get_current_user),
-    db: AsyncSession = Depends(get_database_session)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Update an API key's name, description, or permissions.
@@ -153,7 +153,7 @@ async def update_api_key(
 async def revoke_api_key(
     api_key_id: UUID,
     current_user: UserResponse = Depends(get_current_user),
-    db: AsyncSession = Depends(get_database_session)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Revoke an API key. This action cannot be undone.
@@ -179,7 +179,7 @@ async def revoke_api_key(
 async def get_api_key_usage(
     api_key_id: UUID,
     current_user: UserResponse = Depends(get_current_user),
-    db: AsyncSession = Depends(get_database_session)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get usage statistics for an API key.
@@ -216,7 +216,7 @@ async def list_all_api_keys(
     user_id: Optional[UUID] = Query(None, description="Filter by user ID"),
     tenant_id: Optional[UUID] = Query(None, description="Filter by tenant ID"),
     current_user: UserResponse = Depends(get_current_user),
-    db: AsyncSession = Depends(get_database_session)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     List all API keys in the system (admin only).
@@ -240,7 +240,7 @@ async def list_all_api_keys(
 @router.post("/admin/cleanup", status_code=status.HTTP_200_OK)
 async def cleanup_expired_api_keys(
     current_user: UserResponse = Depends(get_current_user),
-    db: AsyncSession = Depends(get_database_session)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Clean up expired API keys (admin only).

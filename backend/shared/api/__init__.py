@@ -12,7 +12,12 @@ from .api_keys import router as api_keys_router
 from .agent import router as agent_router
 from .agent_templates import router as agent_templates_router
 from .agent_versioning import router as agent_versioning_router
-from .llm_providers import router as llm_providers_router
+from .agent_executor import router as agent_executor_router
+# Temporarily commented out to fix import issues
+# from .llm_providers import router as llm_providers_router
+# Temporarily commented out to fix import issues
+# from .memory import router as memory_router
+from .guardrails import router as guardrails_router
 
 # Create main API router
 api_router = APIRouter()
@@ -25,6 +30,11 @@ api_router.include_router(compliance_router)
 api_router.include_router(agent_router)
 api_router.include_router(agent_templates_router)
 api_router.include_router(agent_versioning_router)
-api_router.include_router(llm_providers_router)
+api_router.include_router(agent_executor_router)
+# Temporarily commented out to fix import issues
+# api_router.include_router(llm_providers_router)
+# Temporarily commented out to fix import issues
+# api_router.include_router(memory_router)
+api_router.include_router(guardrails_router)
 
 __all__ = ["api_router"]

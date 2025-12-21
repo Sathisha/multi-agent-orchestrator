@@ -32,10 +32,23 @@ async def lifespan(app: FastAPI):
         service_name=settings.service_name
     )
     
+    # Start agent lifecycle monitoring
+    from shared.services.agent_executor import lifecycle_manager
+    from shared.services.agent_state_manager import global_state_manager
+    
+    await lifecycle_manager.start_monitoring()
+    await global_state_manager.start_global_monitoring()
+    logger.info("Agent lifecycle monitoring started")
+    
     yield
     
     # Shutdown
     logger.info("Shutting down AI Agent Framework API")
+    
+    # Stop agent lifecycle monitoring
+    await lifecycle_manager.stop_monitoring()
+    await global_state_manager.stop_global_monitoring()
+    logger.info("Agent lifecycle monitoring stopped")
 
 
 # Create FastAPI application

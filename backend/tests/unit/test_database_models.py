@@ -5,7 +5,7 @@ from datetime import datetime
 from uuid import uuid4
 
 from shared.models.user import User, UserStatus, AuthProvider
-from shared.models.rbac import Role, Permission, ResourceType, ActionType, PermissionEffect
+from shared.models.rbac import Role, Permission
 from shared.models.agent import Agent, AgentType, AgentStatus
 from shared.models.workflow import Workflow, WorkflowStatus, WorkflowExecution, ExecutionStatus
 from shared.models.audit import AuditLog, AuditEventType, AuditSeverity, AuditOutcome
@@ -53,15 +53,13 @@ class TestDatabaseModels:
             permission = Permission(
                 name=f"agent:create:{unique_id}",
                 description="Create agents",
-                resource_type=ResourceType.AGENT,
-                action=ActionType.CREATE,
-                effect=PermissionEffect.ALLOW
+                resource="agent",
+                action="create"
             )
             
             # Create role
             role = Role(
                 name=f"developer_{unique_id}",
-                display_name=f"Developer {unique_id}",
                 description="Developer role with agent creation permissions"
             )
             

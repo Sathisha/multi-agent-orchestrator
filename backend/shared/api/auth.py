@@ -31,7 +31,7 @@ security = HTTPBearer()
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register_user(
     user_data: UserRegister,
-    db: AsyncSession = Depends(get_database_session)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Register a new user.
@@ -78,7 +78,7 @@ async def register_user(
 @router.post("/login", response_model=TokenResponse)
 async def login_user(
     user_data: UserLogin,
-    db: AsyncSession = Depends(get_database_session)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Authenticate user and return access tokens.
@@ -111,7 +111,7 @@ async def login_user(
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(
     refresh_token: str,
-    db: AsyncSession = Depends(get_database_session)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Refresh access token using refresh token.
@@ -139,7 +139,7 @@ async def refresh_token(
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: AsyncSession = Depends(get_database_session)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     FastAPI dependency to get current authenticated user.
@@ -202,7 +202,7 @@ async def get_current_user_profile(
 async def update_user_profile(
     user_update: UserUpdate,
     current_user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_database_session)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Update current user profile information.
@@ -228,7 +228,7 @@ async def update_user_profile(
 async def change_password(
     password_data: PasswordChange,
     current_user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_database_session)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Change user password.
@@ -255,7 +255,7 @@ async def change_password(
 @router.post("/reset-password")
 async def reset_password(
     password_data: PasswordReset,
-    db: AsyncSession = Depends(get_database_session)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Reset user password (admin function).
@@ -299,7 +299,7 @@ async def list_users(
     skip: int = 0,
     limit: int = 100,
     current_user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_database_session)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     List all users (admin only).
@@ -327,7 +327,7 @@ async def list_users(
 async def get_user(
     user_id: UUID,
     current_user = Depends(get_current_user),
-    db: AsyncSession = Depends(get_database_session)
+    db: AsyncSession = Depends(get_async_db)
 ):
     """
     Get user by ID (admin only).
@@ -351,3 +351,9 @@ async def get_user(
         )
     
     return UserResponse.from_orm(user)
+
+
+# Temporary compatibility function for testing
+def require_tenant_authentication():
+    """Temporary function for compatibility."""
+    return None

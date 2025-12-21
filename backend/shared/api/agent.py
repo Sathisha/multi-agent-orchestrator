@@ -5,12 +5,13 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, Field
 
-from ..database.connection import get_database_session
+from ..database.connection import get_async_db
 from ..services.agent import AgentService, AgentDeploymentService, AgentExecutionService, AgentMemoryService
 from ..middleware.tenant import (
+    get_tenant_context,
+    get_tenant_aware_session,
     get_tenant_context_dependency,
-    require_tenant_context_dependency,
-    get_tenant_aware_session
+    require_tenant_context_dependency
 )
 from ..api.auth import require_tenant_authentication
 from ..models.tenant import TenantContext
@@ -26,7 +27,7 @@ class AgentCreateRequest(BaseModel):
     type: AgentType = AgentType.CONVERSATIONAL
     config: Dict[str, Any] = Field(default_factory=dict)
     system_prompt: Optional[str] = None
-    model_config: Optional[Dict[str, Any]] = None
+    llm_config: Optional[Dict[str, Any]] = None
     available_tools: Optional[List[str]] = None
     capabilities: Optional[List[str]] = None
     tags: Optional[List[str]] = None
@@ -37,7 +38,7 @@ class AgentUpdateRequest(BaseModel):
     description: Optional[str] = None
     config: Optional[Dict[str, Any]] = None
     system_prompt: Optional[str] = None
-    model_config: Optional[Dict[str, Any]] = None
+    llm_config: Optional[Dict[str, Any]] = None
     available_tools: Optional[List[str]] = None
     capabilities: Optional[List[str]] = None
     tags: Optional[List[str]] = None
@@ -53,7 +54,7 @@ class AgentResponse(BaseModel):
     version: str
     config: Dict[str, Any]
     system_prompt: Optional[str]
-    model_config: Optional[Dict[str, Any]]
+    llm_config: Optional[Dict[str, Any]]
     available_tools: Optional[List[str]]
     capabilities: Optional[List[str]]
     tags: Optional[List[str]]

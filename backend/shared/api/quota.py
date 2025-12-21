@@ -5,7 +5,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
 
-from ..database import get_database_session
+from ..database import get_async_db
 from ..middleware.tenant import get_tenant_context, TenantContext
 from ..services.quota import ResourceQuotaService, ResourceType, QuotaViolationException
 from ..services.billing import BillingService, ResourceMonitoringService
@@ -48,7 +48,7 @@ class BillingChargesResponse(BaseModel):
 @router.get("/usage", response_model=UsageSummaryResponse)
 async def get_usage_summary(
     tenant_context: TenantContext = Depends(get_tenant_context),
-    session: AsyncSession = Depends(get_database_session)
+    session: AsyncSession = Depends(get_async_db)
 ):
     """Get comprehensive usage summary for the tenant"""
     try:
@@ -63,7 +63,7 @@ async def get_usage_summary(
 async def get_quota_warnings(
     threshold: float = Query(0.8, ge=0.0, le=1.0, description="Warning threshold (0.0-1.0)"),
     tenant_context: TenantContext = Depends(get_tenant_context),
-    session: AsyncSession = Depends(get_database_session)
+    session: AsyncSession = Depends(get_async_db)
 ):
     """Get resources approaching their quota limits"""
     try:
@@ -79,7 +79,7 @@ async def check_resource_quota(
     resource_type: ResourceType,
     requested_amount: int = Query(1, ge=1, description="Amount of resource to check"),
     tenant_context: TenantContext = Depends(get_tenant_context),
-    session: AsyncSession = Depends(get_database_session)
+    session: AsyncSession = Depends(get_async_db)
 ):
     """Check if tenant can use additional resources"""
     try:
@@ -105,7 +105,7 @@ async def check_resource_quota(
 async def update_quotas(
     request: QuotaUpdateRequest,
     tenant_context: TenantContext = Depends(get_tenant_context),
-    session: AsyncSession = Depends(get_database_session)
+    session: AsyncSession = Depends(get_async_db)
 ):
     """Update tenant resource quotas (admin only)"""
     try:
@@ -131,7 +131,7 @@ async def get_billing_charges(
     start_date: Optional[datetime] = Query(None, description="Start date for billing period"),
     end_date: Optional[datetime] = Query(None, description="End date for billing period"),
     tenant_context: TenantContext = Depends(get_tenant_context),
-    session: AsyncSession = Depends(get_database_session)
+    session: AsyncSession = Depends(get_async_db)
 ):
     """Get billing charges for a specific period"""
     try:
@@ -153,7 +153,7 @@ async def generate_invoice(
     start_date: datetime,
     end_date: datetime,
     tenant_context: TenantContext = Depends(get_tenant_context),
-    session: AsyncSession = Depends(get_database_session)
+    session: AsyncSession = Depends(get_async_db)
 ):
     """Generate an invoice for the specified billing period"""
     try:
@@ -168,7 +168,7 @@ async def generate_invoice(
 async def get_usage_forecast(
     forecast_days: int = Query(30, ge=1, le=365, description="Number of days to forecast"),
     tenant_context: TenantContext = Depends(get_tenant_context),
-    session: AsyncSession = Depends(get_database_session)
+    session: AsyncSession = Depends(get_async_db)
 ):
     """Get usage forecast based on historical data"""
     try:
@@ -182,7 +182,7 @@ async def get_usage_forecast(
 @router.get("/billing/alerts")
 async def get_billing_alerts(
     tenant_context: TenantContext = Depends(get_tenant_context),
-    session: AsyncSession = Depends(get_database_session)
+    session: AsyncSession = Depends(get_async_db)
 ):
     """Get billing-related alerts for the tenant"""
     try:
@@ -196,7 +196,7 @@ async def get_billing_alerts(
 @router.post("/monitoring/run")
 async def run_monitoring_cycle(
     tenant_context: TenantContext = Depends(get_tenant_context),
-    session: AsyncSession = Depends(get_database_session)
+    session: AsyncSession = Depends(get_async_db)
 ):
     """Run a monitoring cycle to check quotas and billing"""
     try:
@@ -211,7 +211,7 @@ async def run_monitoring_cycle(
 async def get_current_usage(
     resource_type: ResourceType,
     tenant_context: TenantContext = Depends(get_tenant_context),
-    session: AsyncSession = Depends(get_database_session)
+    session: AsyncSession = Depends(get_async_db)
 ):
     """Get current usage for a specific resource type"""
     try:

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, Field
 
-from ..database.connection import get_database_session
+from ..database.connection import get_async_db
 from ..services.tenant import TenantService, TenantInvitationService, TenantUserService
 from ..services.quota import ResourceQuotaService
 from ..services.analytics import TenantAnalyticsService, AnalyticsTimeframe
@@ -111,7 +111,7 @@ class QuotaUpdateRequest(BaseModel):
 @router.post("/", response_model=TenantResponse, status_code=status.HTTP_201_CREATED)
 async def create_tenant(
     request: TenantCreateRequest,
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
 ):
     """Create a new tenant (system admin only)"""
@@ -137,7 +137,7 @@ async def list_tenants(
     status_filter: Optional[str] = None,
     limit: int = 100,
     offset: int = 0,
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
 ):
     """List all tenants (system admin only)"""
@@ -155,7 +155,7 @@ async def list_tenants(
 @router.get("/{tenant_id}", response_model=TenantResponse)
 async def get_tenant(
     tenant_id: UUID,
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
 ):
     """Get tenant by ID"""
@@ -172,7 +172,7 @@ async def get_tenant(
 async def update_tenant(
     tenant_id: UUID,
     request: TenantUpdateRequest,
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
 ):
     """Update tenant"""
@@ -196,7 +196,7 @@ async def update_tenant(
 @router.post("/{tenant_id}/activate")
 async def activate_tenant(
     tenant_id: UUID,
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
 ):
     """Activate tenant"""
@@ -212,7 +212,7 @@ async def activate_tenant(
 @router.post("/{tenant_id}/suspend")
 async def suspend_tenant(
     tenant_id: UUID,
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
 ):
     """Suspend tenant"""
@@ -230,7 +230,7 @@ async def suspend_tenant(
 async def create_invitation(
     tenant_id: UUID,
     request: TenantInvitationRequest,
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
 ):
     """Create tenant invitation"""
@@ -251,7 +251,7 @@ async def create_invitation(
 async def list_invitations(
     tenant_id: UUID,
     status_filter: Optional[str] = None,
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
 ):
     """List tenant invitations"""
@@ -264,7 +264,7 @@ async def list_invitations(
 @router.post("/invitations/{invitation_id}/accept")
 async def accept_invitation(
     invitation_id: UUID,
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
 ):
     """Accept tenant invitation"""
@@ -294,7 +294,7 @@ async def accept_invitation(
 async def list_tenant_users(
     tenant_id: UUID,
     status_filter: Optional[str] = None,
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
 ):
     """List tenant users"""
@@ -308,7 +308,7 @@ async def list_tenant_users(
 async def remove_tenant_user(
     tenant_id: UUID,
     user_id: UUID,
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
 ):
     """Remove user from tenant"""
@@ -325,7 +325,7 @@ async def remove_tenant_user(
 @router.get("/{tenant_id}/quotas", response_model=ResourceQuotaResponse)
 async def get_tenant_quotas(
     tenant_id: UUID,
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
 ):
     """Get tenant resource quotas"""
@@ -339,7 +339,7 @@ async def get_tenant_quotas(
 async def update_tenant_quotas(
     tenant_id: UUID,
     request: QuotaUpdateRequest,
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
 ):
     """Update tenant resource quotas"""
@@ -362,7 +362,7 @@ async def update_tenant_quotas(
 @router.get("/{tenant_id}/usage", response_model=ResourceUsageResponse)
 async def get_tenant_usage(
     tenant_id: UUID,
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
 ):
     """Get tenant resource usage"""
@@ -376,7 +376,7 @@ async def get_tenant_usage(
 async def get_usage_warnings(
     tenant_id: UUID,
     threshold: float = 0.8,
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
 ):
     """Get usage warnings for resources approaching limits"""
@@ -431,7 +431,7 @@ async def get_current_tenant_quotas(
 @router.get("/{tenant_id}/analytics/overview")
 async def get_tenant_analytics_overview(
     tenant_id: UUID,
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
 ):
     """Get tenant analytics overview"""
@@ -444,7 +444,7 @@ async def get_tenant_analytics_overview(
 async def get_tenant_usage_analytics(
     tenant_id: UUID,
     timeframe: AnalyticsTimeframe = AnalyticsTimeframe.LAST_30_DAYS,
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
 ):
     """Get detailed tenant usage analytics"""
@@ -457,7 +457,7 @@ async def get_tenant_usage_analytics(
 async def get_tenant_daily_activity(
     tenant_id: UUID,
     timeframe: AnalyticsTimeframe = AnalyticsTimeframe.LAST_30_DAYS,
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
 ):
     """Get tenant daily activity breakdown"""
@@ -470,7 +470,7 @@ async def get_tenant_daily_activity(
 async def get_tenant_error_analytics(
     tenant_id: UUID,
     timeframe: AnalyticsTimeframe = AnalyticsTimeframe.LAST_30_DAYS,
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
 ):
     """Get tenant error analytics and patterns"""
@@ -483,7 +483,7 @@ async def get_tenant_error_analytics(
 async def get_tenant_user_activity(
     tenant_id: UUID,
     timeframe: AnalyticsTimeframe = AnalyticsTimeframe.LAST_30_DAYS,
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
 ):
     """Get tenant user activity analytics"""
@@ -496,7 +496,7 @@ async def get_tenant_user_activity(
 async def generate_tenant_report(
     tenant_id: UUID,
     timeframe: AnalyticsTimeframe = AnalyticsTimeframe.LAST_30_DAYS,
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
 ):
     """Generate comprehensive tenant report"""

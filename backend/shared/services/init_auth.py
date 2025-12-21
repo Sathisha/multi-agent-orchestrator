@@ -11,9 +11,9 @@ from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.shared.services.auth import AuthService
-from backend.shared.services.rbac import RBACService, StandardPermissions, StandardRoles
-from backend.shared.models.rbac import Permission, Role
+from .auth import AuthService
+from .rbac import RBACService, StandardPermissions, StandardRoles
+from ..models.rbac import Permission, Role
 
 logger = logging.getLogger(__name__)
 

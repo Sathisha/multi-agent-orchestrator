@@ -1,0 +1,58 @@
+# Agent Executor Service Configuration
+version: '3.8'
+
+services:
+  # Agent Executor Service
+  agent-executor:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.agent-executor
+    container_name: ai-agent-framework-executor
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/ai_agent_framework
+      - DATABASE_ASYNC_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/ai_agent_framework
+      - REDIS_URL=redis://redis:6379/0
+      - CHROMA_DB_PATH=/app/data/chroma
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - LOG_LEVEL=INFO
+      - EXECUTOR_MAX_CONCURRENT=50
+      - EXECUTOR_DEFAULT_TIMEOUT=300
+      - EXECUTOR_CLEANUP_INTERVAL=1800
+    ports:
+      - "8001:8000"  # Different port to avoid conflict with main backend
+    volumes:
+      - ./backend:/app
+      - agent_executor_data:/app/data
+      - /app/__pycache__  # Exclude pycache from volume mount
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    networks:
+      - ai-agent-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/agent-executor/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  agent_executor_data:
+
+networks:
+  ai-agent-network:
+    external: true

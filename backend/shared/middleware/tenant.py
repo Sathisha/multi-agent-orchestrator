@@ -14,6 +14,12 @@ from starlette.middleware.base import BaseHTTPMiddleware
 logger = logging.getLogger(__name__)
 
 
+# Simple TenantContext class for compatibility
+class TenantContext:
+    def __init__(self, tenant_id: str = None):
+        self.tenant_id = tenant_id
+
+
 class TenantContextMiddleware(BaseHTTPMiddleware):
     """Basic tenant context middleware framework."""
     
@@ -106,3 +112,21 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
 def get_tenant_context(request: Request) -> Optional[str]:
     """Get basic tenant context from request state."""
     return getattr(request.state, 'tenant_id', None)
+
+
+# Temporary compatibility functions for testing
+async def get_tenant_aware_session():
+    """Temporary function for compatibility - returns basic session."""
+    from ..database.connection import get_async_db
+    async for session in get_async_db():
+        yield session
+
+
+def get_tenant_context_dependency():
+    """Temporary function for compatibility."""
+    return None
+
+
+def require_tenant_context_dependency():
+    """Temporary function for compatibility."""
+    return None

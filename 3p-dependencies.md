@@ -2,7 +2,7 @@
 
 This document tracks all third-party libraries, frameworks, and Docker images used in the AI Agent Framework project.
 
-**Last Updated:** December 21, 2025
+**Last Updated:** December 21, 2025 (Updated with vector database and embeddings dependencies)
 
 ## Docker Images
 
@@ -43,11 +43,6 @@ This document tracks all third-party libraries, frameworks, and Docker images us
 | structlog | 23.2.0 | backend/requirements.txt | Structured logging | Active | MIT | Enhanced logging |
 | prometheus-client | 0.19.0 | backend/requirements.txt | Prometheus metrics | Active | Apache-2.0 | Metrics collection |
 | python-dotenv | 1.0.0 | backend/requirements.txt | Environment variables | Active | BSD-3-Clause | .env file support |
-| openai | 1.3.7 | backend/requirements.txt | OpenAI API client | Active | MIT | Official OpenAI Python client |
-| anthropic | 0.7.8 | backend/requirements.txt | Anthropic API client | Active | MIT | Official Anthropic Python client |
-| ollama | 0.1.7 | backend/requirements.txt | Ollama API client | Active | MIT | Local LLM server integration |
-| tiktoken | 0.5.2 | backend/requirements.txt | Token counting for OpenAI models | Active | MIT | OpenAI tokenizer library |
-| tenacity | 8.2.3 | backend/requirements.txt | Retry library with backoff | Active | Apache-2.0 | Resilient API calls and error handling |
 
 ## Development Dependencies (Backend)
 
@@ -71,6 +66,9 @@ This document tracks all third-party libraries, frameworks, and Docker images us
 | ollama | 0.1.7 | backend/requirements.txt | Ollama API client | Active | MIT | Local LLM server integration for self-hosted models |
 | tiktoken | 0.5.2 | backend/requirements.txt | Token counting for OpenAI models | Active | MIT | OpenAI tokenizer library for accurate cost estimation |
 | tenacity | 8.2.3 | backend/requirements.txt | Retry library with backoff | Active | Apache-2.0 | Resilient API calls and error handling for LLM providers |
+| chromadb | 0.4.18 | backend/requirements.txt | Vector database for embeddings | Active | Apache-2.0 | Local vector database for semantic memory and RAG |
+| sentence-transformers | 2.2.2 | backend/requirements.txt | Text embeddings generation | Active | Apache-2.0 | Pre-trained models for semantic similarity and search |
+| numpy | 1.24.4 | backend/requirements.txt | Numerical computing for ML | Active | BSD-3-Clause | Core dependency for embeddings and vector operations |
 
 ## Infrastructure Configuration
 
@@ -88,6 +86,9 @@ This document tracks all third-party libraries, frameworks, and Docker images us
 - **OpenAI, Anthropic, Ollama**: API keys and credentials must be securely managed
 - **tiktoken**: Used for token counting - ensure input sanitization
 - **tenacity**: Retry mechanisms should include rate limiting to prevent abuse
+- **chromadb**: Vector database should be secured with proper access controls
+- **sentence-transformers**: Model files should be verified for integrity
+- **numpy**: Core numerical library - keep updated for security patches
 
 ### EOL Monitoring
 - **PostgreSQL 15**: EOL November 2027 - Plan migration to newer version
@@ -125,3 +126,6 @@ This document tracks all third-party libraries, frameworks, and Docker images us
 8. Token counting with tiktoken ensures accurate cost estimation for OpenAI models
 9. Tenacity library provides resilient retry mechanisms with exponential backoff for API calls
 10. All LLM provider credentials should be stored in HashiCorp Vault or similar secret management system
+11. ChromaDB provides local vector database capabilities for semantic memory and RAG applications
+12. Sentence Transformers enables local embeddings generation without external API dependencies
+13. NumPy provides essential numerical computing foundation for ML and vector operations

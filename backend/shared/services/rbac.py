@@ -19,7 +19,8 @@ from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from ..models.user import User, Role, Permission, UserRole
+from ..models.user import User
+from ..models.rbac import Role, Permission, user_roles
 
 logger = logging.getLogger(__name__)
 
@@ -148,55 +149,46 @@ class RBACService:
         user_id: UUID,
         role_id: UUID,
         assigned_by: Optional[UUID] = None
-    ) -> UserRole:
+    ) -> bool:
         """Assign a role to a user."""
-        # Check if assignment already exists
-        existing_assignment = await self.session.scalar(
-            select(UserRole).where(
-                and_(
-                    UserRole.user_id == user_id,
-                    UserRole.role_id == role_id,
-                    UserRole.is_active == True
-                )
-            )
-        )
+        # Get the user and role
+        user = await self.session.get(User, user_id)
+        if not user:
+            raise ValueError("User not found")
         
-        if existing_assignment:
+        role = await self.session.get(Role, role_id)
+        if not role:
+            raise ValueError("Role not found")
+        
+        # Check if assignment already exists
+        if role in user.roles:
             raise ValueError("User already has this role assigned")
         
-        user_role = UserRole(
-            id=uuid4(),
-            user_id=user_id,
-            role_id=role_id,
-            assigned_by=assigned_by,
-            assigned_at=datetime.utcnow(),
-            is_active=True
-        )
-        
-        self.session.add(user_role)
+        # Add the role to the user
+        user.roles.append(role)
         await self.session.commit()
-        await self.session.refresh(user_role)
         
         logger.info(f"Assigned role {role_id} to user {user_id}")
-        return user_role
+        return True
     
     async def remove_role_from_user(self, user_id: UUID, role_id: UUID) -> bool:
         """Remove a role from a user."""
-        user_role = await self.session.scalar(
-            select(UserRole).where(
-                and_(
-                    UserRole.user_id == user_id,
-                    UserRole.role_id == role_id,
-                    UserRole.is_active == True
-                )
-            )
-        )
-        
-        if not user_role:
+        # Get the user
+        user = await self.session.get(User, user_id, options=[selectinload(User.roles)])
+        if not user:
             return False
         
-        user_role.is_active = False
-        user_role.removed_at = datetime.utcnow()
+        # Find and remove the role
+        role_to_remove = None
+        for role in user.roles:
+            if role.id == role_id:
+                role_to_remove = role
+                break
+        
+        if not role_to_remove:
+            return False
+        
+        user.roles.remove(role_to_remove)
         await self.session.commit()
         
         logger.info(f"Removed role {role_id} from user {user_id}")
@@ -204,16 +196,16 @@ class RBACService:
     
     async def get_user_roles(self, user_id: UUID) -> List[Role]:
         """Get all active roles for a user."""
-        query = select(Role).join(UserRole).where(
-            and_(
-                UserRole.user_id == user_id,
-                UserRole.is_active == True,
-                Role.is_deleted == False
-            )
-        ).options(selectinload(Role.permissions))
+        user = await self.session.get(
+            User, 
+            user_id, 
+            options=[selectinload(User.roles).selectinload(Role.permissions)]
+        )
         
-        result = await self.session.execute(query)
-        return result.scalars().all()
+        if not user:
+            return []
+        
+        return [role for role in user.roles if not role.is_deleted]
     
     async def get_user_permissions(self, user_id: UUID) -> Set[str]:
         """Get all permissions for a user through their roles."""

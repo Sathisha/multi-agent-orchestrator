@@ -135,8 +135,8 @@ class ComplianceMiddleware(BaseHTTPMiddleware):
             
             # For demonstration, we'll create a service instance
             # In production, this would be injected via dependency
-            from ..database import get_database_session
-            async with get_database_session() as session:
+            from ..database import get_async_db
+            async with get_async_db() as session:
                 residency_service = DataResidencyService(session, tenant_id)
                 
                 # Validate data residency
@@ -269,8 +269,8 @@ class DataRetentionMiddleware(BaseHTTPMiddleware):
     async def _check_expired_data(self, tenant_id: str):
         """Check for expired data and optionally clean up"""
         try:
-            from ..database import get_database_session
-            async with get_database_session() as session:
+            from ..database import get_async_db
+            async with get_async_db() as session:
                 retention_service = DataRetentionService(session, tenant_id)
                 expired_data = await retention_service.identify_expired_data()
                 
@@ -303,8 +303,8 @@ def enforce_data_residency(
             
             if tenant_id:
                 try:
-                    from ..database import get_database_session
-                    async with get_database_session() as session:
+                    from ..database import get_async_db
+                    async with get_async_db() as session:
                         residency_service = DataResidencyService(session, tenant_id)
                         
                         target_region = region or DataRegion.US_EAST

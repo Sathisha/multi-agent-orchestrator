@@ -57,3 +57,8 @@ ollama==0.1.7
 # Additional utilities for LLM integration
 tiktoken==0.5.2
 tenacity==8.2.3
+
+# Vector database and embeddings for memory management
+chromadb==0.4.18
+sentence-transformers==2.2.2
+numpy==1.24.4

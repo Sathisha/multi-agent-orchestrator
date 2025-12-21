@@ -55,7 +55,7 @@ class AgentVersioningService(BaseService):
             version=version,
             parent_agent_id=current_agent.id,
             system_prompt=current_agent.system_prompt,
-            model_config=current_agent.model_config.copy() if current_agent.model_config else {},
+            llm_config=current_agent.llm_config.copy() if current_agent.llm_config else {},
             available_tools=current_agent.available_tools.copy() if current_agent.available_tools else [],
             capabilities=current_agent.capabilities.copy() if current_agent.capabilities else [],
             tags=current_agent.tags.copy() if current_agent.tags else [],
@@ -164,7 +164,7 @@ class AgentVersioningService(BaseService):
         rollback_changes = {
             'config': target_agent.config,
             'system_prompt': target_agent.system_prompt,
-            'model_config': target_agent.model_config,
+            'llm_config': target_agent.llm_config,
             'available_tools': target_agent.available_tools,
             'capabilities': target_agent.capabilities,
             'tags': target_agent.tags,
@@ -226,10 +226,10 @@ class AgentVersioningService(BaseService):
             }
         
         # Compare model config
-        if agent1.model_config != agent2.model_config:
-            differences['model_config'] = {
-                'version1': agent1.model_config,
-                'version2': agent2.model_config
+        if agent1.llm_config != agent2.llm_config:
+            differences['llm_config'] = {
+                'version1': agent1.llm_config,
+                'version2': agent2.llm_config
             }
         
         # Compare tools

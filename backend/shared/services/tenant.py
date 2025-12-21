@@ -305,7 +305,7 @@ class TenantMiddleware:
             return None
         
         # Get tenant context
-        async with get_database_session() as session:
+        async with get_async_db() as session:
             service = TenantService(session)
             tenant = await service.get_tenant_by_slug(tenant_slug)
             

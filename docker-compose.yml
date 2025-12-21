@@ -90,6 +90,7 @@ services:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/ai_agent_framework
       - DATABASE_ASYNC_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/ai_agent_framework
       - REDIS_URL=redis://redis:6379/0
+      - CHROMA_DB_PATH=/app/data/chroma
       - ENVIRONMENT=development
       - DEBUG=true
       - LOG_LEVEL=INFO
@@ -97,6 +98,7 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
+      - chroma_data:/app/data/chroma
       - /app/__pycache__  # Exclude pycache from volume mount
     depends_on:
       postgres:
@@ -106,6 +108,19 @@ services:
     networks:
       - ai-agent-network
     command: python main.py
+
+  # Ollama for local LLM models
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ai-agent-framework-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - ai-agent-network
+    # Pull a small model for testing
+    entrypoint: ["/bin/bash", "-c", "ollama serve & sleep 10 && ollama pull llama2:7b-chat && wait"]
 
   # Prometheus Monitoring
   prometheus:
@@ -129,6 +144,8 @@ volumes:
   postgres_data:
   redis_data:
   prometheus_data:
+  chroma_data:
+  ollama_data:
 
 networks:
   ai-agent-network:
