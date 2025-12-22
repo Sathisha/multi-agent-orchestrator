@@ -7,16 +7,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import make_asgi_app
 
 from shared.config.settings import get_settings
-from shared.logging.config import init_logging, get_logger
+from shared.logging.structured_logging import setup_structured_logging, get_logger
+from shared.tracing.distributed_tracing import setup_tracing, instrument_app, TracingMiddleware
 from shared.api import api_router
 from shared.middleware.tenant import TenantContextMiddleware
 from shared.middleware.compliance import ComplianceMiddleware
 from shared.middleware.audit import AuditMiddleware
 from shared.middleware.security import SecurityConfig, create_security_middleware_stack
+from shared.services.monitoring import monitoring_service
 
-# Initialize logging
-init_logging()
+# Initialize structured logging
+setup_structured_logging()
 logger = get_logger(__name__)
+
+# Initialize distributed tracing
+tracer = setup_tracing()
 
 # Get settings
 settings = get_settings()
@@ -33,6 +38,10 @@ async def lifespan(app: FastAPI):
         service_name=settings.service_name
     )
     
+    # Start monitoring service
+    await monitoring_service.start()
+    logger.info("Monitoring service started")
+    
     # Start agent lifecycle monitoring
     from shared.services.agent_executor import lifecycle_manager
     from shared.services.agent_state_manager import global_state_manager
@@ -45,6 +54,10 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("Shutting down AI Agent Framework API")
+    
+    # Stop monitoring service
+    await monitoring_service.stop()
+    logger.info("Monitoring service stopped")
     
     # Stop agent lifecycle monitoring
     await lifecycle_manager.stop_monitoring()
@@ -60,6 +73,12 @@ app = FastAPI(
     debug=settings.debug,
     lifespan=lifespan,
 )
+
+# Instrument application with tracing
+instrument_app(app)
+
+# Add tracing middleware
+app.add_middleware(TracingMiddleware)
 
 # Configure security middleware
 security_config = SecurityConfig()
@@ -92,9 +111,17 @@ app.add_middleware(ComplianceMiddleware)
 # Include API routers
 app.include_router(api_router)
 
-# Add Prometheus metrics endpoint
-metrics_app = make_asgi_app()
-app.mount("/metrics", metrics_app)
+# Add monitoring endpoints
+from shared.api.monitoring import router as monitoring_router
+app.include_router(monitoring_router)
+
+# Add Prometheus metrics endpoint (use monitoring service metrics)
+@app.get("/metrics")
+async def get_prometheus_metrics():
+    """Get Prometheus metrics"""
+    from fastapi import Response
+    metrics_data = monitoring_service.get_metrics_data()
+    return Response(content=metrics_data, media_type="text/plain")
 
 
 @app.get("/")

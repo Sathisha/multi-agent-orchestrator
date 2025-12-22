@@ -58,11 +58,9 @@ ollama==0.1.7
 tiktoken==0.5.2
 tenacity==8.2.3
 
-# Vector database and embeddings for memory management
-chromadb==0.4.18
-sentence-transformers==2.2.2
+# Vector database and embeddings for memory management - simplified version
 numpy==1.24.4
 
-# BPMN workflow orchestration - using compatible version
-pyzeebe==4.5.0
-lxml==4.9.3
+# Enhanced Monitoring and Observability
+python-json-logger==2.0.7
+psutil==5.9.6
