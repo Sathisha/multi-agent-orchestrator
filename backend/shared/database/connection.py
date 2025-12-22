@@ -1,6 +1,7 @@
 """Database connection and session management with optimized connection pooling."""
 
 import os
+from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
 from sqlalchemy import create_engine, event, text
@@ -102,6 +103,7 @@ def get_db():
         db.close()
 
 
+@asynccontextmanager
 async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
     """Dependency for asynchronous database sessions."""
     async with AsyncSessionLocal() as session:

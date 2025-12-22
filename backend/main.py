@@ -11,6 +11,7 @@ from shared.logging.config import init_logging, get_logger
 from shared.api import api_router
 from shared.middleware.tenant import TenantContextMiddleware
 from shared.middleware.compliance import ComplianceMiddleware
+from shared.middleware.audit import AuditMiddleware
 from shared.middleware.security import SecurityConfig, create_security_middleware_stack
 
 # Initialize logging
@@ -81,6 +82,9 @@ app.add_middleware(
 
 # Add tenant context middleware
 app.add_middleware(TenantContextMiddleware)
+
+# Add audit middleware (should be after tenant context)
+app.add_middleware(AuditMiddleware)
 
 # Add compliance middleware
 app.add_middleware(ComplianceMiddleware)

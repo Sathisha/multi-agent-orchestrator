@@ -63,6 +63,6 @@ chromadb==0.4.18
 sentence-transformers==2.2.2
 numpy==1.24.4
 
-# BPMN workflow orchestration
-pyzeebe==4.7.0
+# BPMN workflow orchestration - using compatible version
+pyzeebe==4.5.0
 lxml==4.9.3

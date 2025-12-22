@@ -21,6 +21,7 @@ from .mcp_gateway import router as mcp_gateway_router
 # Temporarily commented out to fix import issues
 # from .memory import router as memory_router
 from .guardrails import router as guardrails_router
+from .audit import router as audit_router
 
 # Create main API router
 api_router = APIRouter()
@@ -42,5 +43,6 @@ api_router.include_router(mcp_gateway_router)
 # Temporarily commented out to fix import issues
 # api_router.include_router(memory_router)
 api_router.include_router(guardrails_router)
+api_router.include_router(audit_router)
 
 __all__ = ["api_router"]

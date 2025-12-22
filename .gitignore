@@ -418,3 +418,5 @@ certs/dev/
 *.dump
 *.backup.sql
 db-backups/local/
+
+myenv
