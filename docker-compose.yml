@@ -122,6 +122,68 @@ services:
     # Pull a small model for testing
     entrypoint: ["/bin/bash", "-c", "ollama serve & sleep 10 && ollama pull llama2:7b-chat && wait"]
 
+  # Camunda Platform 8 Community Edition
+  zeebe:
+    image: camunda/zeebe:8.3.0
+    container_name: ai-agent-framework-zeebe
+    ports:
+      - "26500:26500"  # Gateway port
+      - "9600:9600"    # Monitoring port
+    environment:
+      - ZEEBE_BROKER_GATEWAY_ENABLE=true
+      - ZEEBE_BROKER_GATEWAY_HOST=0.0.0.0
+      - ZEEBE_BROKER_GATEWAY_PORT=26500
+      - ZEEBE_BROKER_NETWORK_HOST=0.0.0.0
+      - ZEEBE_LOG_LEVEL=info
+    volumes:
+      - zeebe_data:/usr/local/zeebe/data
+    networks:
+      - ai-agent-network
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 10s bash -c ':> /dev/tcp/127.0.0.1/9600' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Camunda Operate (Web UI for monitoring workflows)
+  operate:
+    image: camunda/operate:8.3.0
+    container_name: ai-agent-framework-operate
+    ports:
+      - "8081:8080"
+    environment:
+      - CAMUNDA_OPERATE_ZEEBE_GATEWAYADDRESS=zeebe:26500
+      - CAMUNDA_OPERATE_ELASTICSEARCH_URL=http://elasticsearch:9200
+      - CAMUNDA_OPERATE_ZEEBEELASTICSEARCH_URL=http://elasticsearch:9200
+    depends_on:
+      zeebe:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - ai-agent-network
+
+  # Elasticsearch for Camunda data storage
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.9.0
+    container_name: ai-agent-framework-elasticsearch
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - ai-agent-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
   # Prometheus Monitoring
   prometheus:
     image: prom/prometheus:v2.47.0
@@ -146,6 +208,8 @@ volumes:
   prometheus_data:
   chroma_data:
   ollama_data:
+  zeebe_data:
+  elasticsearch_data:
 
 networks:
   ai-agent-network:

@@ -13,6 +13,9 @@ from .agent import router as agent_router
 from .agent_templates import router as agent_templates_router
 from .agent_versioning import router as agent_versioning_router
 from .agent_executor import router as agent_executor_router
+from .workflow_orchestrator import router as workflow_orchestrator_router
+from .tool_registry import router as tool_registry_router
+from .mcp_gateway import router as mcp_gateway_router
 # Temporarily commented out to fix import issues
 # from .llm_providers import router as llm_providers_router
 # Temporarily commented out to fix import issues
@@ -31,6 +34,9 @@ api_router.include_router(agent_router)
 api_router.include_router(agent_templates_router)
 api_router.include_router(agent_versioning_router)
 api_router.include_router(agent_executor_router)
+api_router.include_router(workflow_orchestrator_router)
+api_router.include_router(tool_registry_router)
+api_router.include_router(mcp_gateway_router)
 # Temporarily commented out to fix import issues
 # api_router.include_router(llm_providers_router)
 # Temporarily commented out to fix import issues
