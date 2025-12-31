@@ -4,12 +4,14 @@ Tool Registry API endpoints for the AI Agent Framework.
 This module provides REST API endpoints for managing custom tools and tool registry.
 """
 
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.security import HTTPBearer
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..database import get_database_session
 from ..models.tool import (
     ToolRequest, ToolResponse, ToolExecutionRequest, ToolExecutionResponse,
     ToolDiscoveryResponse, ToolType, ToolStatus
@@ -25,11 +27,18 @@ router = APIRouter(prefix="/api/v1/tools", tags=["Tool Registry"])
 security = HTTPBearer()
 
 
+async def get_tool_registry_service(
+    session: AsyncSession = Depends(get_database_session),
+) -> ToolRegistryService:
+    """Get ToolRegistryService with the current database session."""
+    return ToolRegistryService(session)
+
+
 @router.post("/", response_model=ToolResponse, status_code=status.HTTP_201_CREATED)
 async def create_tool(
     tool_request: ToolRequest,
     current_user: User = Depends(get_current_user_with_tenant),
-    tool_service: ToolRegistryService = Depends(ToolRegistryService)
+    tool_service: ToolRegistryService = Depends(get_tool_registry_service)
 ):
     """Create a new custom tool."""
     try:
@@ -74,7 +83,7 @@ async def list_tools(
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of tools to return"),
     offset: int = Query(0, ge=0, description="Number of tools to skip"),
     current_user: User = Depends(get_current_user_with_tenant),
-    tool_service: ToolRegistryService = Depends(ToolRegistryService)
+    tool_service: ToolRegistryService = Depends(get_tool_registry_service)
 ):
     """List tools with optional filtering."""
     try:
@@ -107,7 +116,7 @@ async def list_tools(
 async def get_tool(
     tool_id: UUID,
     current_user: User = Depends(get_current_user_with_tenant),
-    tool_service: ToolRegistryService = Depends(ToolRegistryService)
+    tool_service: ToolRegistryService = Depends(get_tool_registry_service)
 ):
     """Get a tool by ID."""
     try:
@@ -145,7 +154,7 @@ async def update_tool(
     tool_id: UUID,
     tool_request: ToolRequest,
     current_user: User = Depends(get_current_user_with_tenant),
-    tool_service: ToolRegistryService = Depends(ToolRegistryService)
+    tool_service: ToolRegistryService = Depends(get_tool_registry_service)
 ):
     """Update an existing tool."""
     try:
@@ -186,7 +195,7 @@ async def update_tool(
 async def delete_tool(
     tool_id: UUID,
     current_user: User = Depends(get_current_user_with_tenant),
-    tool_service: ToolRegistryService = Depends(ToolRegistryService)
+    tool_service: ToolRegistryService = Depends(get_tool_registry_service)
 ):
     """Delete a tool."""
     try:
@@ -227,7 +236,7 @@ async def delete_tool(
 async def validate_tool(
     tool_id: UUID,
     current_user: User = Depends(get_current_user_with_tenant),
-    tool_service: ToolRegistryService = Depends(ToolRegistryService)
+    tool_service: ToolRegistryService = Depends(get_tool_registry_service)
 ):
     """Validate a tool's code and configuration."""
     try:
@@ -269,7 +278,7 @@ async def execute_tool(
     tool_id: UUID,
     execution_request: ToolExecutionRequest,
     current_user: User = Depends(get_current_user_with_tenant),
-    tool_service: ToolRegistryService = Depends(ToolRegistryService)
+    tool_service: ToolRegistryService = Depends(get_tool_registry_service)
 ):
     """Execute a tool with given inputs."""
     try:
@@ -313,7 +322,7 @@ async def execute_tool(
 @router.get("/templates/", response_model=List[Dict[str, Any]])
 async def get_tool_templates(
     current_user: User = Depends(get_current_user_with_tenant),
-    tool_service: ToolRegistryService = Depends(ToolRegistryService)
+    tool_service: ToolRegistryService = Depends(get_tool_registry_service)
 ):
     """Get available tool templates for development."""
     try:
@@ -337,7 +346,7 @@ async def get_tool_templates(
 async def discover_tools(
     include_mcp: bool = Query(True, description="Include MCP server tools"),
     current_user: User = Depends(get_current_user_with_tenant),
-    tool_service: ToolRegistryService = Depends(ToolRegistryService)
+    tool_service: ToolRegistryService = Depends(get_tool_registry_service)
 ):
     """Discover available tools and capabilities."""
     try:

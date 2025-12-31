@@ -35,15 +35,12 @@ class IDGeneratorService:
         Generate a unique agent ID.
         
         Args:
-            prefix: Optional prefix for the ID
+            prefix: Optional prefix for the ID (ignored for UUID compatibility)
             
         Returns:
-            Unique agent ID
+            Unique agent ID as UUID
         """
-        short_id = IDGeneratorService.generate_short_id(12)
-        if prefix:
-            return f"{prefix}-{short_id}"
-        return f"agent-{short_id}"
+        return str(uuid.uuid4())
     
     @staticmethod
     def generate_execution_id() -> str:
@@ -101,9 +98,13 @@ class IDGeneratorService:
     
     @staticmethod
     def generate_workflow_id() -> str:
-        """Generate a unique workflow ID."""
-        short_id = IDGeneratorService.generate_short_id(10)
-        return f"wf-{short_id}"
+        """
+        Generate a unique workflow ID.
+        
+        Returns:
+            Unique workflow ID as UUID (consistent with other entity IDs)
+        """
+        return str(uuid.uuid4())
     
     @staticmethod
     def generate_tool_id() -> str:

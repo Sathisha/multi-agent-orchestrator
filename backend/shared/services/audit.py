@@ -233,6 +233,9 @@ class AuditService(BaseService):
         # Convert to response models
         response_logs = [
             AuditLogResponse(
+                id=str(log.id),
+                created_at=log.created_at,
+                updated_at=log.updated_at,
                 event_type=log.event_type,
                 event_id=log.event_id,
                 correlation_id=log.correlation_id,

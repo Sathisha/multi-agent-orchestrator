@@ -357,6 +357,17 @@ class Permissions:
     TOOL_MANAGE = "tool.manage"
     TOOL_VIEW = "tool.view"
     TOOL_EXECUTE = "tool.execute"
+    
+    # Audit permissions
+    AUDIT_READ = "audit.read"
+    AUDIT_EXPORT = "audit.export"
+    AUDIT_MANAGE = "audit.manage"
+
+
+# Alias for backward compatibility
+class StandardPermissions(Permissions):
+    """Alias for Permissions class for backward compatibility."""
+    pass
 
 
 # Role constants for easy reference
@@ -367,3 +378,33 @@ class Roles:
     TENANT_ADMIN = "tenant_admin"
     DEVELOPER = "developer"
     USER = "user"
+
+
+# Helper function for FastAPI dependency injection
+async def require_permission(
+    rbac_service: RBACService,
+    user_id: UUID,
+    permission_name: str,
+    tenant_id: Optional[UUID] = None
+) -> None:
+    """
+    Check if a user has the required permission.
+    
+    Raises HTTPException with 403 status if permission is not granted.
+    """
+    from fastapi import HTTPException, status
+    
+    # System admins have all permissions
+    if await rbac_service.is_system_admin(user_id):
+        return
+    
+    # Check specific permission
+    has_permission = await rbac_service.user_has_permission(user_id, permission_name)
+    
+    if not has_permission:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"User does not have permission: {permission_name}"
+        )
+    
+    logger.warning(f"User {user_id} attempted unauthorized action: {permission_name}")

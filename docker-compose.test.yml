@@ -1,0 +1,84 @@
+services:
+  # PostgreSQL Database for tests
+  postgres-test:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_password
+      POSTGRES_DB: test_db
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user -d test_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - test-network
+
+  # Redis for caching and sessions
+  redis-test:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - test-network
+
+  # Ollama for LLM testing
+  ollama-test:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    environment:
+      OLLAMA_HOST: "0.0.0.0:11434"
+    volumes:
+      - ollama-test:/root/.ollama
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
+    networks:
+      - test-network
+
+  # Test runner service
+  test-runner:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      # Database - connect to existing postgres-test service
+      DATABASE_URL: "postgresql+asyncpg://test_user:test_password@postgres-test:5432/test_db"
+      DATABASE_SYNC_URL: "postgresql://test_user:test_password@postgres-test:5432/test_db"
+      # Redis - connect to existing redis-test service
+      REDIS_URL: "redis://redis-test:6379/0"
+      # Ollama - connect to existing ollama service
+      OLLAMA_BASE_URL: "http://ollama:11434"
+      # Testing
+      ENVIRONMENT: "test"
+      PYTEST_ARGS: "${PYTEST_ARGS:-tests/ -v}"
+    volumes:
+      - .:/app
+      - /app/__pycache__
+      - ./reports:/app/reports
+      - ./htmlcov:/app/htmlcov
+    working_dir: /app/backend
+    command: >
+      sh -c "
+        echo '🚀 Running tests...' &&
+        pytest ${PYTEST_ARGS}
+      "
+    network_mode: host
+
+networks:
+  test-network:
+    driver: bridge
+
+volumes:
+  ollama-test:

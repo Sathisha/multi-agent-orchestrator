@@ -1,77 +1,44 @@
-version: '3.8'
+# Development-specific Docker Compose overrides
+# Use with: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 services:
-  # Backend API Service
+  # Backend service with development-specific settings
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: ai-agent-framework-backend
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/ai_agent_framework
-      - DATABASE_ASYNC_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/ai_agent_framework
-      - REDIS_URL=redis://redis:6379/0
-      - ENVIRONMENT=development
+      - RECREATE_DB=true  # Always recreate database in development
       - DEBUG=true
-      - LOG_LEVEL=INFO
-      - API_RELOAD=true
-    ports:
-      - "8000:8000"
+      - LOG_LEVEL=DEBUG
+      - ENABLE_MIGRATIONS=false
     volumes:
+      # Mount source code for hot reloading
       - ./backend:/app
-      - /app/__pycache__
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - ai-agent-network
-    command: python main.py
-
-  # PostgreSQL Database
+      - chroma_data:/app/data/chroma
+      - /app/__pycache__  # Exclude pycache from volume mount
+      - /app/.pytest_cache  # Exclude pytest cache
+    # Override command for development with auto-reload
+    command: python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    
+  # PostgreSQL with development-specific settings
   postgres:
-    image: postgres:15-alpine
-    container_name: ai-agent-framework-postgres
     environment:
       POSTGRES_DB: ai_agent_framework
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_HOST_AUTH_METHOD: trust
+    # Expose port for direct database access during development
     ports:
       - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./infrastructure/docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d ai_agent_framework"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - ai-agent-network
-
-  # Redis Cache
+    # Use tmpfs for faster database operations in development
+    tmpfs:
+      - /var/lib/postgresql/data:noexec,nosuid,size=1g
+    
+  # Redis with development-specific settings
   redis:
-    image: redis:7-alpine
-    container_name: ai-agent-framework-redis
+    # Expose port for direct Redis access during development
     ports:
       - "6379:6379"
-    volumes:
-      - redis_data:/data
-    command: redis-server --appendonly yes
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - ai-agent-network
+    # Disable persistence for faster startup in development
+    command: redis-server --save "" --appendonly no
 
 volumes:
-  postgres_data:
-  redis_data:
-
-networks:
-  ai-agent-network:
-    driver: bridge
+  chroma_data:

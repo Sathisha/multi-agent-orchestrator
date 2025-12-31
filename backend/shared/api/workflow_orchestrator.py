@@ -1,7 +1,7 @@
 """API endpoints for BPMN Workflow Orchestrator."""
 
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -29,16 +29,42 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/workflows", tags=["Workflow Orchestrator"])
 
-# Initialize services
-workflow_orchestrator = WorkflowOrchestratorService()
-rbac_service = RBACService()
+# Initialize services lazily
+_workflow_orchestrator_instance: Optional[WorkflowOrchestratorService] = None
+
+
+def get_workflow_orchestrator_service() -> WorkflowOrchestratorService:
+    """Get or create the workflow orchestrator service singleton."""
+    global _workflow_orchestrator_instance
+    if _workflow_orchestrator_instance is None:
+        _workflow_orchestrator_instance = WorkflowOrchestratorService()
+    return _workflow_orchestrator_instance
+
+
+async def get_rbac_service(
+    session: AsyncSession = Depends(get_database_session)
+) -> RBACService:
+    """Get RBAC service with the current database session."""
+    return RBACService(session)
+
+
+def require_permission_dependency(permission: str):
+    """Dependency factory for permission checking."""
+    async def _require_permission(
+        current_user: User = Depends(get_current_user),
+        tenant_context: TenantContext = Depends(get_tenant_context),
+        rbac_service: RBACService = Depends(get_rbac_service)
+    ):
+        await require_permission(rbac_service, current_user.id, permission, tenant_context.tenant_id)
+    return _require_permission
 
 
 @router.on_event("startup")
 async def startup_event():
     """Initialize workflow orchestrator on startup."""
     try:
-        await workflow_orchestrator.initialize()
+        service = get_workflow_orchestrator_service()
+        await service.initialize()
         logger.info("Workflow orchestrator API initialized")
     except Exception as e:
         logger.error(f"Failed to initialize workflow orchestrator API: {e}")
@@ -48,7 +74,8 @@ async def startup_event():
 async def shutdown_event():
     """Shutdown workflow orchestrator."""
     try:
-        await workflow_orchestrator.shutdown()
+        service = get_workflow_orchestrator_service()
+        await service.shutdown()
         logger.info("Workflow orchestrator API shutdown completed")
     except Exception as e:
         logger.error(f"Error during workflow orchestrator API shutdown: {e}")
@@ -57,13 +84,17 @@ async def shutdown_event():
 @router.post("/", response_model=WorkflowResponse, status_code=status.HTTP_201_CREATED)
 async def create_workflow(
     workflow_request: WorkflowRequest,
+    session: AsyncSession = Depends(get_database_session),
     current_user: User = Depends(get_current_user),
     tenant_context: TenantContext = Depends(get_tenant_context),
-    session: AsyncSession = Depends(get_database_session)
+    rbac_service: RBACService = Depends(get_rbac_service)
 ):
     """Create a new BPMN workflow."""
     # Check permissions
     await require_permission(rbac_service, current_user.id, "workflow:create", tenant_context.tenant_id)
+    
+    # Get service instance
+    workflow_orchestrator = get_workflow_orchestrator_service()
     
     try:
         # Validate BPMN XML
@@ -139,9 +170,10 @@ async def list_workflows(
     category: Optional[str] = Query(None, description="Filter by category"),
     limit: int = Query(50, ge=1, le=100, description="Number of workflows to return"),
     offset: int = Query(0, ge=0, description="Number of workflows to skip"),
+    session: AsyncSession = Depends(get_database_session),
     current_user: User = Depends(get_current_user),
     tenant_context: TenantContext = Depends(get_tenant_context),
-    session: AsyncSession = Depends(get_database_session)
+    rbac_service: RBACService = Depends(get_rbac_service)
 ):
     """List workflows for the current tenant."""
     # Check permissions
@@ -188,9 +220,10 @@ async def list_workflows(
 @router.get("/{workflow_id}", response_model=WorkflowResponse)
 async def get_workflow(
     workflow_id: UUID,
+    session: AsyncSession = Depends(get_database_session),
     current_user: User = Depends(get_current_user),
     tenant_context: TenantContext = Depends(get_tenant_context),
-    session: AsyncSession = Depends(get_database_session)
+    rbac_service: RBACService = Depends(get_rbac_service)
 ):
     """Get a specific workflow."""
     # Check permissions
@@ -235,11 +268,14 @@ async def get_workflow(
 async def update_workflow(
     workflow_id: UUID,
     workflow_request: WorkflowRequest,
+    session: AsyncSession = Depends(get_database_session),
     current_user: User = Depends(get_current_user),
     tenant_context: TenantContext = Depends(get_tenant_context),
-    session: AsyncSession = Depends(get_database_session)
+    rbac_service: RBACService = Depends(get_rbac_service)
 ):
     """Update a workflow."""
+    # Get service instance
+    workflow_orchestrator = get_workflow_orchestrator_service()
     # Check permissions
     await require_permission(rbac_service, current_user.id, "workflow:update", tenant_context.tenant_id)
     
@@ -593,7 +629,8 @@ async def get_workflow_statistics(
     workflow_id: UUID,
     current_user: User = Depends(get_current_user),
     tenant_context: TenantContext = Depends(get_tenant_context),
-    session: AsyncSession = Depends(get_database_session)
+    session: AsyncSession = Depends(get_database_session),
+    rbac_service: RBACService = Depends(get_rbac_service)
 ):
     """Get statistics for a workflow."""
     # Check permissions
@@ -676,7 +713,8 @@ async def delete_workflow(
     workflow_id: UUID,
     current_user: User = Depends(get_current_user),
     tenant_context: TenantContext = Depends(get_tenant_context),
-    session: AsyncSession = Depends(get_database_session)
+    session: AsyncSession = Depends(get_database_session),
+    rbac_service: RBACService = Depends(get_rbac_service)
 ):
     """Delete a workflow."""
     # Check permissions

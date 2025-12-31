@@ -1,11 +1,37 @@
-"""Pytest configuration and fixtures for AI Agent Framework tests."""
+"""
+Pytest configuration and fixtures for AI Agent Framework tests.
+
+This module provides centralized configuration and fixtures for all tests:
+- Unit tests (tests/unit/)
+- Property-based tests (tests/properties/)
+- Integration tests (tests/integration/)
+
+Usage:
+    pytest tests/ -v              # Run all tests
+    pytest tests/unit/ -v         # Run only unit tests
+    pytest tests/properties/ -v   # Run only property tests
+    pytest tests/integration/ -v  # Run only integration tests
+
+Available Fixtures:
+    - event_loop: Event loop for async tests
+    - async_engine: Async SQLAlchemy engine
+    - async_session: Async database session (transaction with rollback)
+    - async_db_session: Alias for async_session
+    - test_client: FastAPI TestClient
+    - test_settings: Test Settings object
+
+See TEST_GUIDE.md for detailed information.
+"""
 
 import asyncio
 import os
 import sys
 from typing import AsyncGenerator, Generator
 
-# Add the parent directory to Python path
+# Set testing environment variable
+os.environ['TESTING'] = 'true'
+
+# Add the parent directory to Python path to allow imports of 'shared' and 'main'
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
@@ -80,8 +106,44 @@ def test_client(async_session):
 
 
 @pytest.fixture
+async def async_db_session(async_engine) -> AsyncGenerator[AsyncSession, None]:
+    """
+    Alias for async_session with transaction rollback.
+    
+    Use this fixture for tests that need database transactions rolled back
+    automatically after the test completes.
+    
+    Example:
+        async def test_user_creation(async_db_session):
+            user = await create_user(async_db_session, name="test")
+            assert user.id is not None
+    """
+    async_session_maker = sessionmaker(
+        async_engine, class_=AsyncSession, expire_on_commit=False
+    )
+    
+    async with async_session_maker() as session:
+        yield session
+
+
+@pytest.fixture
+def client(test_client):
+    """Alias for test_client for backward compatibility."""
+    return test_client
+
+
+@pytest.fixture
 def test_settings() -> Settings:
-    """Create test settings."""
+    """
+    Create test settings with sensible defaults.
+    
+    Use this fixture to override settings in tests:
+    
+    Example:
+        def test_with_settings(test_settings):
+            test_settings.debug = False
+            # Use test_settings in your test
+    """
     return Settings(
         environment="test",
         debug=True,
@@ -109,4 +171,30 @@ def test_settings() -> Settings:
             "cors_methods": ["GET", "POST", "PUT", "DELETE"],
             "cors_headers": ["*"]
         }
+    )
+
+
+# Pytest configuration and hooks
+def pytest_configure(config):
+    """Configure pytest with custom markers."""
+    config.addinivalue_line(
+        "markers", "unit: mark test as a unit test"
+    )
+    config.addinivalue_line(
+        "markers", "integration: mark test as an integration test"
+    )
+    config.addinivalue_line(
+        "markers", "property: mark test as a property-based test"
+    )
+    config.addinivalue_line(
+        "markers", "slow: mark test as slow"
+    )
+    config.addinivalue_line(
+        "markers", "db: mark test as requiring database"
+    )
+    config.addinivalue_line(
+        "markers", "llm: mark test as requiring LLM services"
+    )
+    config.addinivalue_line(
+        "markers", "requires_docker: mark test as requiring Docker"
     )

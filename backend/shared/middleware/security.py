@@ -7,6 +7,7 @@ This module provides essential security middleware including:
 - CORS policies and security headers
 - IP filtering and basic DDoS protection
 - Request/response logging for security monitoring
+- Authentication and authorization dependencies
 
 This is a simplified implementation that can be extended with Kong Gateway later.
 """
@@ -14,17 +15,72 @@ This is a simplified implementation that can be extended with Kong Gateway later
 import logging
 import time
 import re
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Callable
 from collections import defaultdict, deque
 from datetime import datetime, timedelta
 from ipaddress import ip_address, ip_network
 
-from fastapi import Request, Response, HTTPException, status
+from fastapi import Request, Response, HTTPException, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
+# Import auth functions from services
+from ..services.auth import get_current_user as _get_current_user, get_current_user_with_tenant as _get_current_user_with_tenant
+from ..models.user import User
+
 logger = logging.getLogger(__name__)
+
+# Re-export auth functions for backward compatibility
+get_current_user = _get_current_user
+get_current_user_with_tenant = _get_current_user_with_tenant
+
+
+def require_permissions(permissions: List[str]) -> Callable:
+    """
+    FastAPI dependency to require specific permissions.
+    
+    Args:
+        permissions: List of required permissions
+        
+    Returns:
+        FastAPI dependency function
+        
+    Usage:
+        @app.get("/admin")
+        async def admin_endpoint(
+            current_user: User = Depends(get_current_user),
+            _: None = Depends(require_permissions(["admin:read"]))
+        ):
+            return {"message": "Admin access granted"}
+    """
+    def permission_dependency(current_user: User = Depends(get_current_user)) -> None:
+        """Check if current user has required permissions."""
+        if not current_user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required"
+            )
+        
+        # For now, system admins have all permissions
+        if current_user.is_system_admin:
+            return None
+        
+        # TODO: Implement proper RBAC permission checking
+        # This is a placeholder implementation
+        user_permissions = getattr(current_user, 'permissions', [])
+        
+        missing_permissions = [p for p in permissions if p not in user_permissions]
+        if missing_permissions:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Missing required permissions: {', '.join(missing_permissions)}"
+            )
+        
+        return None
+    
+    return permission_dependency
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):

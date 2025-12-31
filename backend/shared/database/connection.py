@@ -113,6 +113,10 @@ async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
+# Alias for compatibility
+get_database_session = get_async_db
+
+
 async def create_tables():
     """Create all database tables."""
     # Import all models to ensure they are registered
@@ -120,6 +124,20 @@ async def create_tables():
     
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+
+async def init_database_on_startup():
+    """Initialize database tables on application startup.
+    
+    This function is called during application startup to ensure
+    all tables exist. It's safe to call multiple times.
+    """
+    try:
+        await create_tables()
+        print("Database tables initialized successfully")
+    except Exception as e:
+        print(f"Database initialization failed: {e}")
+        raise
 
 
 async def drop_tables():

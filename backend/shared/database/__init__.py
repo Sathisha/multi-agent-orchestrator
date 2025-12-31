@@ -8,15 +8,13 @@ from .connection import (
     AsyncSessionLocal,
     get_db,
     get_async_db,
+    get_database_session,
     create_tables,
     drop_tables,
     check_database_health,
     get_connection_pool_status,
     get_async_connection_pool_status
 )
-
-# Alias for compatibility
-get_database_session = get_async_db
 
 __all__ = [
     "Base",

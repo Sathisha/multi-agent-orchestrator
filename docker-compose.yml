@@ -94,6 +94,8 @@ services:
       - ENVIRONMENT=development
       - DEBUG=true
       - LOG_LEVEL=INFO
+      - RECREATE_DB=false  # Set to true to recreate database on startup
+      - ENABLE_MIGRATIONS=false  # Set to true to enable Alembic migrations
     ports:
       - "8000:8000"
     volumes:
@@ -107,7 +109,49 @@ services:
         condition: service_healthy
     networks:
       - ai-agent-network
-    command: python main.py
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend Application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ai-agent-framework-frontend
+    ports:
+      - "3000:80"
+    environment:
+      - NODE_ENV=production
+    networks:
+      - ai-agent-network
+    restart: unless-stopped
+    profiles:
+      - frontend
+
+  # Development frontend service (for hot reload)
+  frontend-dev:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: ai-agent-framework-frontend-dev
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+    networks:
+      - ai-agent-network
+    restart: unless-stopped
+    profiles:
+      - dev
 
   # Ollama for local LLM models
   ollama:

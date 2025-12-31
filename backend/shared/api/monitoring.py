@@ -13,8 +13,8 @@ from typing import Dict, Any, List
 import logging
 
 from ..services.monitoring import monitoring_service, HealthStatus
-from ..auth.dependencies import get_current_user
-from ..models.auth import User
+from ..services.auth import get_current_user
+from ..models.user import User
 
 
 logger = logging.getLogger(__name__)

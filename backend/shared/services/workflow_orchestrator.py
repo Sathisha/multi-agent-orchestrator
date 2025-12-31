@@ -56,7 +56,6 @@ class WorkflowOrchestratorService(BaseService):
         memory_manager: Optional[MemoryManagerService] = None,
         guardrails_service: Optional[GuardrailsService] = None
     ):
-        super().__init__()
         self.zeebe_gateway_address = zeebe_gateway_address
         self.zeebe_client: Optional[ZeebeClient] = None
         self.zeebe_worker: Optional[ZeebeWorker] = None

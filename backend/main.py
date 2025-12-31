@@ -8,7 +8,6 @@ from prometheus_client import make_asgi_app
 
 from shared.config.settings import get_settings
 from shared.logging.structured_logging import setup_structured_logging, get_logger
-from shared.tracing.distributed_tracing import setup_tracing, instrument_app, TracingMiddleware
 from shared.api import api_router
 from shared.middleware.tenant import TenantContextMiddleware
 from shared.middleware.compliance import ComplianceMiddleware
@@ -19,9 +18,6 @@ from shared.services.monitoring import monitoring_service
 # Initialize structured logging
 setup_structured_logging()
 logger = get_logger(__name__)
-
-# Initialize distributed tracing
-tracer = setup_tracing()
 
 # Get settings
 settings = get_settings()
@@ -37,6 +33,11 @@ async def lifespan(app: FastAPI):
         environment=settings.environment,
         service_name=settings.service_name
     )
+    
+    # Initialize database tables
+    from shared.database.connection import init_database_on_startup
+    await init_database_on_startup()
+    logger.info("Database initialized")
     
     # Start monitoring service
     await monitoring_service.start()
@@ -73,12 +74,6 @@ app = FastAPI(
     debug=settings.debug,
     lifespan=lifespan,
 )
-
-# Instrument application with tracing
-instrument_app(app)
-
-# Add tracing middleware
-app.add_middleware(TracingMiddleware)
 
 # Configure security middleware
 security_config = SecurityConfig()

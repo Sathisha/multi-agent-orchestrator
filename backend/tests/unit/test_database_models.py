@@ -49,7 +49,7 @@ class TestDatabaseModels:
         """Test creating roles and permissions."""
         unique_id = generate_unique_id()
         async with AsyncSessionLocal() as session:
-            # Create permission
+            # Create permission (permissions are system-wide, no tenant_id needed)
             permission = Permission(
                 name=f"agent:create:{unique_id}",
                 description="Create agents",
@@ -57,8 +57,22 @@ class TestDatabaseModels:
                 action="create"
             )
             
-            # Create role
+            # Create tenant for the role
+            from shared.models.tenant import Tenant, TenantStatus, TenantPlan
+            tenant = Tenant(
+                name="Test Tenant",
+                slug=f"test-tenant-{unique_id}",
+                display_name="Test Tenant",
+                primary_email="test@example.com",
+                status=TenantStatus.ACTIVE.value,
+                plan=TenantPlan.FREE.value
+            )
+            session.add(tenant)
+            await session.flush()  # Get the tenant ID
+            
+            # Create role with tenant_id
             role = Role(
+                tenant_id=tenant.id,
                 name=f"developer_{unique_id}",
                 description="Developer role with agent creation permissions"
             )
@@ -127,7 +141,21 @@ class TestDatabaseModels:
     async def test_audit_log_creation(self):
         """Test creating an audit log entry."""
         async with AsyncSessionLocal() as session:
+            # Create a tenant first for the audit log
+            from shared.models.tenant import Tenant, TenantStatus, TenantPlan
+            tenant = Tenant(
+                name="Test Tenant",
+                slug="test-tenant",
+                display_name="Test Tenant",
+                primary_email="test@example.com",
+                status=TenantStatus.ACTIVE.value,
+                plan=TenantPlan.FREE.value
+            )
+            session.add(tenant)
+            await session.flush()  # Get the tenant ID
+            
             audit_log = AuditLog(
+                tenant_id=tenant.id,  # Provide required tenant_id
                 event_type=AuditEventType.USER_CREATED,
                 event_id=str(uuid4()),
                 username="testuser",
@@ -152,19 +180,33 @@ class TestDatabaseModels:
         """Test assigning roles to users."""
         unique_id = generate_unique_id()
         async with AsyncSessionLocal() as session:
+            # Create tenant first
+            from shared.models.tenant import Tenant, TenantStatus, TenantPlan
+            tenant = Tenant(
+                name="Test Tenant",
+                slug="test-tenant-role",
+                display_name="Test Tenant",
+                primary_email="test@example.com",
+                status=TenantStatus.ACTIVE.value,
+                plan=TenantPlan.FREE.value
+            )
+            session.add(tenant)
+            await session.flush()  # Get the tenant ID
+            
             # Create user
             user = User(
+                tenant_id=tenant.id,  # Provide tenant_id
                 username=f"roleuser_{unique_id}",
                 email=f"roleuser_{unique_id}@example.com",
                 status=UserStatus.ACTIVE,
                 auth_provider=AuthProvider.LOCAL
             )
             
-            # Create role
+            # Create role (remove display_name, use description instead)
             role = Role(
+                tenant_id=tenant.id,  # Provide tenant_id
                 name=f"test_role_{unique_id}",
-                display_name=f"Test Role {unique_id}",
-                description="A test role"
+                description=f"Test Role {unique_id}"  # Use description instead of display_name
             )
             
             # Assign role to user
