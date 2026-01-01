@@ -26,7 +26,12 @@ wait_for_db() {
     for i in {1..60}; do
         if pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" >/dev/null 2>&1; then
             echo "✅ PostgreSQL is ready!"
-            return 0
+            
+            # Additional check: verify we can actually connect and query
+            if PGPASSWORD=$POSTGRES_PASSWORD psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "SELECT 1" >/dev/null 2>&1; then
+                echo "✅ Database connection verified!"
+                return 0
+            fi
         fi
         echo "⏳ Waiting for PostgreSQL... (attempt $i/60)"
         sleep 1
@@ -38,7 +43,7 @@ wait_for_db() {
 
 # Function to initialize database
 init_database() {
-    echo "🔄 Initializing database with Alembic..."
+    echo "🔄 Initializing database tables..."
     
     python3 init_db.py
     
@@ -50,15 +55,32 @@ init_database() {
     fi
 }
 
-# Function to run database migrations (if needed in future)
-run_migrations() {
-    echo "🔄 Running Alembic migrations..."
-    alembic upgrade head
+# Function to verify tables exist
+verify_tables() {
+    echo "🔍 Verifying database tables exist..."
+    
+    # Use Python to check if tables exist
+    python3 -c "
+import asyncio
+from shared.database.connection import async_engine
+from sqlalchemy import text
+
+async def check_tables():
+    async with async_engine.connect() as conn:
+        result = await conn.execute(text(\"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public'\"))
+        count = result.scalar()
+        return count > 0
+
+result = asyncio.run(check_tables())
+exit(0 if result else 1)
+" 2>/dev/null
+    
     if [ $? -eq 0 ]; then
-        echo "✅ Alembic migrations completed successfully"
+        echo "✅ Database tables verified"
+        return 0
     else
-        echo "❌ Alembic migrations failed"
-        exit 1
+        echo "⚠️  Could not verify tables (may not exist yet)"
+        return 1
     fi
 }
 
@@ -66,23 +88,36 @@ run_migrations() {
 main() {
     echo "🏗️  Environment: ${ENVIRONMENT:-development}"
     echo "🐛 Debug mode: ${DEBUG:-false}"
+    echo "🔄 Recreate DB: ${RECREATE_DB:-false}"
     
     # Wait for database to be ready
     wait_for_db
     
-    # Initialize database (now runs Alembic)
+    # Give database a moment to fully initialize
+    echo "⏳ Waiting 2 seconds for database to fully initialize..."
+    sleep 2
+    
+    # Initialize database tables
     init_database
     
-    # Seed data if RECREATE_DB is true (or always in dev)
-    if [ "$RECREATE_DB" = "true" ] || [ "$ENVIRONMENT" = "development" ]; then
-        echo "🌱 Seeding database..."
-        python /app/seed_data.py
-        if [ $? -eq 0 ]; then
-            echo "✅ Database seeding completed successfully"
+    # Verify tables exist before seeding
+    if verify_tables; then
+        # Seed data if RECREATE_DB is true (or always in dev)
+        if [ "$RECREATE_DB" = "true" ] || [ "$ENVIRONMENT" = "development" ]; then
+            echo "🌱 Seeding database..."
+            python3 /app/seed_data.py
+            
+            if [ $? -eq 0 ]; then
+                echo "✅ Database seeding completed successfully"
+            else
+                echo "⚠️  Database seeding failed (continuing anyway)"
+                # Don't exit on seeding failure - let the app start
+            fi
         else
-            echo "❌ Database seeding failed"
-            exit 1
+            echo "ℹ️  Skipping database seeding (RECREATE_DB=false and ENVIRONMENT!=development)"
         fi
+    else
+        echo "⚠️  Skipping seeding - tables not verified"
     fi
     
     echo "🎯 Starting application with command: $@"

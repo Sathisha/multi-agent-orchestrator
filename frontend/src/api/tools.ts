@@ -13,6 +13,12 @@ export interface Tool {
     usage_count: number
     created_at: string
     updated_at: string
+    // New fields for tool details
+    code?: string
+    entry_point?: string
+    input_schema?: Record<string, any>
+    output_schema?: Record<string, any>
+    timeout_seconds?: number
 }
 
 export interface CreateToolRequest {
@@ -27,6 +33,7 @@ export interface CreateToolRequest {
     tags?: string[]
     capabilities?: string[]
     timeout_seconds?: number
+    entry_point?: string // Added entry_point
 }
 
 export const getTools = async (): Promise<Tool[]> => {
@@ -58,8 +65,13 @@ export const validateTool = async (id: string): Promise<{ is_valid: boolean; err
     return response.data
 }
 
-export const executeTool = async (id: string, inputs: Record<string, any>): Promise<any> => {
-    const response = await apiClient.post(`/tools/${id}/execute`, { tool_id: id, inputs })
+export const executeTool = async (
+    id: string, 
+    inputs: Record<string, any>, 
+    context: Record<string, any> = {}, 
+    timeout_override?: number
+): Promise<any> => {
+    const response = await apiClient.post(`/tools/${id}/execute`, { inputs, context, timeout_override })
     return response.data
 }
 

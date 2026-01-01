@@ -4,18 +4,29 @@ import {
   Add as AddIcon,
   Code as CodeIcon,
   Extension as ExtensionIcon,
-  Delete as DeleteIcon
+  Delete as DeleteIcon,
+  Edit as EditIcon,
+  PlayArrow as PlayArrowIcon
 } from '@mui/icons-material'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
-import { getTools, createTool, deleteTool, getToolTemplates } from '../api/tools'
+import { getTools, createTool, deleteTool, updateTool, getToolTemplates, executeTool, Tool, CreateToolRequest } from '../api/tools'
 import { useNavigate } from 'react-router-dom'
 
 const ToolsWorkspace: React.FC = () => {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [testDialogOpen, setTestDialogOpen] = useState(false)
+  const [selectedTool, setSelectedTool] = useState<Tool | null>(null)
+
   const [newToolName, setNewToolName] = useState('')
   const [newToolDesc, setNewToolDesc] = useState('')
+  const [newToolCode, setNewToolCode] = useState('')
+  const [newToolInputSchema, setNewToolInputSchema] = useState('{}')
+  const [newToolOutputSchema, setNewToolOutputSchema] = useState('{}')
+  const [newToolEntryPoint, setNewToolEntryPoint] = useState('execute')
+  const [newToolTimeout, setNewToolTimeout] = useState(60)
 
   const { data: tools, isLoading } = useQuery('tools', getTools)
   const { data: templates } = useQuery('tool-templates', getToolTemplates)
@@ -26,6 +37,11 @@ const ToolsWorkspace: React.FC = () => {
       setCreateDialogOpen(false)
       setNewToolName('')
       setNewToolDesc('')
+      setNewToolCode('')
+      setNewToolInputSchema('{}')
+      setNewToolOutputSchema('{}')
+      setNewToolEntryPoint('execute')
+      setNewToolTimeout(60)
     },
   })
 
@@ -35,14 +51,27 @@ const ToolsWorkspace: React.FC = () => {
     }
   })
 
+  const updateMutation = useMutation(
+    (data: { id: string; tool_request: Partial<CreateToolRequest> }) => updateTool(data.id, data.tool_request),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries('tools')
+        setEditDialogOpen(false)
+      }
+    }
+  )
+
   const handleCreate = () => {
-    // Use first template as default
-    const defaultCode = templates?.[0]?.code || 'def execute(inputs, context=None):\\n    return {"result": "Hello World"}'
+    // Use first template as default or empty values
     createMutation.mutate({
       name: newToolName,
       description: newToolDesc,
-      tool_type: 'custom',
-      code: defaultCode
+      tool_type: 'custom', // Assuming custom for now
+      code: newToolCode || 'def execute(inputs, context=None):\\n    return {"result": "Hello World"}',
+      input_schema: JSON.parse(newToolInputSchema),
+      output_schema: JSON.parse(newToolOutputSchema),
+      entry_point: newToolEntryPoint,
+      timeout_seconds: newToolTimeout
     })
   }
 
@@ -52,6 +81,16 @@ const ToolsWorkspace: React.FC = () => {
       deleteMutation.mutate(id)
     }
   }
+
+  const openEditDialog = (tool: Tool) => {
+    setSelectedTool(tool);
+    setEditDialogOpen(true);
+  };
+
+  const openTestDialog = (tool: Tool) => {
+    setSelectedTool(tool);
+    setTestDialogOpen(true);
+  };
 
   return (
     <Box sx={{ p: 3, height: '100%', overflow: 'auto' }}>
@@ -206,6 +245,12 @@ const ToolsWorkspace: React.FC = () => {
                             mr: 1
                           }}
                         />
+                        <IconButton size="small" onClick={(e) => openEditDialog(tool)}>
+                            <EditIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton size="small" onClick={(e) => openTestDialog(tool)}>
+                            <PlayArrowIcon fontSize="small" />
+                        </IconButton>
                         <IconButton size="small" onClick={(e) => handleDelete(tool.id, e)}>
                           <DeleteIcon fontSize="small" />
                         </IconButton>
@@ -243,7 +288,7 @@ const ToolsWorkspace: React.FC = () => {
       </Box>
 
       {/* Create Dialog */}
-      <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)}>
+      <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>Create New Tool</DialogTitle>
         <DialogContent>
           <TextField
@@ -253,15 +298,64 @@ const ToolsWorkspace: React.FC = () => {
             fullWidth
             value={newToolName}
             onChange={(e) => setNewToolName(e.target.value)}
+            sx={{ mb: 2 }}
           />
           <TextField
             margin="dense"
             label="Description"
             fullWidth
             multiline
-            rows={3}
+            rows={2}
             value={newToolDesc}
             onChange={(e) => setNewToolDesc(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            margin="dense"
+            label="Entry Point"
+            fullWidth
+            value={newToolEntryPoint}
+            onChange={(e) => setNewToolEntryPoint(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            margin="dense"
+            label="Code"
+            fullWidth
+            multiline
+            rows={10}
+            value={newToolCode}
+            onChange={(e) => setNewToolCode(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            margin="dense"
+            label="Input Schema (JSON)"
+            fullWidth
+            multiline
+            rows={4}
+            value={newToolInputSchema}
+            onChange={(e) => setNewToolInputSchema(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            margin="dense"
+            label="Output Schema (JSON)"
+            fullWidth
+            multiline
+            rows={4}
+            value={newToolOutputSchema}
+            onChange={(e) => setNewToolOutputSchema(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            margin="dense"
+            label="Timeout Seconds"
+            fullWidth
+            type="number"
+            value={newToolTimeout}
+            onChange={(e) => setNewToolTimeout(parseInt(e.target.value))}
+            sx={{ mb: 2 }}
           />
         </DialogContent>
         <DialogActions>
@@ -269,8 +363,211 @@ const ToolsWorkspace: React.FC = () => {
           <Button onClick={handleCreate} disabled={!newToolName || createMutation.isLoading}>Create</Button>
         </DialogActions>
       </Dialog>
+
+      {/* Edit Dialog */}
+      {selectedTool && (
+        <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="md" fullWidth>
+          <DialogTitle>Edit Tool: {selectedTool.name}</DialogTitle>
+          <DialogContent>
+            <TextField
+              autoFocus
+              margin="dense"
+              label="Name"
+              fullWidth
+              value={selectedTool.name}
+              onChange={(e) => setSelectedTool(prev => prev ? { ...prev, name: e.target.value } : null)}
+              sx={{ mb: 2 }}
+            />
+            <TextField
+              margin="dense"
+              label="Description"
+              fullWidth
+              multiline
+              rows={2}
+              value={selectedTool.description || ''}
+              onChange={(e) => setSelectedTool(prev => prev ? { ...prev, description: e.target.value } : null)}
+              sx={{ mb: 2 }}
+            />
+            <TextField
+              margin="dense"
+              label="Entry Point"
+              fullWidth
+              value={selectedTool.entry_point || ''}
+              onChange={(e) => setSelectedTool(prev => prev ? { ...prev, entry_point: e.target.value } : null)}
+              sx={{ mb: 2 }}
+            />
+            <TextField
+              margin="dense"
+              label="Code"
+              fullWidth
+              multiline
+              rows={10}
+              value={selectedTool.code || ''}
+              onChange={(e) => setSelectedTool(prev => prev ? { ...prev, code: e.target.value } : null)}
+              sx={{ mb: 2 }}
+            />
+            <TextField
+              margin="dense"
+              label="Input Schema (JSON)"
+              fullWidth
+              multiline
+              rows={4}
+              value={JSON.stringify(selectedTool.input_schema, null, 2)}
+              onChange={(e) => {
+                try {
+                  setSelectedTool(prev => prev ? { ...prev, input_schema: JSON.parse(e.target.value) } : null)
+                } catch {
+                  // Handle invalid JSON
+                }
+              }}
+              sx={{ mb: 2 }}
+            />
+            <TextField
+              margin="dense"
+              label="Output Schema (JSON)"
+              fullWidth
+              multiline
+              rows={4}
+              value={JSON.stringify(selectedTool.output_schema, null, 2)}
+              onChange={(e) => {
+                try {
+                  setSelectedTool(prev => prev ? { ...prev, output_schema: JSON.parse(e.target.value) } : null)
+                } catch {
+                  // Handle invalid JSON
+                }
+              }}
+              sx={{ mb: 2 }}
+            />
+            <TextField
+              margin="dense"
+              label="Timeout Seconds"
+              fullWidth
+              type="number"
+              value={selectedTool.timeout_seconds || 60}
+              onChange={(e) => setSelectedTool(prev => prev ? { ...prev, timeout_seconds: parseInt(e.target.value) } : null)}
+              sx={{ mb: 2 }}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setEditDialogOpen(false)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (selectedTool) {
+                  updateMutation.mutate({
+                    id: selectedTool.id,
+                    tool_request: {
+                      name: selectedTool.name,
+                      description: selectedTool.description,
+                      code: selectedTool.code,
+                      input_schema: selectedTool.input_schema,
+                      output_schema: selectedTool.output_schema,
+                      entry_point: selectedTool.entry_point,
+                      timeout_seconds: selectedTool.timeout_seconds
+                    }
+                  })
+                }
+              }}
+              disabled={updateMutation.isLoading}
+            >
+              Save
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
+
+      {/* Test Dialog */}
+      {selectedTool && (
+        <Dialog open={testDialogOpen} onClose={() => setTestDialogOpen(false)} maxWidth="md" fullWidth>
+          <ToolTestDialog tool={selectedTool} onClose={() => setTestDialogOpen(false)} />
+        </Dialog>
+      )}
     </Box>
   )
 }
+
+interface ToolTestDialogProps {
+  tool: Tool;
+  onClose: () => void;
+}
+
+const ToolTestDialog: React.FC<ToolTestDialogProps> = ({ tool, onClose }) => {
+  const [inputs, setInputs] = useState('{}');
+  const [context, setContext] = useState('{}');
+  const [response, setResponse] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleExecuteTest = async () => {
+    setLoading(true);
+    setError(null);
+    setResponse(null);
+    try {
+      const parsedInputs = JSON.parse(inputs);
+      const parsedContext = JSON.parse(context);
+      const result = await executeTool(tool.id, parsedInputs, parsedContext, tool.timeout_seconds);
+      setResponse(result);
+    } catch (e: any) {
+      setError(e.response?.data?.detail || e.message || 'An unknown error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <DialogTitle>Test Tool: {tool.name}</DialogTitle>
+      <DialogContent>
+        <TextField
+          margin="dense"
+          label="Inputs (JSON)"
+          fullWidth
+          multiline
+          rows={6}
+          value={inputs}
+          onChange={(e) => setInputs(e.target.value)}
+          sx={{ mb: 2 }}
+        />
+        <TextField
+          margin="dense"
+          label="Context (JSON - Optional)"
+          fullWidth
+          multiline
+          rows={4}
+          value={context}
+          onChange={(e) => setContext(e.target.value)}
+          sx={{ mb: 2 }}
+        />
+        <Button
+          variant="contained"
+          onClick={handleExecuteTest}
+          disabled={loading}
+          startIcon={loading ? <CircularProgress size={20} /> : <PlayArrowIcon />}
+          sx={{ mb: 2 }}
+        >
+          Execute Test
+        </Button>
+
+        {loading && <CircularProgress size={24} sx={{ mt: 2 }} />}
+
+        {error && (
+          <Box sx={{ mt: 2, p: 2, bgcolor: '#f4433620', color: '#f44336', borderRadius: 1 }}>
+            <Typography variant="h6">Error:</Typography>
+            <Typography sx={{ whiteSpace: 'pre-wrap' }}>{error}</Typography>
+          </Box>
+        )}
+
+        {response && (
+          <Box sx={{ mt: 2, p: 2, border: '1px solid #4ec9b0', borderRadius: 1, bgcolor: '#4ec9b020' }}>
+            <Typography variant="h6" sx={{ color: '#4ec9b0' }}>Response:</Typography>
+            <Typography sx={{ whiteSpace: 'pre-wrap', color: '#cccccc' }}>{JSON.stringify(response, null, 2)}</Typography>
+          </Box>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Close</Button>
+      </DialogActions>
+    </>
+  );
+};
 
 export default ToolsWorkspace

@@ -14,6 +14,8 @@ from ..services.auth import get_current_user
 from ..models.agent import AgentExecution, Agent
 from ..models.user import User
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/v1/agent-executor", tags=["agent-executor"])
 
 
@@ -79,7 +81,7 @@ async def execute_agent(
             input_data=request.input_data,
             session_id=request.session_id,
             timeout_seconds=request.timeout_seconds,
-            created_by="system" # Temporarily set to system
+            created_by=None  # Use None for system actions
         )
         
         return ExecuteAgentResponse(

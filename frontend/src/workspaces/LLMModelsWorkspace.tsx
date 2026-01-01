@@ -1,29 +1,29 @@
 import React, { useState } from 'react';
 import {
-  Box,
-  Typography,
-  Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  IconButton,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  TextField,
-  Checkbox,
-  FormControlLabel,
-  Select,
-  MenuItem,
-  CircularProgress,
-  List,
-  ListItem,
-  ListItemText
+    Box,
+    Typography,
+    Button,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
+    Paper,
+    IconButton,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    TextField,
+    Checkbox,
+    FormControlLabel,
+    Select,
+    MenuItem,
+    CircularProgress,
+    List,
+    ListItem,
+    ListItemText
 } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Refresh as RefreshIcon, PlayArrow as PlayArrowIcon } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
@@ -54,7 +54,7 @@ const LLMModelsWorkspace: React.FC = () => {
             setEditDialogOpen(false);
         },
     });
-    
+
     const deleteMutation = useMutation(deleteModel, {
         onSuccess: () => {
             queryClient.invalidateQueries('llm_models');
@@ -88,11 +88,23 @@ const LLMModelsWorkspace: React.FC = () => {
         }
     };
 
+    const handleImportOllamaModel = (ollamaModel: OllamaModel) => {
+        const newModel: LLMModelCreate = {
+            name: ollamaModel.name,
+            provider: 'ollama',
+            api_base: 'http://localhost:11434',
+            api_key: 'ollama',
+            description: `Imported from Ollama discovery. Size: ${(ollamaModel.size / (1024 * 1024 * 1024)).toFixed(2)} GB`,
+            is_default: false
+        };
+        createMutation.mutate(newModel);
+    };
+
     const openCreateDialog = () => {
         setSelectedModel(null);
         setCreateDialogOpen(true);
     }
-    
+
     const openEditDialog = (model: LLMModel) => {
         setSelectedModel(model);
         setEditDialogOpen(true);
@@ -108,9 +120,9 @@ const LLMModelsWorkspace: React.FC = () => {
             <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Typography variant="h4">LLM Models</Typography>
                 <Box>
-                    <Button 
-                        variant="outlined" 
-                        startIcon={ollamaDiscoveryLoading ? <CircularProgress size={20} /> : <RefreshIcon />} 
+                    <Button
+                        variant="outlined"
+                        startIcon={ollamaDiscoveryLoading ? <CircularProgress size={20} /> : <RefreshIcon />}
                         onClick={handleDiscoverOllamaModels}
                         disabled={ollamaDiscoveryLoading}
                         sx={{ mr: 2 }}
@@ -128,12 +140,17 @@ const LLMModelsWorkspace: React.FC = () => {
                     <Typography variant="h5">Discovered Ollama Models</Typography>
                     <List component={Paper} sx={{ mt: 1 }}>
                         {discoveredOllamaModels.map((ollamaModel) => (
-                            <ListItem key={ollamaModel.name}>
-                                <ListItemText 
-                                    primary={ollamaModel.name} 
-                                    secondary={`Size: ${(ollamaModel.size / (1024 * 1024 * 1024)).toFixed(2)} GB, Modified: ${new Date(ollamaModel.modified_at).toLocaleString()}`} 
+                            <ListItem key={ollamaModel.name}
+                                secondaryAction={
+                                    <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={() => handleImportOllamaModel(ollamaModel)}>
+                                        Import
+                                    </Button>
+                                }
+                            >
+                                <ListItemText
+                                    primary={ollamaModel.name}
+                                    secondary={`Size: ${(ollamaModel.size / (1024 * 1024 * 1024)).toFixed(2)} GB, Modified: ${new Date(ollamaModel.modified_at).toLocaleString()}`}
                                 />
-                                {/* Add an action here to "add" this model to the database if desired */}
                             </ListItem>
                         ))}
                     </List>
@@ -174,7 +191,7 @@ const LLMModelsWorkspace: React.FC = () => {
                 </TableContainer>
             )}
 
-            <ModelDialog 
+            <ModelDialog
                 open={createDialogOpen || editDialogOpen}
                 onClose={() => { setCreateDialogOpen(false); setEditDialogOpen(false); }}
                 onSubmit={selectedModel ? handleUpdateModel : handleCreateModel}
@@ -224,7 +241,7 @@ const ModelDialog: React.FC<ModelDialogProps> = ({ open, onClose, onSubmit, mode
     };
 
     const handleSelectChange = (e: any) => {
-        setFormData(prev => ({...prev, provider: e.target.value}));
+        setFormData(prev => ({ ...prev, provider: e.target.value }));
     }
 
     const handleSubmit = () => {

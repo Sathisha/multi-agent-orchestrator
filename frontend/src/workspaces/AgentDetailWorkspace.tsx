@@ -22,6 +22,7 @@ import {
     UpdateAgentRequest,
     Agent
 } from '../api/agents'
+import { getModels, discoverOllamaModels, LLMModel, OllamaModel } from '../api/llmModels'
 import Editor from '@monaco-editor/react'
 
 interface TabPanelProps {
@@ -67,6 +68,13 @@ const AgentDetailWorkspace: React.FC = () => {
     const [isExecuting, setIsExecuting] = useState(false)
     const [currentExecutionId, setCurrentExecutionId] = useState<string | null>(null)
 
+    const { data: configuredModels, isLoading: isLoadingConfigured } = useQuery<LLMModel[]>('llm_models', getModels)
+    const { data: ollamaModels, isLoading: isLoadingOllama } = useQuery<OllamaModel[]>('discovered_ollama_models', discoverOllamaModels, {
+        retry: 1,
+        refetchOnWindowFocus: false,
+        staleTime: 1000 * 60 * 5 // 5 minutes
+    })
+
     const { data: agent, isLoading, isError } = useQuery(
         ['agent', agentId],
         () => getAgent(agentId!),
@@ -76,7 +84,8 @@ const AgentDetailWorkspace: React.FC = () => {
                 setName(data.name)
                 setDescription(data.description || '')
                 setSystemPrompt(data.system_prompt || '')
-                setModel(data.config?.model || 'gpt-4')
+                // Use model from config or fallback
+                setModel(data.config?.model || data.config?.model_name || 'gpt-4')
                 setTemperature(data.config?.temperature || 0.7)
                 setMaxTokens(data.config?.max_tokens || 2000)
                 setCapabilities(data.config?.capabilities || {
@@ -88,6 +97,49 @@ const AgentDetailWorkspace: React.FC = () => {
             }
         }
     )
+
+    const availableModels = useMemo(() => {
+        const models: { value: string; label: string; provider: string; group: string }[] = [];
+        const seenValues = new Set<string>();
+
+        // Helper to add unique models
+        const addModel = (value: string, label: string, provider: string, group: string) => {
+            if (!seenValues.has(value)) {
+                models.push({ value, label, provider, group });
+                seenValues.add(value);
+            }
+        };
+
+        if (configuredModels && Array.isArray(configuredModels)) {
+            configuredModels.forEach(m => {
+                addModel(m.name, `${m.name} (${m.provider})`, m.provider, 'Configured');
+            });
+        }
+
+        if (ollamaModels && Array.isArray(ollamaModels)) {
+            ollamaModels.forEach(m => {
+                // Determine label based on available fields (name or model)
+                const modelName = m.model || m.name;
+                addModel(modelName, `${modelName} (Ollama)`, 'ollama', 'Discovered');
+            });
+        }
+
+        // If currently selected model is not in the list (and we are not loading), add it nicely
+        // This prevents the "empty select" issue or losing the current setting visually
+        // We only do this if BOTH queries have finished, otherwise we might be premature
+        if (!isLoadingConfigured && !isLoadingOllama && model && !seenValues.has(model)) {
+            // Try to determine provider from existing config or default to unknown
+            const currentProvider = agent?.config?.llm_provider || 'unknown';
+            addModel(model, `${model} (Current)`, currentProvider, 'Current Setting');
+        }
+
+        // Only if absolutely nothing found and not loading, show fallback
+        if (models.length === 0 && !isLoadingConfigured && !isLoadingOllama) {
+            addModel('gpt-4', 'GPT-4 (Default/Fallback)', 'openai', 'Default');
+        }
+
+        return models;
+    }, [configuredModels, ollamaModels, model, agent, isLoadingConfigured, isLoadingOllama]);
 
     const updateMutation = useMutation(
         (data: Partial<UpdateAgentRequest>) => updateAgent(agentId!, data),
@@ -105,13 +157,27 @@ const AgentDetailWorkspace: React.FC = () => {
     )
 
     const handleSave = () => {
+        // Find provider for selected model
+        let selectedProvider = 'ollama';
+        let selectedModelName = model;
+
+        const foundModel = availableModels.find(m => m.value === model);
+        if (foundModel) {
+            selectedProvider = foundModel.provider;
+        } else {
+            // Fallback to existing config if model name didn't change or not in list
+            selectedProvider = agent?.config?.llm_provider || 'ollama';
+        }
+
         updateMutation.mutate({
             name,
             description,
             system_prompt: systemPrompt,
             config: {
                 ...agent?.config,
-                model,
+                model: selectedModelName,     // Frontend state often uses 'model'
+                model_name: selectedModelName, // Backend executor uses 'model_name'
+                llm_provider: selectedProvider,
                 temperature,
                 max_tokens: maxTokens,
                 capabilities,
@@ -405,24 +471,24 @@ const AgentDetailWorkspace: React.FC = () => {
                                         <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>Performance</Typography>
                                     </Box>
 
-                                                                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                                                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                                                <Typography variant="body2" sx={{ color: '#969696' }}>Total Executions</Typography>
-                                                                                <Typography variant="h5" sx={{ fontWeight: 700 }}>{agent.execution_count}</Typography>
-                                                                            </Box>
-                                                                            <Divider sx={{ borderColor: 'rgba(255, 255, 255, 0.05)' }} />
-                                                                            {/* TODO: Implement avg response time */}
-                                                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                                                <Typography variant="body2" sx={{ color: '#969696' }}>Avg. Response Time</Typography>
-                                                                                <Typography variant="h5" sx={{ fontWeight: 700, color: '#4caf50' }}>1.2s</Typography>
-                                                                            </Box>
-                                                                            <Divider sx={{ borderColor: 'rgba(255, 255, 255, 0.05)' }} />
-                                                                            {/* TODO: Implement success rate */}
-                                                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                                                <Typography variant="body2" sx={{ color: '#969696' }}>Success Rate</Typography>
-                                                                                <Typography variant="h5" sx={{ fontWeight: 700, color: '#007acc' }}>98%</Typography>
-                                                                            </Box>
-                                                                        </Box>
+                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <Typography variant="body2" sx={{ color: '#969696' }}>Total Executions</Typography>
+                                            <Typography variant="h5" sx={{ fontWeight: 700 }}>{agent.execution_count}</Typography>
+                                        </Box>
+                                        <Divider sx={{ borderColor: 'rgba(255, 255, 255, 0.05)' }} />
+                                        {/* TODO: Implement avg response time */}
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <Typography variant="body2" sx={{ color: '#969696' }}>Avg. Response Time</Typography>
+                                            <Typography variant="h5" sx={{ fontWeight: 700, color: '#4caf50' }}>1.2s</Typography>
+                                        </Box>
+                                        <Divider sx={{ borderColor: 'rgba(255, 255, 255, 0.05)' }} />
+                                        {/* TODO: Implement success rate */}
+                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <Typography variant="body2" sx={{ color: '#969696' }}>Success Rate</Typography>
+                                            <Typography variant="h5" sx={{ fontWeight: 700, color: '#007acc' }}>98%</Typography>
+                                        </Box>
+                                    </Box>
                                     <Button
                                         fullWidth
                                         variant="outlined"
@@ -620,11 +686,11 @@ const AgentDetailWorkspace: React.FC = () => {
                                         onChange={(e) => { setModel(e.target.value); setHasUnsavedChanges(true) }}
                                         sx={{ borderRadius: '8px' }}
                                     >
-                                        <MenuItem value="gpt-4">GPT-4 Turbo</MenuItem>
-                                        <MenuItem value="gpt-3.5-turbo">GPT-3.5 Turbo</MenuItem>
-                                        <MenuItem value="claude-3-opus">Claude 3 Opus</MenuItem>
-                                        <MenuItem value="claude-3-sonnet">Claude 3 Sonnet</MenuItem>
-                                        <MenuItem value="llama-2-70b">Llama 2 70B (Ollama)</MenuItem>
+                                        {availableModels.map((m) => (
+                                            <MenuItem key={`${m.provider}-${m.value}`} value={m.value}>
+                                                {m.label}
+                                            </MenuItem>
+                                        ))}
                                     </Select>
                                 </FormControl>
 

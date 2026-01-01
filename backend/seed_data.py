@@ -329,10 +329,37 @@ async def create_sample_tools(user_id: uuid.UUID):
         print(f"✓ Created {len(tools)} sample tools")
 
 
+async def wait_for_database():
+    """Wait for database to be ready with retry logic."""
+    from shared.database.connection import async_engine
+    from sqlalchemy import text
+    import asyncio
+    
+    max_retries = 10
+    retry_delay = 2
+    
+    for attempt in range(max_retries):
+        try:
+            async with async_engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+            print(f"✅ Database connection established")
+            return True
+        except Exception as e:
+            if attempt < max_retries - 1:
+                print(f"⏳ Waiting for database... (attempt {attempt + 1}/{max_retries})")
+                await asyncio.sleep(retry_delay)
+            else:
+                print(f"❌ Failed to connect to database after {max_retries} attempts")
+                raise
+
+
 async def main():
     print("🌱 Seeding database with sample data...\n")
     
     try:
+        # Wait for database to be ready
+        await wait_for_database()
+        
         # Create admin user
         admin_user = await create_admin_user()
         

@@ -294,65 +294,108 @@ class AgentExecutorService(BaseService):
 
     async def _execute_agent_background(self, context: AgentExecutionContext):
         """Wrapper to run execution with a fresh session."""
-        async with AsyncSessionLocal() as session:
-            # Create a fresh executor instance for the background task
-            # this avoids "another operation in progress" errors by not sharing sessions
-            executor = AgentExecutorService(session)
-            executor.memory_service = await create_memory_manager_service(session, "default")
-            await executor._execute_agent_logic(context)
+        logger.info(f"[EXEC-BG] Starting background execution for {context.execution_id}")
+        try:
+            async with AsyncSessionLocal() as session:
+                logger.debug(f"[EXEC-BG] Created new session for execution {context.execution_id}")
+                # Create a fresh executor instance for the background task
+                # this avoids "another operation in progress" errors by not sharing sessions
+                executor = AgentExecutorService(session)
+                logger.debug(f"[EXEC-BG] Creating memory service for execution {context.execution_id}")
+                executor.memory_service = await create_memory_manager_service(session, "default")
+                logger.debug(f"[EXEC-BG] Memory service created, executing logic for {context.execution_id}")
+                await executor._execute_agent_logic(context)
+                logger.info(f"[EXEC-BG] Background execution completed for {context.execution_id}")
+        except Exception as e:
+            logger.error(f"[EXEC-BG] Background execution failed for {context.execution_id}: {e}", exc_info=True)
 
     async def _execute_agent_logic(self, context: AgentExecutionContext) -> AgentExecutionResult:
+        logger.info(f"[EXEC-LOGIC] Starting execution logic for {context.execution_id}")
         start_time = time.time()
         try:
+            logger.debug(f"[EXEC-LOGIC] Fetching agent {context.agent_id}")
             agent = await self._get_agent(context.agent_id)
             if not agent:
                 raise ValueError(f"Agent {context.agent_id} not found")
+            logger.debug(f"[EXEC-LOGIC] Agent {context.agent_id} found: {agent.name}")
 
             # Guardrails, Memory... (Simplified logic for brevity but preserving key flows)
             memory_context = []
-            if context.config.get("memory_enabled", True):
+            memory_enabled = context.config.get("memory_enabled", True)
+            logger.debug(f"[EXEC-LOGIC] Memory enabled: {memory_enabled}")
+            if memory_enabled:
+                logger.debug(f"[EXEC-LOGIC] Performing semantic search for execution {context.execution_id}")
                 memory_results = await self.memory_service.semantic_search(
                     agent_id=context.agent_id,
                     query=str(context.input_data),
                     limit=5
                 )
                 memory_context = [res.content for res in memory_results]
+                logger.debug(f"[EXEC-LOGIC] Retrieved {len(memory_context)} memory items")
 
-            llm_request = self._prepare_llm_request(agent, context, memory_context)
+            logger.debug(f"[EXEC-LOGIC] Preparing messages for execution {context.execution_id}")
+            
+            # Prepare messages
+            system_prompt = agent.system_prompt or "You are a helpful assistant."
+            if memory_context:
+                system_prompt += f"\nContext from memory: {', '.join(memory_context)}"
+            
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": str(context.input_data)}
+            ]
+            
+            # Create agent config from agent.config dict
+            from ..models.agent import AgentConfig
+            agent_config = AgentConfig(
+                name=agent.name,
+                model=agent.config.get("model_name", "llama3"),
+                temperature=agent.config.get("temperature", 0.7),
+                max_tokens=agent.config.get("max_tokens", 2000),
+                llm_provider=agent.config.get("llm_provider", "ollama")
+            )
+            
+            logger.info(f"[EXEC-LOGIC] Calling LLM service for execution {context.execution_id} (timeout: {context.timeout_seconds}s)")
             
             llm_response = await asyncio.wait_for(
-                self.llm_service.generate_response(llm_request),
+                self.llm_service.generate_response(messages, agent_config, stream=False),
                 timeout=context.timeout_seconds
             )
+            logger.info(f"[EXEC-LOGIC] LLM response received for execution {context.execution_id}")
             
             # Store memory
             if context.config.get("memory_enabled", True) and context.session_id:
+                logger.debug(f"[EXEC-LOGIC] Storing memory for execution {context.execution_id}")
                 await self.memory_service.store_memory(
                     agent_id=context.agent_id,
-                    content=f"InOut: {context.input_data} -> {llm_response}",
+                    content=f"InOut: {context.input_data} -> {llm_response.content}",
                     session_id=context.session_id,
                     metadata={"execution_id": context.execution_id}
                 )
+                logger.debug(f"[EXEC-LOGIC] Memory stored for execution {context.execution_id}")
 
             execution_time_ms = int((time.time() - start_time) * 1000)
-            tokens_used = llm_response.get("usage", {}).get("total_tokens", 0)
+            tokens_used = llm_response.usage.total_tokens if llm_response.usage else 0
             cost = 0.0 # Simplify cost
             
+            logger.debug(f"[EXEC-LOGIC] Creating execution result for {context.execution_id}")
             result = AgentExecutionResult(
                 execution_id=context.execution_id,
                 status=ExecutionStatus.COMPLETED,
-                output_data=llm_response,
+                output_data={"content": llm_response.content, "model": llm_response.model},
                 tokens_used=tokens_used,
                 execution_time_ms=execution_time_ms,
                 cost=cost,
                 completed_at=datetime.utcnow()
             )
             
+            logger.info(f"[EXEC-LOGIC] Updating execution result to COMPLETED for {context.execution_id}")
             await self._update_execution_result(result)
+            logger.info(f"[EXEC-LOGIC] Execution {context.execution_id} completed successfully in {execution_time_ms}ms")
             return result
 
         except Exception as e:
-            logger.error(f"Execution failed: {e}")
+            logger.error(f"[EXEC-LOGIC] Execution {context.execution_id} failed: {e}", exc_info=True)
             result = AgentExecutionResult(
                 execution_id=context.execution_id,
                 status=ExecutionStatus.FAILED,
@@ -360,10 +403,14 @@ class AgentExecutorService(BaseService):
                 execution_time_ms=int((time.time() - start_time) * 1000),
                 completed_at=datetime.utcnow()
             )
+            logger.info(f"[EXEC-LOGIC] Updating execution result to FAILED for {context.execution_id}")
             await self._update_execution_result(result)
+            logger.info(f"[EXEC-LOGIC] Execution {context.execution_id} marked as failed")
             return result
         finally:
+            logger.debug(f"[EXEC-LOGIC] Cleaning up execution {context.execution_id}")
             self._cleanup_execution(context.execution_id)
+            logger.debug(f"[EXEC-LOGIC] Cleanup completed for execution {context.execution_id}")
 
     def _cleanup_execution(self, execution_id: str):
         if execution_id in self.lifecycle.active_executions:

@@ -195,7 +195,7 @@ class LLMService:
             # Create LLM request
             request = LLMRequest(
                 messages=llm_messages,
-                model=agent_config.model_name,
+                model=agent_config.model,
                 temperature=agent_config.temperature,
                 max_tokens=agent_config.max_tokens,
                 stream=stream
@@ -282,7 +282,7 @@ class LLMService:
             # Create LLM request
             request = LLMRequest(
                 messages=llm_messages,
-                model=agent_config.model_name,
+                model=agent_config.model,
                 temperature=agent_config.temperature,
                 max_tokens=agent_config.max_tokens,
                 stream=True

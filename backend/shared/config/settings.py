@@ -94,6 +94,29 @@ class APISettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="API_")
 
 
+class MemorySettings(BaseSettings):
+    """Memory system configuration settings."""
+    
+    embedding_provider: str = Field(
+        default="openai",
+        description="Embedding provider to use (openai or local)"
+    )
+    embedding_model: str = Field(
+        default="text-embedding-3-small",
+        description="Embedding model name"
+    )
+    openai_api_key: Optional[str] = Field(
+        default=None,
+        description="OpenAI API key for embeddings (uses OPENAI_API_KEY env if not set)"
+    )
+    vector_db_path: str = Field(
+        default="./data/chroma",
+        description="Path to vector database storage"
+    )
+    
+    model_config = SettingsConfigDict(env_prefix="MEMORY_")
+
+
 class Settings(BaseSettings):
     """Main application settings."""
     
@@ -111,6 +134,7 @@ class Settings(BaseSettings):
     security: SecuritySettings = Field(default_factory=SecuritySettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     api: APISettings = Field(default_factory=APISettings)
+    memory: MemorySettings = Field(default_factory=MemorySettings)
     
     model_config = SettingsConfigDict(
         env_file=".env",
