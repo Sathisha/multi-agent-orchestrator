@@ -74,7 +74,7 @@ src/
 
 ## API Integration
 
-The frontend connects to the backend API at `http://localhost:8000` by default. API calls are proxied through Vite during development and through Nginx in production.
+The frontend connects to the backend API through Kong Gateway at `http://localhost:8000` by default. API calls are proxied through Vite during development and through Nginx in production. Kong routes `/api` requests to the backend service.
 
 ## Styling
 

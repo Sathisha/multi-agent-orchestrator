@@ -2,7 +2,6 @@ import React from 'react'
 import { Box, Typography, Button, Card, CardContent, Grid, Chip } from '@mui/material'
 import { 
   Add as AddIcon, 
-  Build as ToolIcon, 
   Code as CodeIcon,
   Extension as ExtensionIcon,
   CloudDownload as DownloadIcon

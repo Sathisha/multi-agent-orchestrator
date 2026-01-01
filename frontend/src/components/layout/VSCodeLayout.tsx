@@ -1,6 +1,8 @@
 import React, { useState } from 'react'
 import { Box } from '@mui/material'
-import SplitPane from 'react-split-pane'
+import { Allotment } from 'allotment'
+import 'allotment/dist/style.css'
+import '../../styles/allotment-theme.css'
 import ActivityBar from './ActivityBar'
 import SidePanel from './SidePanel'
 import MainEditor from './MainEditor'
@@ -30,72 +32,52 @@ const VSCodeLayout: React.FC<VSCodeLayoutProps> = ({ children }) => {
       {/* Main content area */}
       <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Activity Bar */}
-        <ActivityBar 
-          activeView={activeView} 
+        <ActivityBar
           onViewChange={setActiveView}
           onToggleSidePanel={() => setSidePanelOpen(!sidePanelOpen)}
         />
-        
+
         {/* Main workspace area */}
         <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-          <SplitPane
-            split="horizontal"
-            minSize={200}
-            defaultSize={terminalOpen ? '70%' : '100%'}
-            resizerStyle={{
-              background: '#007acc',
-              opacity: 0.2,
-              zIndex: 1,
-              MozUserSelect: 'none',
-              WebkitUserSelect: 'none',
-              msUserSelect: 'none',
-              userSelect: 'none',
-            }}
-          >
-            {/* Top pane: Side panel + Main editor */}
-            <Box sx={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
-              <SplitPane
-                split="vertical"
-                minSize={200}
-                maxSize={600}
-                defaultSize={sidePanelOpen ? 300 : 0}
-                resizerStyle={{
-                  background: '#007acc',
-                  opacity: 0.2,
-                  zIndex: 1,
-                  MozUserSelect: 'none',
-                  WebkitUserSelect: 'none',
-                  msUserSelect: 'none',
-                  userSelect: 'none',
-                }}
-              >
-                {/* Side Panel */}
-                {sidePanelOpen && (
-                  <SidePanel 
-                    activeView={activeView}
-                    onClose={() => setSidePanelOpen(false)}
-                  />
-                )}
-                
-                {/* Main Editor Area */}
-                <MainEditor>
-                  {children}
-                </MainEditor>
-              </SplitPane>
-            </Box>
-            
-            {/* Bottom pane: Terminal */}
+          <Allotment vertical={true}>
+            {/* Main content area */}
+            <Allotment.Pane>
+              <Box sx={{ display: 'flex', height: '100%' }}>
+                <Allotment vertical={false}>
+                  {/* Side Panel */}
+                  {sidePanelOpen && (
+                    <Allotment.Pane minSize={200} maxSize={600} preferredSize={300}>
+                      <SidePanel
+                        activeView={activeView}
+                        onClose={() => setSidePanelOpen(false)}
+                      />
+                    </Allotment.Pane>
+                  )}
+
+                  {/* Main Editor Area */}
+                  <Allotment.Pane>
+                    <MainEditor>
+                      {children}
+                    </MainEditor>
+                  </Allotment.Pane>
+                </Allotment>
+              </Box>
+            </Allotment.Pane>
+
+            {/* Terminal Panel */}
             {terminalOpen && (
-              <TerminalPanel 
-                onClose={() => setTerminalOpen(false)}
-              />
+              <Allotment.Pane minSize={200} preferredSize="30%">
+                <TerminalPanel
+                  onClose={() => setTerminalOpen(false)}
+                />
+              </Allotment.Pane>
             )}
-          </SplitPane>
+          </Allotment>
         </Box>
       </Box>
-      
+
       {/* Status Bar */}
-      <StatusBar 
+      <StatusBar
         onToggleTerminal={() => setTerminalOpen(!terminalOpen)}
         terminalOpen={terminalOpen}
       />

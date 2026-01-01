@@ -12,7 +12,7 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
         secure: false,
-        rewrite: (path) => path.replace(/^\/api/, ''),
+        // Don't rewrite path - Kong expects /api prefix
       },
     },
   },

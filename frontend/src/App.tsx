@@ -1,4 +1,3 @@
-import React from 'react'
 import { Routes, Route } from 'react-router-dom'
 import VSCodeLayout from './components/layout/VSCodeLayout'
 import AgentWorkspace from './workspaces/AgentWorkspace'

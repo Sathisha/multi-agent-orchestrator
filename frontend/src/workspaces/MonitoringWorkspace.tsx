@@ -237,7 +237,7 @@ const MonitoringWorkspace: React.FC = () => {
             >
               <CardContent>
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                  <BugReport sx={{ color: '#f48771', mr: 1 }} />
+                  <LogsIcon sx={{ color: '#f48771', mr: 1 }} />
                   <Typography variant="subtitle1" sx={{ color: '#cccccc' }}>
                     Error Rate
                   </Typography>

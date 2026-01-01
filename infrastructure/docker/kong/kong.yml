@@ -3,7 +3,7 @@ _transform: true
 
 services:
   - name: ai-agent-framework-api
-    url: http://host.docker.internal:8000
+    url: http://backend:8000
     plugins:
       - name: cors
         config:

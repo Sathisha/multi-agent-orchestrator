@@ -5,19 +5,17 @@ import {
   SmartToy as AgentIcon,
   AccountTree as WorkflowIcon,
   Build as ToolsIcon,
-  Monitoring as MonitoringIcon,
+  Monitor as MonitoringIcon,
   Settings as SettingsIcon,
   Menu as MenuIcon,
 } from '@mui/icons-material'
 
 interface ActivityBarProps {
-  activeView: string
   onViewChange: (view: string) => void
   onToggleSidePanel: () => void
 }
 
 const ActivityBar: React.FC<ActivityBarProps> = ({ 
-  activeView, 
   onViewChange, 
   onToggleSidePanel 
 }) => {

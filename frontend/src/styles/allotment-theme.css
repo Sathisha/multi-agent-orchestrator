@@ -1,0 +1,25 @@
+/* Custom Allotment theme for VS Code-like appearance */
+.allotment > .allotment-separator {
+  background-color: #2d2d30;
+  border: none;
+}
+
+.allotment > .allotment-separator:hover {
+  background-color: #007acc;
+}
+
+.allotment > .allotment-separator.allotment-separator-resizing {
+  background-color: #007acc;
+}
+
+/* Vertical separator */
+.allotment.allotment-vertical > .allotment-separator {
+  width: 4px;
+  cursor: col-resize;
+}
+
+/* Horizontal separator */
+.allotment.allotment-horizontal > .allotment-separator {
+  height: 4px;
+  cursor: row-resize;
+}

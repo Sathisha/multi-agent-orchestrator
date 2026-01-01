@@ -14,7 +14,7 @@ import {
 import {
   ExpandMore as ExpandMoreIcon,
   ChevronRight as ChevronRightIcon,
-  Monitoring as MonitoringIcon,
+  Monitor as MonitoringIcon,
   Refresh as RefreshIcon,
   Folder as FolderIcon,
   FolderOpen as FolderOpenIcon,

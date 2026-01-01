@@ -2,7 +2,16 @@
 
 This document tracks all third-party libraries, frameworks, and Docker images used in the AI Agent Framework project.
 
-**Last Updated:** December 31, 2025 (Updated with docker-compose.frontend.yml changes and comprehensive dependency analysis)
+**Last Updated:** January 1, 2026 (Updated after frontend/Dockerfile dependency installation change - now includes dev dependencies in production build)
+
+## Recent Changes
+
+### January 1, 2026 - Frontend Dockerfile Dependency Change
+- **Change**: Modified `frontend/Dockerfile` from `npm ci --only=production` to `npm ci`
+- **Impact**: Production frontend build now includes development dependencies
+- **Security Consideration**: Development dependencies are now included in production image, increasing attack surface
+- **Recommendation**: Consider reverting to `--only=production` or use multi-stage build to exclude dev dependencies from final image
+- **Affected Dependencies**: All frontend devDependencies listed below are now included in production builds
 
 ## Docker Images
 

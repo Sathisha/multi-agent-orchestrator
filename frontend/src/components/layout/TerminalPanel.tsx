@@ -129,7 +129,7 @@ const TerminalPanel: React.FC<TerminalPanelProps> = ({ onClose }) => {
               [INFO] Frontend application started successfully
             </Typography>
             <Typography variant="body2" sx={{ color: '#cccccc' }}>
-              [INFO] Connected to backend API at http://localhost:8000
+              [INFO] Connected to backend API via Kong Gateway at http://localhost:8000
             </Typography>
           </Box>
         )}
