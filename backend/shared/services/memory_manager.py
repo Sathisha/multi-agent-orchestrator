@@ -79,9 +79,10 @@ class MemoryConfig:
     importance_decay_rate: float = 0.95
     similarity_threshold: float = 0.7
     cleanup_interval_hours: int = 24
-    embedding_provider: str = "openai"  # "openai" or "local"
-    embedding_model: str = "text-embedding-3-small"  # For OpenAI or local model name
+    embedding_provider: str = "openai"  # "openai", "ollama", or "local"
+    embedding_model: str = "text-embedding-3-small"  # For OpenAI, Ollama or local model name
     openai_api_key: Optional[str] = None  # Optional, uses OPENAI_API_KEY env var if not set
+    ollama_base_url: str = "http://ollama:11434"
     vector_db_path: str = "./data/chroma"
 
 
@@ -114,12 +115,18 @@ class MemoryManager:
         """Initialize the memory management system."""
         try:
             # Initialize embedding provider
-            from .embeddings import OpenAIEmbeddingProvider, LocalEmbeddingProvider
+            from .embeddings import OpenAIEmbeddingProvider, LocalEmbeddingProvider, OllamaEmbeddingProvider
             
             if self.config.embedding_provider == "openai":
                 self.logger.info(f"Initializing OpenAI embedding provider: {self.config.embedding_model}")
                 self._embedding_provider = OpenAIEmbeddingProvider(
                     api_key=self.config.openai_api_key,
+                    model=self.config.embedding_model
+                )
+            elif self.config.embedding_provider == "ollama":
+                self.logger.info(f"Initializing Ollama embedding provider: {self.config.embedding_model} at {self.config.ollama_base_url}")
+                self._embedding_provider = OllamaEmbeddingProvider(
+                    base_url=self.config.ollama_base_url,
                     model=self.config.embedding_model
                 )
             else:  # local
@@ -815,6 +822,7 @@ async def get_memory_manager() -> MemoryManager:
             embedding_provider=settings.memory.embedding_provider,
             embedding_model=settings.memory.embedding_model,
             openai_api_key=settings.memory.openai_api_key,
+            ollama_base_url=settings.memory.ollama_base_url,
             vector_db_path=settings.memory.vector_db_path
         )
         

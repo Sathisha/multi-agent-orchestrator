@@ -99,7 +99,7 @@ class MemorySettings(BaseSettings):
     
     embedding_provider: str = Field(
         default="openai",
-        description="Embedding provider to use (openai or local)"
+        description="Embedding provider to use (openai, ollama, or local)"
     )
     embedding_model: str = Field(
         default="text-embedding-3-small",
@@ -108,6 +108,10 @@ class MemorySettings(BaseSettings):
     openai_api_key: Optional[str] = Field(
         default=None,
         description="OpenAI API key for embeddings (uses OPENAI_API_KEY env if not set)"
+    )
+    ollama_base_url: str = Field(
+        default="http://ollama:11434",
+        description="Base URL for Ollama API"
     )
     vector_db_path: str = Field(
         default="./data/chroma",

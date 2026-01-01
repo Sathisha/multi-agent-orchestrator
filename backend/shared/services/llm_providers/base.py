@@ -184,7 +184,9 @@ class BaseLLMProvider(ABC):
     
     def _handle_error(self, error: Exception, context: str = "") -> LLMError:
         """Convert provider-specific errors to LLMError."""
-        error_message = f"{context}: {str(error)}" if context else str(error)
+        # Use repr(error) if str(error) is empty to avoid trailing colons
+        err_str = str(error) if str(error) else repr(error)
+        error_message = f"{context}: {err_str}" if context else err_str
         
         # Map common error types
         if "authentication" in str(error).lower() or "unauthorized" in str(error).lower():

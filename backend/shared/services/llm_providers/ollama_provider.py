@@ -26,6 +26,7 @@ class OllamaConfig(LLMProviderConfig):
     keep_alive: str = "5m"
     num_predict: Optional[int] = None
     num_ctx: Optional[int] = None
+    timeout: int = 300  # Default to 300 seconds for Ollama
     
     def __init__(self, **data):
         if "provider_type" not in data:
@@ -129,9 +130,27 @@ class OllamaProvider(BaseLLMProvider):
             if self.config.keep_alive:
                 payload["keep_alive"] = self.config.keep_alive
             
-            # Make request
-            response = await self._client.post("/api/chat", json=payload)
-            response.raise_for_status()
+            # Make request with retries
+            max_retries = 3
+            retry_delay = 2
+            
+            for attempt in range(max_retries):
+                try:
+                    response = await self._client.post("/api/chat", json=payload)
+                    response.raise_for_status()
+                    break
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code == 500 and attempt < max_retries - 1:
+                        self.logger.warning(f"Ollama generation failed with 500 (attempt {attempt + 1}/{max_retries}). Retrying in {retry_delay}s...")
+                        await asyncio.sleep(retry_delay)
+                        continue
+                    raise
+                except (httpx.RequestError, asyncio.TimeoutError) as e:
+                    if attempt < max_retries - 1:
+                        self.logger.warning(f"Ollama connection error (attempt {attempt + 1}/{max_retries}): {str(e)}. Retrying...")
+                        await asyncio.sleep(retry_delay)
+                        continue
+                    raise
             
             response_data = response.json()
             response_time_ms = int((time.time() - start_time) * 1000)
@@ -211,20 +230,39 @@ class OllamaProvider(BaseLLMProvider):
             if self.config.keep_alive:
                 payload["keep_alive"] = self.config.keep_alive
             
-            # Make streaming request
-            async with self._client.stream("POST", "/api/chat", json=payload) as response:
-                response.raise_for_status()
-                
-                async for line in response.aiter_lines():
-                    if line.strip():
-                        try:
-                            data = json.loads(line)
-                            if "message" in data and "content" in data["message"]:
-                                content = data["message"]["content"]
-                                if content:
-                                    yield content
-                        except json.JSONDecodeError:
-                            continue
+            # Make streaming request with retries
+            max_retries = 3
+            retry_delay = 2
+            
+            for attempt in range(max_retries):
+                try:
+                    async with self._client.stream("POST", "/api/chat", json=payload) as response:
+                        response.raise_for_status()
+                        
+                        async for line in response.aiter_lines():
+                            if line.strip():
+                                try:
+                                    data = json.loads(line)
+                                    if "message" in data and "content" in data["message"]:
+                                        content = data["message"]["content"]
+                                        if content:
+                                            yield content
+                                except json.JSONDecodeError:
+                                    continue
+                    # Successfully completed streaming
+                    return
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code == 500 and attempt < max_retries - 1:
+                        self.logger.warning(f"Ollama streaming failed with 500 (attempt {attempt + 1}/{max_retries}). Retrying...")
+                        await asyncio.sleep(retry_delay)
+                        continue
+                    raise
+                except (httpx.RequestError, asyncio.TimeoutError) as e:
+                    if attempt < max_retries - 1:
+                        self.logger.warning(f"Ollama connection error (attempt {attempt + 1}/{max_retries}): {str(e)}. Retrying...")
+                        await asyncio.sleep(retry_delay)
+                        continue
+                    raise
                         
         except Exception as e:
             raise self._handle_error(e, "Failed to stream response")

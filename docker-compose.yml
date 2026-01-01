@@ -96,9 +96,10 @@ services:
       - LOG_LEVEL=INFO
       - RECREATE_DB=false # Set to true to recreate database on startup
       - ENABLE_MIGRATIONS=false # Set to true to enable Alembic migrations
-      - MEMORY_EMBEDDING_PROVIDER=${MEMORY_EMBEDDING_PROVIDER:-openai}
-      - MEMORY_EMBEDDING_MODEL=${MEMORY_EMBEDDING_MODEL:-text-embedding-3-small}
+      - MEMORY_EMBEDDING_PROVIDER=ollama
+      - MEMORY_EMBEDDING_MODEL=nomic-embed-text
       - OPENAI_API_KEY=${OPENAI_API_KEY:-not-required-for-ollama}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
       - MEMORY_VECTOR_DB_PATH=/app/data/chroma
     ports:
       - "8001:8000"
@@ -175,6 +176,12 @@ services:
         if ! ollama list | grep -q 'gemma'; then
           echo 'Pulling gemma model...'
           ollama pull gemma
+        fi;
+
+        # Pull nomic-embed-text if not available
+        if ! ollama list | grep -q 'nomic-embed-text'; then
+          echo 'Pulling nomic-embed-text model...'
+          ollama pull nomic-embed-text
         fi;
         
         wait

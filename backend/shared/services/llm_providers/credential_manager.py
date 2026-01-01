@@ -251,6 +251,11 @@ class CredentialManager:
             if value:
                 credentials[cred_key] = value
         
+        # Fallback for Ollama if not provided
+        if provider_type == LLMProviderType.OLLAMA and "base_url" not in credentials:
+            credentials["base_url"] = "http://ollama:11434"
+            self.logger.info("Using default Ollama base URL: http://ollama:11434")
+        
         # Return credentials only if we have at least one value
         return credentials if credentials else None
     

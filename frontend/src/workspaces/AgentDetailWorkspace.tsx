@@ -233,7 +233,7 @@ const AgentDetailWorkspace: React.FC = () => {
                 } catch (error) {
                     console.error('Polling error:', error);
                 }
-            }, 1000);
+            }, 3000);
         }
 
         return () => {
