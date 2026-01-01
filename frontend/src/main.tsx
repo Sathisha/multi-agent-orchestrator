@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from 'react-query'
 import { ThemeProvider, createTheme } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
 import App from './App'
+import { AuthProvider } from './context/AuthContext'
 
 // Create a dark theme similar to VS Code
 const darkTheme = createTheme({
@@ -75,10 +76,12 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>
       <QueryClientProvider client={queryClient}>
-        <ThemeProvider theme={darkTheme}>
-          <CssBaseline />
-          <App />
-        </ThemeProvider>
+        <AuthProvider>
+          <ThemeProvider theme={darkTheme}>
+            <CssBaseline />
+            <App />
+          </ThemeProvider>
+        </AuthProvider>
       </QueryClientProvider>
     </BrowserRouter>
   </React.StrictMode>,

@@ -8,15 +8,15 @@ from pydantic import BaseModel, Field
 
 from ..database.connection import get_async_db
 from ..services.agent_executor import AgentExecutorService, ExecutionStatus, lifecycle_manager
-from ..middleware.tenant import get_tenant_aware_session
-from ..models.agent import AgentExecution
+from ..services.auth import get_current_user
+from ..models.agent import AgentExecution, Agent
+from ..models.user import User
 
 router = APIRouter(prefix="/api/v1/agent-executor", tags=["agent-executor"])
 
 
 class ExecuteAgentRequest(BaseModel):
     """Request model for executing an agent."""
-    
     input_data: Dict[str, Any] = Field(..., description="Input data for agent execution")
     session_id: Optional[str] = Field(None, description="Session ID for conversation continuity")
     timeout_seconds: int = Field(300, ge=30, le=3600, description="Execution timeout in seconds")
@@ -24,7 +24,6 @@ class ExecuteAgentRequest(BaseModel):
 
 class ExecuteAgentResponse(BaseModel):
     """Response model for agent execution."""
-    
     execution_id: str = Field(..., description="Unique execution identifier")
     agent_id: str = Field(..., description="Agent identifier")
     status: str = Field(..., description="Current execution status")
@@ -33,7 +32,6 @@ class ExecuteAgentResponse(BaseModel):
 
 class ExecutionStatusResponse(BaseModel):
     """Response model for execution status."""
-    
     execution_id: str = Field(..., description="Execution identifier")
     agent_id: str = Field(..., description="Agent identifier")
     status: str = Field(..., description="Current status")
@@ -49,22 +47,19 @@ class ExecutionStatusResponse(BaseModel):
 
 class ActiveExecutionResponse(BaseModel):
     """Response model for active execution."""
-    
     execution_id: str = Field(..., description="Execution identifier")
     agent_id: str = Field(..., description="Agent identifier")
     status: str = Field(..., description="Current status")
     started_at: str = Field(..., description="Start timestamp")
-    runtime_seconds: float = Field(..., description="Current runtime in seconds")
-    progress: Dict[str, Any] = Field(..., description="Progress information")
+    # runtime_seconds: float = Field(..., description="Current runtime in seconds") # Optional in recent refactor? kept it
+    progress: Optional[Dict[str, Any]] = Field(None, description="Progress information")
 
 
 class SystemStatusResponse(BaseModel):
     """Response model for system status."""
-    
-    total_active_executions: int = Field(..., description="Total active executions across all tenants")
-    tenant_count: int = Field(..., description="Number of active tenants")
+    total_active_executions: int = Field(..., description="Total active executions")
     monitoring_enabled: bool = Field(..., description="Whether monitoring is enabled")
-    tenant_stats: Dict[str, Any] = Field(..., description="Per-tenant statistics")
+    # tenant_stats: Dict[str, Any] # Removed
 
 
 @router.post("/{agent_id}/execute", response_model=ExecuteAgentResponse)
@@ -72,16 +67,11 @@ async def execute_agent(
     agent_id: UUID,
     request: ExecuteAgentRequest,
     background_tasks: BackgroundTasks,
-    session_and_context = Depends(get_tenant_aware_session),
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
+    session: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Execute an agent asynchronously."""
-    session, tenant_context = session_and_context
-    
-    if not tenant_context:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    executor = lifecycle_manager.get_executor(session, tenant_context.tenant_id)
+    executor = lifecycle_manager.get_executor(session)
     
     try:
         execution_id = await executor.start_agent_execution(
@@ -89,7 +79,7 @@ async def execute_agent(
             input_data=request.input_data,
             session_id=request.session_id,
             timeout_seconds=request.timeout_seconds,
-            created_by=current_user["user_id"]
+            created_by=str(current_user.id)
         )
         
         return ExecuteAgentResponse(
@@ -108,16 +98,11 @@ async def execute_agent(
 @router.post("/executions/{execution_id}/stop")
 async def stop_execution(
     execution_id: UUID,
-    session_and_context = Depends(get_tenant_aware_session),
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
+    session: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Stop a running agent execution."""
-    session, tenant_context = session_and_context
-    
-    if not tenant_context:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    executor = lifecycle_manager.get_executor(session, tenant_context.tenant_id)
+    executor = lifecycle_manager.get_executor(session)
     
     success = await executor.stop_agent_execution(str(execution_id))
     
@@ -130,16 +115,11 @@ async def stop_execution(
 @router.post("/executions/{execution_id}/restart", response_model=ExecuteAgentResponse)
 async def restart_execution(
     execution_id: UUID,
-    session_and_context = Depends(get_tenant_aware_session),
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
+    session: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Restart a failed or cancelled agent execution."""
-    session, tenant_context = session_and_context
-    
-    if not tenant_context:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    executor = lifecycle_manager.get_executor(session, tenant_context.tenant_id)
+    executor = lifecycle_manager.get_executor(session)
     
     new_execution_id = await executor.restart_agent_execution(str(execution_id))
     
@@ -160,15 +140,11 @@ async def restart_execution(
 @router.get("/executions/{execution_id}/status", response_model=ExecutionStatusResponse)
 async def get_execution_status(
     execution_id: UUID,
-    session_and_context = Depends(get_tenant_aware_session)
+    session: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Get the status of an agent execution."""
-    session, tenant_context = session_and_context
-    
-    if not tenant_context:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    executor = lifecycle_manager.get_executor(session, tenant_context.tenant_id)
+    executor = lifecycle_manager.get_executor(session)
     
     status_info = await executor.get_execution_status(str(execution_id))
     
@@ -180,15 +156,11 @@ async def get_execution_status(
 
 @router.get("/executions/active", response_model=List[ActiveExecutionResponse])
 async def list_active_executions(
-    session_and_context = Depends(get_tenant_aware_session)
+    session: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(get_current_user)
 ):
-    """List all currently active executions for the tenant."""
-    session, tenant_context = session_and_context
-    
-    if not tenant_context:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    executor = lifecycle_manager.get_executor(session, tenant_context.tenant_id)
+    """List all currently active executions."""
+    executor = lifecycle_manager.get_executor(session)
     
     active_executions = await executor.list_active_executions()
     
@@ -201,25 +173,15 @@ async def list_agent_executions(
     status_filter: Optional[ExecutionStatus] = None,
     limit: int = 50,
     offset: int = 0,
-    session_and_context = Depends(get_tenant_aware_session)
+    session: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(get_current_user)
 ):
     """List executions for a specific agent."""
-    session, tenant_context = session_and_context
+    executor = lifecycle_manager.get_executor(session)
     
-    if not tenant_context:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    executor = lifecycle_manager.get_executor(session, tenant_context.tenant_id)
-    
-    # Get executions from database
     from sqlalchemy import select, and_
     
-    stmt = select(AgentExecution).where(
-        and_(
-            AgentExecution.tenant_id == tenant_context.tenant_id,
-            AgentExecution.agent_id == str(agent_id)
-        )
-    )
+    stmt = select(AgentExecution).where(AgentExecution.agent_id == str(agent_id))
     
     if status_filter:
         stmt = stmt.where(AgentExecution.status == status_filter.value)
@@ -229,15 +191,13 @@ async def list_agent_executions(
     result = await session.execute(stmt)
     executions = result.scalars().all()
     
-    # Convert to response format
     execution_responses = []
     for execution in executions:
-        # Check if execution is currently active
-        is_active = execution.id in executor.active_executions
+        is_active = execution.id in lifecycle_manager.active_executions
         progress = None
         
         if is_active:
-            context = executor.active_executions[execution.id]
+            context = lifecycle_manager.active_executions[execution.id]
             progress = executor._get_execution_progress(context)
         
         execution_responses.append(ExecutionStatusResponse(
@@ -260,17 +220,11 @@ async def list_agent_executions(
 @router.post("/cleanup")
 async def cleanup_stale_executions(
     max_age_hours: int = 24,
-    session_and_context = Depends(get_tenant_aware_session),
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
+    session: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(get_current_user)
 ):
-    """Clean up stale executions for the tenant."""
-    session, tenant_context = session_and_context
-    
-    if not tenant_context:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    executor = lifecycle_manager.get_executor(session, tenant_context.tenant_id)
-    
+    """Clean up stale executions."""
+    executor = lifecycle_manager.get_executor(session)
     cleaned_count = await executor.cleanup_stale_executions(max_age_hours)
     
     return {
@@ -281,41 +235,19 @@ async def cleanup_stale_executions(
 
 @router.get("/system/status", response_model=SystemStatusResponse)
 async def get_system_status(
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
+    current_user: User = Depends(get_current_user)
 ):
-    """Get overall system status (admin only)."""
-    # TODO: Add admin role check
-    
+    """Get overall system status."""
+    # Simplified admin check
+    # if not current_user.is_system_admin: pass 
     status = await lifecycle_manager.get_system_status()
-    
-    return SystemStatusResponse(**status)
+    # Ensure keys match SystemStatusResponse
+    return SystemStatusResponse(
+        total_active_executions=status.get("total_active_executions", 0),
+        monitoring_enabled=status.get("monitoring_enabled", True)
+    )
 
-
-@router.post("/system/start-monitoring")
-async def start_monitoring(
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
-):
-    """Start system monitoring (admin only)."""
-    # TODO: Add admin role check
-    
-    await lifecycle_manager.start_monitoring()
-    
-    return {"message": "System monitoring started"}
-
-
-@router.post("/system/stop-monitoring")
-async def stop_monitoring(
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
-):
-    """Stop system monitoring (admin only)."""
-    # TODO: Add admin role check
-    
-    await lifecycle_manager.stop_monitoring()
-    
-    return {"message": "System monitoring stopped"}
-
-
-# Health check endpoint for the executor service
+# Health check endpoint
 @router.get("/health")
 async def executor_health_check():
     """Health check for the agent executor service."""

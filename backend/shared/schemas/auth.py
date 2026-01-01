@@ -18,7 +18,6 @@ class UserRegister(BaseModel):
     email: EmailStr = Field(..., description="User email address")
     password: str = Field(..., min_length=8, description="User password (minimum 8 characters)")
     full_name: str = Field(..., min_length=1, max_length=255, description="User full name")
-    tenant_id: Optional[UUID] = Field(None, description="Tenant ID (for multi-tenant deployments)")
     
     @validator('password')
     def validate_password(cls, v):
@@ -118,7 +117,7 @@ class UserResponse(BaseModel):
     email: str
     full_name: str
     avatar_url: Optional[str] = None
-    tenant_id: Optional[UUID] = None
+    # is_active: bool # Check step 733. Yes.
     is_active: bool
     is_system_admin: bool
     created_at: datetime
@@ -155,7 +154,6 @@ class RoleResponse(BaseModel):
     id: UUID
     name: str
     description: str
-    tenant_id: Optional[UUID] = None
     permissions: List[PermissionResponse] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
@@ -168,7 +166,6 @@ class RoleCreate(BaseModel):
     """Schema for creating a new role."""
     name: str = Field(..., min_length=1, max_length=100, description="Role name")
     description: str = Field(..., min_length=1, max_length=500, description="Role description")
-    tenant_id: Optional[UUID] = Field(None, description="Tenant ID (for tenant-specific roles)")
     permissions: Optional[List[str]] = Field(default_factory=list, description="List of permission names")
 
 
@@ -204,14 +201,12 @@ class PermissionCheck(BaseModel):
     """Schema for permission check requests."""
     user_id: UUID = Field(..., description="User ID to check")
     permission: str = Field(..., description="Permission name to check")
-    tenant_id: Optional[UUID] = Field(None, description="Tenant context for the check")
 
 
 class PermissionCheckResponse(BaseModel):
     """Schema for permission check responses."""
     user_id: UUID
     permission: str
-    tenant_id: Optional[UUID] = None
     has_permission: bool
     roles: List[str] = Field(default_factory=list, description="Roles that grant this permission")
 
@@ -222,7 +217,6 @@ class SessionInfo(BaseModel):
     """Schema for session information."""
     user_id: UUID
     email: str
-    tenant_id: Optional[UUID] = None
     roles: List[str] = Field(default_factory=list)
     permissions: List[str] = Field(default_factory=list)
     is_system_admin: bool

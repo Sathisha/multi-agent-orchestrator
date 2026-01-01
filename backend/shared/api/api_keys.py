@@ -19,7 +19,7 @@ from ..database.connection import get_async_db
 from ..services.api_key import APIKeyService
 from .auth import get_current_user
 from ..schemas.auth import UserResponse
-from ..models.api_key import (
+from ..schemas.api_key import (
     APIKeyRequest, APIKeyResponse, APIKeyCreateResponse,
     APIKeyUpdateRequest, APIKeyUsageResponse, APIKeyListResponse
 )

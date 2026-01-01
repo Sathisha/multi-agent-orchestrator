@@ -25,10 +25,9 @@ from .base import BaseService
 class AuditService(BaseService):
     """Comprehensive audit logging and compliance service."""
     
-    def __init__(self, session: AsyncSession, tenant_id: str, user_id: Optional[str] = None):
+    def __init__(self, session: AsyncSession, user_id: Optional[str] = None):
         # Don't call super().__init__ since AuditService has different parameters
         self.session = session
-        self.tenant_id = tenant_id
         self.user_id = user_id
         self.correlation_id = str(uuid.uuid4())
     
@@ -97,7 +96,6 @@ class AuditService(BaseService):
             
             # Create audit log entry
             audit_log = AuditLog(
-                tenant_id=self.tenant_id,
                 event_type=event_type,
                 event_id=event_id,
                 correlation_id=correlation_id or self.correlation_id,
@@ -154,8 +152,8 @@ class AuditService(BaseService):
             Tuple of (audit logs, total count)
         """
         # Build base query
-        query = select(AuditLog).where(AuditLog.tenant_id == self.tenant_id)
-        count_query = select(func.count(AuditLog.id)).where(AuditLog.tenant_id == self.tenant_id)
+        query = select(AuditLog)
+        count_query = select(func.count(AuditLog.id))
         
         # Apply filters
         if request.event_types:
@@ -269,7 +267,7 @@ class AuditService(BaseService):
         end_date: Optional[datetime] = None
     ) -> AuditStatistics:
         """
-        Get audit log statistics for the tenant.
+        Get audit log statistics.
         
         Args:
             start_date: Start date for statistics
@@ -285,7 +283,6 @@ class AuditService(BaseService):
         
         # Base query conditions
         conditions = [
-            AuditLog.tenant_id == self.tenant_id,
             AuditLog.timestamp >= start_date,
             AuditLog.timestamp <= end_date
         ]
@@ -413,7 +410,6 @@ class AuditService(BaseService):
         
         # Base query conditions
         conditions = [
-            AuditLog.tenant_id == self.tenant_id,
             AuditLog.timestamp >= start_date,
             AuditLog.timestamp <= end_date
         ]
@@ -577,7 +573,6 @@ class AuditService(BaseService):
         export_data = {
             'export_id': str(uuid.uuid4()),
             'generated_at': datetime.utcnow().isoformat(),
-            'tenant_id': self.tenant_id,
             'exported_by': self.user_id,
             'total_records': total_count,
             'format': format,
@@ -619,7 +614,7 @@ class AuditService(BaseService):
         Returns:
             Integrity verification results
         """
-        conditions = [AuditLog.tenant_id == self.tenant_id]
+        conditions = []
         
         if start_date:
             conditions.append(AuditLog.timestamp >= start_date)
@@ -719,7 +714,6 @@ class AuditService(BaseService):
         action: str,
         message: str,
         user_id: Optional[str] = None,
-        tenant_id: Optional[str] = None,
         resource_type: Optional[str] = None,
         resource_id: Optional[str] = None,
         resource_name: Optional[str] = None,
@@ -731,7 +725,7 @@ class AuditService(BaseService):
     ):
         """Helper method for logging audit events from other services."""
         # Create temporary audit service for logging
-        temp_service = AuditService(session, tenant_id or self.tenant_id, user_id or self.user_id)
+        temp_service = AuditService(session, user_id or self.user_id)
         
         # Prepare details with old/new values if provided
         audit_details = details or {}

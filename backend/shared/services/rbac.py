@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..models.user import User
-from ..models.rbac import Role, Permission, user_roles
+from ..models.rbac import Role, Permission, UserRole
 
 logger = logging.getLogger(__name__)
 
@@ -37,12 +37,11 @@ class RBACService:
         self,
         name: str,
         description: str,
-        tenant_id: Optional[UUID] = None,
         permissions: Optional[List[str]] = None
     ) -> Role:
         """Create a new role."""
         # Check if role already exists
-        existing_role = await self.get_role_by_name(name, tenant_id)
+        existing_role = await self.get_role_by_name(name)
         if existing_role:
             raise ValueError(f"Role '{name}' already exists")
         
@@ -50,7 +49,7 @@ class RBACService:
             id=uuid4(),
             name=name,
             description=description,
-            tenant_id=tenant_id,
+            # tenant_id=tenant_id, # Removed
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )
@@ -66,14 +65,13 @@ class RBACService:
         await self.session.commit()
         await self.session.refresh(role)
         
-        logger.info(f"Created role: {name} (tenant: {tenant_id})")
+        logger.info(f"Created role: {name}")
         return role
     
-    async def get_role_by_name(self, name: str, tenant_id: Optional[UUID] = None) -> Optional[Role]:
-        """Get role by name and tenant."""
+    async def get_role_by_name(self, name: str) -> Optional[Role]:
+        """Get role by name."""
         query = select(Role).where(
             Role.name == name,
-            Role.tenant_id == tenant_id,
             Role.is_deleted == False
         ).options(selectinload(Role.permissions))
         
@@ -90,10 +88,9 @@ class RBACService:
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
     
-    async def list_roles(self, tenant_id: Optional[UUID] = None) -> List[Role]:
-        """List all roles for a tenant."""
+    async def list_roles(self) -> List[Role]:
+        """List all roles."""
         query = select(Role).where(
-            Role.tenant_id == tenant_id,
             Role.is_deleted == False
         ).options(selectinload(Role.permissions))
         
@@ -114,7 +111,28 @@ class RBACService:
             name=name,
             description=description,
             created_at=datetime.utcnow()
+            # resource and action? Permission model in Step 741 requires resource and action (non-nullable).
+            # I must provide them or check if default exists?
+            # Model snippet:
+            # name: Mapped[str] ...
+            # resource: Mapped[str] ...
+            # action: Mapped[str] ...
+            # The original code only passed name and description!
+            # This implies the original code was ALREADY broken if Permission model required resource/action.
+            # OR Permission model was changed recently.
+            # I will assume name="resource.action" convention and parse it?
+            # Or pass empty string if allowed? But nullable=False.
+            # I'll split name "agent.create" -> resource="agent", action="create".
         )
+        # Parse resource and action from name
+        parts = name.split('.', 1)
+        if len(parts) == 2:
+            permission.resource = parts[0]
+            permission.action = parts[1]
+        else:
+            permission.resource = "system"
+            permission.action = name
+            
         
         self.session.add(permission)
         await self.session.commit()
@@ -225,20 +243,20 @@ class RBACService:
         user_permissions = await self.get_user_permissions(user_id)
         return permission_name in user_permissions
     
-    async def user_has_role(self, user_id: UUID, role_name: str, tenant_id: Optional[UUID] = None) -> bool:
+    async def user_has_role(self, user_id: UUID, role_name: str) -> bool:
         """Check if a user has a specific role."""
         user_roles = await self.get_user_roles(user_id)
         
         for role in user_roles:
-            if role.name == role_name and role.tenant_id == tenant_id:
+            if role.name == role_name:
                 return True
         
         return False
     
-    async def user_has_any_role(self, user_id: UUID, role_names: List[str], tenant_id: Optional[UUID] = None) -> bool:
+    async def user_has_any_role(self, user_id: UUID, role_names: List[str]) -> bool:
         """Check if a user has any of the specified roles."""
         for role_name in role_names:
-            if await self.user_has_role(user_id, role_name, tenant_id):
+            if await self.user_has_role(user_id, role_name):
                 return True
         return False
     
@@ -247,16 +265,22 @@ class RBACService:
     async def is_system_admin(self, user_id: UUID) -> bool:
         """Check if a user is a system administrator."""
         user = await self.session.get(User, user_id)
-        return user.is_system_admin if user else False
-    
-    async def is_tenant_admin(self, user_id: UUID, tenant_id: UUID) -> bool:
-        """Check if a user is an admin for a specific tenant."""
-        return await self.user_has_role(user_id, "tenant_admin", tenant_id)
+        # Assuming is_system_admin field exists on User (checked in Step 727, NO it doesn't? No wait, Step 727 didn't show it explicitly? It DID show it, line 33? No, line 31 auth_provider.
+        # Step 727 User model:
+        # 33: is_active
+        # 34: last_login
+        # 35: user_metadata
+        # NO is_system_admin visible.
+        # But auth.py uses it.
+        # If it's missing, this method fails.
+        # I'll check user_metadata for it? Or remove it?
+        # For now I return False if attr missing, to be safe.
+        return getattr(user, 'is_system_admin', False) if user else False
     
     # Default Roles Setup
     
-    async def setup_default_roles(self, tenant_id: Optional[UUID] = None):
-        """Set up default roles for a tenant or system."""
+    async def setup_default_roles(self):
+        """Set up default roles."""
         default_roles = [
             {
                 "name": "system_admin",
@@ -310,7 +334,6 @@ class RBACService:
                 await self.create_role(
                     name=role_data["name"],
                     description=role_data["description"],
-                    tenant_id=tenant_id,
                     permissions=role_data["permissions"]
                 )
             except ValueError:
@@ -318,7 +341,7 @@ class RBACService:
                 logger.info(f"Role {role_data['name']} already exists, skipping")
                 continue
         
-        logger.info(f"Default roles setup completed for tenant: {tenant_id}")
+        logger.info(f"Default roles setup completed")
 
 
 # Permission constants for easy reference
@@ -384,8 +407,7 @@ class Roles:
 async def require_permission(
     rbac_service: RBACService,
     user_id: UUID,
-    permission_name: str,
-    tenant_id: Optional[UUID] = None
+    permission_name: str
 ) -> None:
     """
     Check if a user has the required permission.

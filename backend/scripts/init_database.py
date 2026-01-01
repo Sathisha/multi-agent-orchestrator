@@ -259,9 +259,9 @@ async def create_default_admin_user(system_tenant: Tenant):
     async with AsyncSessionLocal() as session:
         # Check if any super_admin users exist
         from sqlalchemy import select
-        from shared.models.user import user_roles
+        # from shared.models.user import user_roles  # Removed
         
-        query = select(User).join(user_roles).join(Role).where(Role.name == "super_admin")
+        query = select(User).join(User.roles).join(Role).where(Role.name == "super_admin")
         result = await session.execute(query)
         existing_admin = result.scalar_one_or_none()
         
@@ -277,7 +277,7 @@ async def create_default_admin_user(system_tenant: Tenant):
             last_name="Administrator",
             status=UserStatus.ACTIVE,
             auth_provider=AuthProvider.LOCAL,
-            tenant_id=system_tenant.id
+            # tenant_id=system_tenant.id  # Removed for single-tenant
         )
         
         # Get super_admin role
@@ -315,8 +315,8 @@ async def verify_database_setup():
         logger.info(f"Total users: {user_count}")
         
         # Verify admin user has super_admin role
-        from shared.models.user import user_roles
-        query = select(User).join(user_roles).join(Role).where(
+        # from shared.models.user import user_roles
+        query = select(User).join(User.roles).join(Role).where(
             User.username == "admin",
             Role.name == "super_admin"
         )
@@ -337,8 +337,9 @@ async def main():
         # Create tables
         await create_tables()
         
-        # Create system tenant
-        system_tenant = await create_system_tenant()
+        # SKIP System Tenant creation for single-tenant mode
+        # system_tenant = await create_system_tenant()
+        system_tenant = None
         
         # Create permissions
         permissions = await create_system_permissions()
@@ -346,7 +347,7 @@ async def main():
         # Create roles
         await create_system_roles(permissions)
         
-        # Create default admin user
+        # Create default admin user (no tenant)
         await create_default_admin_user(system_tenant)
         
         # Verify setup

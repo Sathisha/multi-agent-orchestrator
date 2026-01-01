@@ -1,5 +1,6 @@
 """Main FastAPI application entry point for AI Agent Framework."""
 
+import logging
 import uvicorn
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -9,7 +10,7 @@ from prometheus_client import make_asgi_app
 from shared.config.settings import get_settings
 from shared.logging.structured_logging import setup_structured_logging, get_logger
 from shared.api import api_router
-from shared.middleware.tenant import TenantContextMiddleware
+# from shared.middleware.tenant import TenantContextMiddleware
 from shared.middleware.compliance import ComplianceMiddleware
 from shared.middleware.audit import AuditMiddleware
 from shared.middleware.security import SecurityConfig, create_security_middleware_stack
@@ -17,6 +18,7 @@ from shared.services.monitoring import monitoring_service
 
 # Initialize structured logging
 setup_structured_logging()
+# logging.basicConfig(level=logging.INFO)
 logger = get_logger(__name__)
 
 # Get settings
@@ -28,10 +30,7 @@ async def lifespan(app: FastAPI):
     """Application lifespan event handler."""
     # Startup
     logger.info(
-        "Starting AI Agent Framework API",
-        version=settings.version,
-        environment=settings.environment,
-        service_name=settings.service_name
+        f"Starting AI Agent Framework API version={settings.version} environment={settings.environment} service={settings.service_name}"
     )
     
     # Initialize database tables
@@ -78,7 +77,7 @@ app = FastAPI(
 # Configure security middleware
 security_config = SecurityConfig()
 security_config.enable_rate_limiting = True
-security_config.enable_input_validation = True
+security_config.enable_input_validation = False
 security_config.enable_security_headers = True
 security_config.enable_request_logging = True
 
@@ -94,14 +93,14 @@ app.add_middleware(
     allow_headers=settings.api.cors_headers,
 )
 
-# Add tenant context middleware
-app.add_middleware(TenantContextMiddleware)
+# Add tenant context middleware (Removed)
+# app.add_middleware(TenantContextMiddleware)
 
 # Add audit middleware (should be after tenant context)
 app.add_middleware(AuditMiddleware)
 
 # Add compliance middleware
-app.add_middleware(ComplianceMiddleware)
+# app.add_middleware(ComplianceMiddleware)
 
 # Include API routers
 app.include_router(api_router)

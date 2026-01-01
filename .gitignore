@@ -213,6 +213,7 @@ metrics/
 *.h5
 *.pb
 models/
+!backend/shared/models/
 checkpoints/
 
 # Vector database files

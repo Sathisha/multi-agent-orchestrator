@@ -7,17 +7,16 @@ from datetime import datetime, timedelta
 import uuid
 
 from ..models.agent import Agent, AgentDeployment, AgentExecution, AgentMemory, AgentType, AgentStatus
-from ..models.tenant import Tenant
 from .base import BaseService
 from .validation import ValidationService
 from .id_generator import IDGeneratorService
 
 
 class AgentService(BaseService):
-    """Service for managing AI agents with multi-tenant support"""
+    """Service for managing AI agents"""
     
-    def __init__(self, session: AsyncSession, tenant_id: str):
-        super().__init__(session, Agent, tenant_id)
+    def __init__(self, session: AsyncSession):
+        super().__init__(session, Agent)
         self.validation_service = ValidationService()
 
     async def create_agent(
@@ -47,23 +46,22 @@ class AgentService(BaseService):
         if not name or not name.strip():
             raise ValueError("Agent name is required")
 
-        # Check if agent name already exists in tenant
+        # Check if agent name already exists
         existing = await self.get_by_name(name)
         if existing:
-            raise ValueError(f"Agent with name '{name}' already exists in this tenant")
+            raise ValueError(f"Agent with name '{name}' already exists")
 
+        # Note: template_id is passed but not stored in Agent model currently.
         agent = Agent(
             id=IDGeneratorService.generate_agent_id(),
-            tenant_id=self.tenant_id,
             name=name.strip(),
             description=description,
             type=agent_type,
-            template_id=template_id,
             status=AgentStatus.DRAFT,
             version="1.0",
             config=config,
             system_prompt=system_prompt,
-            model_config=llm_config or {},
+            model_config_dict=llm_config or {},
             available_tools=available_tools or [],
             capabilities=capabilities or [],
             tags=tags or [],
@@ -77,13 +75,8 @@ class AgentService(BaseService):
         return agent
 
     async def get_by_name(self, name: str) -> Optional[Agent]:
-        """Get agent by name within tenant"""
-        stmt = select(Agent).where(
-            and_(
-                Agent.tenant_id == self.tenant_id,
-                Agent.name == name
-            )
-        )
+        """Get agent by name"""
+        stmt = select(Agent).where(Agent.name == name)
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -96,7 +89,7 @@ class AgentService(BaseService):
         offset: int = 0
     ) -> List[Agent]:
         """List agents with filtering"""
-        stmt = select(Agent).where(Agent.tenant_id == self.tenant_id)
+        stmt = select(Agent)
         
         if agent_type:
             stmt = stmt.where(Agent.type == agent_type)
@@ -133,7 +126,7 @@ class AgentService(BaseService):
         if name and name != agent.name:
             existing = await self.get_by_name(name)
             if existing and existing.id != agent_id:
-                raise ValueError(f"Agent with name '{name}' already exists in this tenant")
+                raise ValueError(f"Agent with name '{name}' already exists")
             agent.name = name.strip()
 
         if description is not None:
@@ -142,8 +135,8 @@ class AgentService(BaseService):
             agent.config = config
         if system_prompt is not None:
             agent.system_prompt = system_prompt
-        if model_config is not None:
-            agent.model_config = model_config
+        if llm_config is not None:
+            agent.model_config_dict = llm_config
         if available_tools is not None:
             agent.available_tools = available_tools
         if capabilities is not None:
@@ -190,12 +183,7 @@ class AgentService(BaseService):
         """Get agent with all deployments"""
         stmt = select(Agent).options(
             selectinload(Agent.deployments)
-        ).where(
-            and_(
-                Agent.id == agent_id,
-                Agent.tenant_id == self.tenant_id
-            )
-        )
+        ).where(Agent.id == agent_id)
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
@@ -214,12 +202,7 @@ class AgentService(BaseService):
                 func.avg(AgentExecution.execution_time_ms).label('avg_execution_time'),
                 func.sum(AgentExecution.tokens_used).label('total_tokens'),
                 func.sum(AgentExecution.cost).label('total_cost')
-            ).where(
-                and_(
-                    AgentExecution.agent_id == agent_id,
-                    AgentExecution.tenant_id == self.tenant_id
-                )
-            )
+            ).where(AgentExecution.agent_id == agent_id)
         )
         stats = exec_stats.first()
 
@@ -228,12 +211,7 @@ class AgentService(BaseService):
             select(
                 func.count(AgentMemory.id).label('total_memories'),
                 func.sum(func.length(AgentMemory.content)).label('total_memory_size')
-            ).where(
-                and_(
-                    AgentMemory.agent_id == agent_id,
-                    AgentMemory.tenant_id == self.tenant_id
-                )
-            )
+            ).where(AgentMemory.agent_id == agent_id)
         )
         memory_data = memory_stats.first()
 
@@ -254,8 +232,8 @@ class AgentService(BaseService):
 class AgentDeploymentService(BaseService):
     """Service for managing agent deployments"""
     
-    def __init__(self, session: AsyncSession, tenant_id: str):
-        super().__init__(session, AgentDeployment, tenant_id)
+    def __init__(self, session: AsyncSession):
+        super().__init__(session, AgentDeployment)
 
     async def create_deployment(
         self,
@@ -267,15 +245,14 @@ class AgentDeploymentService(BaseService):
         created_by: Optional[str] = None
     ) -> AgentDeployment:
         """Create a new agent deployment"""
-        # Verify agent exists and belongs to tenant
-        agent_service = AgentService(self.session, self.tenant_id)
+        # Verify agent exists
+        agent_service = AgentService(self.session)
         agent = await agent_service.get_by_id(agent_id)
         if not agent:
-            raise ValueError(f"Agent {agent_id} not found in tenant {self.tenant_id}")
+            raise ValueError(f"Agent {agent_id} not found")
 
         deployment = AgentDeployment(
             id=IDGeneratorService.generate_deployment_id(),
-            tenant_id=self.tenant_id,
             agent_id=agent_id,
             name=name,
             environment=environment,
@@ -293,10 +270,7 @@ class AgentDeploymentService(BaseService):
     async def list_by_agent(self, agent_id: str) -> List[AgentDeployment]:
         """List all deployments for an agent"""
         stmt = select(AgentDeployment).where(
-            and_(
-                AgentDeployment.tenant_id == self.tenant_id,
-                AgentDeployment.agent_id == agent_id
-            )
+            AgentDeployment.agent_id == agent_id
         ).order_by(AgentDeployment.created_at.desc())
         
         result = await self.session.execute(stmt)
@@ -335,8 +309,8 @@ class AgentDeploymentService(BaseService):
 class AgentExecutionService(BaseService):
     """Service for managing agent executions"""
     
-    def __init__(self, session: AsyncSession, tenant_id: str):
-        super().__init__(session, AgentExecution, tenant_id)
+    def __init__(self, session: AsyncSession):
+        super().__init__(session, AgentExecution)
 
     async def create_execution(
         self,
@@ -347,15 +321,14 @@ class AgentExecutionService(BaseService):
         created_by: Optional[str] = None
     ) -> AgentExecution:
         """Create a new agent execution"""
-        # Verify agent exists and belongs to tenant
-        agent_service = AgentService(self.session, self.tenant_id)
+        # Verify agent exists
+        agent_service = AgentService(self.session)
         agent = await agent_service.get_by_id(agent_id)
         if not agent:
-            raise ValueError(f"Agent {agent_id} not found in tenant {self.tenant_id}")
+            raise ValueError(f"Agent {agent_id} not found")
 
         execution = AgentExecution(
             id=IDGeneratorService.generate_execution_id(),
-            tenant_id=self.tenant_id,
             agent_id=agent_id,
             deployment_id=deployment_id,
             session_id=session_id,
@@ -379,12 +352,7 @@ class AgentExecutionService(BaseService):
         offset: int = 0
     ) -> List[AgentExecution]:
         """List executions for an agent"""
-        stmt = select(AgentExecution).where(
-            and_(
-                AgentExecution.tenant_id == self.tenant_id,
-                AgentExecution.agent_id == agent_id
-            )
-        )
+        stmt = select(AgentExecution).where(AgentExecution.agent_id == agent_id)
         
         if session_id:
             stmt = stmt.where(AgentExecution.session_id == session_id)
@@ -445,8 +413,8 @@ class AgentExecutionService(BaseService):
 class AgentMemoryService(BaseService):
     """Service for managing agent memories"""
     
-    def __init__(self, session: AsyncSession, tenant_id: str):
-        super().__init__(session, AgentMemory, tenant_id)
+    def __init__(self, session: AsyncSession):
+        super().__init__(session, AgentMemory)
 
     async def create_memory(
         self,
@@ -460,15 +428,14 @@ class AgentMemoryService(BaseService):
         created_by: Optional[str] = None
     ) -> AgentMemory:
         """Create a new agent memory"""
-        # Verify agent exists and belongs to tenant
-        agent_service = AgentService(self.session, self.tenant_id)
+        # Verify agent exists
+        agent_service = AgentService(self.session)
         agent = await agent_service.get_by_id(agent_id)
         if not agent:
-            raise ValueError(f"Agent {agent_id} not found in tenant {self.tenant_id}")
+            raise ValueError(f"Agent {agent_id} not found")
 
         memory = AgentMemory(
             id=IDGeneratorService.generate_memory_id(),
-            tenant_id=self.tenant_id,
             agent_id=agent_id,
             session_id=session_id,
             memory_type=memory_type,
@@ -494,12 +461,7 @@ class AgentMemoryService(BaseService):
         offset: int = 0
     ) -> List[AgentMemory]:
         """Get memories for an agent"""
-        stmt = select(AgentMemory).where(
-            and_(
-                AgentMemory.tenant_id == self.tenant_id,
-                AgentMemory.agent_id == agent_id
-            )
-        )
+        stmt = select(AgentMemory).where(AgentMemory.agent_id == agent_id)
 
         if session_id:
             stmt = stmt.where(AgentMemory.session_id == session_id)
@@ -525,21 +487,18 @@ class AgentMemoryService(BaseService):
             return None
 
         memory.access_count += 1
-        memory.last_accessed = datetime.utcnow()
+        memory.last_accessed_at = datetime.utcnow()
 
         await self.session.commit()
         await self.session.refresh(memory)
         return memory
 
     async def cleanup_expired_memories(self) -> int:
-        """Clean up expired memories for the tenant"""
+        """Clean up expired memories"""
         from sqlalchemy import delete
         
         stmt = delete(AgentMemory).where(
-            and_(
-                AgentMemory.tenant_id == self.tenant_id,
-                AgentMemory.expires_at <= datetime.utcnow()
-            )
+            AgentMemory.expires_at <= datetime.utcnow()
         )
         
         result = await self.session.execute(stmt)

@@ -372,16 +372,11 @@ class AuditMiddleware(BaseHTTPMiddleware):
         try:
             # Get database session
             async with get_database_session() as session:
-                # Extract tenant and user information from request state
-                tenant_id = getattr(request.state, 'tenant_id', None)
+                # Extract user information from request state
                 user_id = getattr(request.state, 'user_id', None)
                 
-                if not tenant_id:
-                    # Skip audit logging if no tenant context
-                    return
-                
                 # Create audit service
-                audit_service = AuditService(session, tenant_id, user_id)
+                audit_service = AuditService(session, user_id=user_id)
                 
                 # Determine event details
                 event_type = self._determine_event_type(request, response)

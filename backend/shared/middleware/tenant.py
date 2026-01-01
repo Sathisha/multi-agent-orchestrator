@@ -1,132 +1,74 @@
 """
-Tenant Context Middleware - Basic Framework
+Simplified Tenant Middleware - Returns Default Tenant Context
 
-This middleware provides a basic framework for tenant context extraction.
-It can be extended later when implementing full multi-tenant functionality.
+Multi-tenant features simplified per user requirements (low priority).
+All requests use the default tenant context.
 """
+from typing import Optional, Tuple
+from fastapi import Depends, Request
+from sqlalchemy.ext.asyncio import AsyncSession
 
-import logging
-from typing import Optional
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.responses import Response
 
-from fastapi import Request, Response
-from starlette.middleware.base import BaseHTTPMiddleware
-
-logger = logging.getLogger(__name__)
-
-
-# Simple TenantContext class for compatibility
-class TenantContext:
-    def __init__(self, tenant_id: str = None):
-        self.tenant_id = tenant_id
+from shared.context.default_tenant import TenantContext, get_default_tenant_context, DEFAULT_TENANT_ID
+from shared.database.connection import get_async_db
 
 
 class TenantContextMiddleware(BaseHTTPMiddleware):
-    """Basic tenant context middleware framework."""
-    
-    def __init__(self, app):
-        super().__init__(app)
-        self.excluded_paths = {
-            "/",
-            "/health",
-            "/metrics",
-            "/docs",
-            "/redoc",
-            "/openapi.json"
-        }
-    
-    async def dispatch(self, request: Request, call_next):
-        """Process request with basic tenant context handling."""
-        
-        # Skip tenant context for excluded paths
-        if request.url.path in self.excluded_paths:
-            return await call_next(request)
-        
-        # Basic tenant context extraction (framework only)
-        tenant_id = self._extract_basic_tenant_context(request)
-        
-        if tenant_id:
-            # Store basic tenant context in request state
-            request.state.tenant_id = tenant_id
-            logger.debug(f"Extracted tenant context: {tenant_id}")
-        
-        # Process request
-        response = await call_next(request)
-        
-        # Add basic tenant headers if context exists
-        if tenant_id:
-            response.headers["X-Tenant-ID"] = tenant_id
-        
-        return response
-    
-    def _extract_basic_tenant_context(self, request: Request) -> Optional[str]:
-        """Extract basic tenant context from request."""
-        
-        # Method 1: Check X-Tenant-ID header
-        tenant_header = request.headers.get("x-tenant-id")
-        if tenant_header:
-            return tenant_header
-        
-        # Method 2: Extract from subdomain (basic implementation)
-        host = request.headers.get("host", "")
-        if host:
-            tenant_from_subdomain = self._extract_from_subdomain(host)
-            if tenant_from_subdomain:
-                return tenant_from_subdomain
-        
-        # Method 3: Extract from path (basic implementation)
-        tenant_from_path = self._extract_from_path(request.url.path)
-        if tenant_from_path:
-            return tenant_from_path
-        
-        return None
-    
-    def _extract_from_subdomain(self, host: str) -> Optional[str]:
-        """Extract tenant from subdomain - basic implementation."""
-        # Remove port if present
-        host = host.split(':')[0]
-        
-        # Split by dots
-        parts = host.split('.')
-        
-        # Check if it's a subdomain (at least 3 parts: subdomain.domain.tld)
-        if len(parts) >= 3:
-            subdomain = parts[0]
-            
-            # Skip common subdomains
-            if subdomain not in ['www', 'api', 'admin', 'app']:
-                return subdomain
-        
-        return None
-    
-    def _extract_from_path(self, path: str) -> Optional[str]:
-        """Extract tenant from URL path - basic implementation."""
-        # Pattern: /tenant/{tenant_id}/...
-        if path.startswith('/tenant/'):
-            parts = path.split('/')
-            if len(parts) >= 3:
-                return parts[2]
-        
-        return None
+    """
+    Middleware to handle tenant context. 
+    Simplified for single-tenant mode: just passes through.
+    """
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
+        # In multi-tenant, we would extract tenant ID here.
+        # Single-tenant: assumes default tenant context is used globally/by default.
+        return await call_next(request)
 
 
-def get_tenant_context(request: Request) -> Optional[str]:
-    """Get basic tenant context from request state."""
-    return getattr(request.state, 'tenant_id', None)
+
+async def get_tenant_context() -> TenantContext:
+    """
+    Returns default tenant context for all requests.
+    
+    Simplified implementation - multi-tenant features are low priority.
+    """
+    return get_default_tenant_context()
 
 
-# Temporary compatibility functions for testing
-async def get_tenant_aware_session():
-    """Temporary function for compatibility - returns basic session."""
-    from ..database.connection import get_async_db
-    async for session in get_async_db():
-        yield session
+async def get_tenant_aware_session(
+    session: AsyncSession = Depends(get_async_db)
+) -> Tuple[AsyncSession, TenantContext]:
+    """
+    Returns database session and tenant context.
+    
+    Always returns default tenant for simplified implementation.
+    """
+    tenant_context = get_default_tenant_context()
+    return (session, tenant_context)
 
 
 def get_tenant_context_dependency():
-    """Temporary function for compatibility."""
-    return None
+    """
+    Dependency that provides tenant context.
+    Returns default tenant context.
+    """
+    return Depends(get_tenant_context)
 
 
 def require_tenant_context_dependency():
-    """Temporary function for compatibility."""
-    return None
+    """
+    Dependency that requires tenant context.
+    Returns default tenant context.
+    """
+    return Depends(get_tenant_context)
+
+
+def get_current_tenant_id_from_request(request: Request) -> str:
+    """
+    Extract tenant ID from request.
+    Always returns default tenant ID.
+    """
+    return DEFAULT_TENANT_ID

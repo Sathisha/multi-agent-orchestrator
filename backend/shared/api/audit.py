@@ -9,12 +9,29 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from ..database import get_database_session
-from ..middleware.tenant import get_tenant_context, TenantContext
 from ..middleware.security import get_current_user, require_permissions
 from ..models.audit import (
-    AuditLogRequest, AuditLogResponse, AuditLogCreateRequest,
+    AuditLogRequest, AuditLogResponse,
     AuditStatistics, ComplianceReport, AuditEventType, AuditSeverity, AuditOutcome
 )
+# Define AuditLogCreateRequest locally to ensure fields exist
+class AuditLogCreateRequest(BaseModel):
+    event_type: AuditEventType
+    action: str
+    message: str
+    outcome: AuditOutcome = AuditOutcome.SUCCESS
+    severity: AuditSeverity = AuditSeverity.LOW
+    resource_type: Optional[str] = None
+    resource_id: Optional[str] = None
+    resource_name: Optional[str] = None
+    details: Optional[Dict[str, Any]] = None
+    request_data: Optional[Dict[str, Any]] = None
+    response_data: Optional[Dict[str, Any]] = None
+    error_code: Optional[str] = None
+    error_message: Optional[str] = None
+    compliance_tags: Optional[List[str]] = None
+    correlation_id: Optional[str] = None
+
 from ..models.user import User
 from ..services.audit import AuditService
 from ..services.rbac import StandardPermissions
@@ -67,20 +84,16 @@ async def get_audit_logs(
     size: int = Query(50, ge=1, le=1000, description="Items per page"),
     sort_by: str = Query("timestamp", description="Sort field"),
     sort_order: str = Query("desc", description="Sort order: asc or desc"),
-    tenant_context: TenantContext = Depends(get_tenant_context),
     current_user: User = Depends(get_current_user),
     session = Depends(get_database_session),
     _: None = Depends(require_permissions([StandardPermissions.AUDIT_READ]))
 ):
     """
     Retrieve audit logs with filtering, pagination, and search capabilities.
-    
-    This endpoint provides comprehensive access to audit logs for compliance
-    and forensic analysis. Supports advanced filtering and search capabilities.
     """
     try:
         # Create audit service
-        audit_service = AuditService(session, tenant_context.tenant_id, str(current_user.id))
+        audit_service = AuditService(session, str(current_user.id))
         
         # Create request object
         request = AuditLogRequest(
@@ -141,20 +154,16 @@ async def get_audit_logs(
 @router.get("/logs/{event_id}", response_model=AuditLogResponse)
 async def get_audit_log(
     event_id: str,
-    tenant_context: TenantContext = Depends(get_tenant_context),
     current_user: User = Depends(get_current_user),
     session = Depends(get_database_session),
     _: None = Depends(require_permissions([StandardPermissions.AUDIT_READ]))
 ):
     """
     Retrieve a specific audit log entry by event ID.
-    
-    This endpoint provides detailed access to individual audit log entries
-    for forensic analysis and compliance verification.
     """
     try:
         # Create audit service
-        audit_service = AuditService(session, tenant_context.tenant_id, str(current_user.id))
+        audit_service = AuditService(session, str(current_user.id))
         
         # Create request to find specific event
         request = AuditLogRequest(
@@ -167,8 +176,6 @@ async def get_audit_log(
         # Get all logs and filter by event_id (since we can't filter by event_id in the request model)
         logs, total = await audit_service.get_audit_logs(request)
         
-        # Find the specific log (this is inefficient, but works for now)
-        # In a real implementation, we'd add event_id filtering to the service
         target_log = None
         for log in logs:
             if log.event_id == event_id:
@@ -202,20 +209,16 @@ async def get_audit_log(
 async def get_audit_statistics(
     start_date: Optional[datetime] = Query(None, description="Start date for statistics"),
     end_date: Optional[datetime] = Query(None, description="End date for statistics"),
-    tenant_context: TenantContext = Depends(get_tenant_context),
     current_user: User = Depends(get_current_user),
     session = Depends(get_database_session),
     _: None = Depends(require_permissions([StandardPermissions.AUDIT_READ]))
 ):
     """
     Get audit log statistics and analytics.
-    
-    This endpoint provides statistical analysis of audit logs for monitoring
-    and compliance reporting purposes.
     """
     try:
         # Create audit service
-        audit_service = AuditService(session, tenant_context.tenant_id, str(current_user.id))
+        audit_service = AuditService(session, str(current_user.id))
         
         # Get statistics
         statistics = await audit_service.get_audit_statistics(start_date, end_date)
@@ -247,16 +250,12 @@ async def generate_compliance_report(
     start_date: datetime,
     end_date: datetime,
     report_type: str = "general",
-    tenant_context: TenantContext = Depends(get_tenant_context),
     current_user: User = Depends(get_current_user),
     session = Depends(get_database_session),
     _: None = Depends(require_permissions([StandardPermissions.AUDIT_EXPORT]))
 ):
     """
     Generate a comprehensive compliance report.
-    
-    This endpoint creates detailed compliance reports for regulatory
-    requirements and audit purposes.
     """
     try:
         # Validate date range
@@ -264,7 +263,7 @@ async def generate_compliance_report(
             raise HTTPException(status_code=400, detail="Start date must be before end date")
         
         # Create audit service
-        audit_service = AuditService(session, tenant_context.tenant_id, str(current_user.id))
+        audit_service = AuditService(session, str(current_user.id))
         
         # Generate compliance report
         report = await audit_service.generate_compliance_report(start_date, end_date, report_type)
@@ -315,16 +314,12 @@ async def export_audit_logs(
     size: int = Query(1000, ge=1, le=10000, description="Items per page"),
     sort_by: str = Query("timestamp", description="Sort field"),
     sort_order: str = Query("desc", description="Sort order: asc or desc"),
-    tenant_context: TenantContext = Depends(get_tenant_context),
     current_user: User = Depends(get_current_user),
     session = Depends(get_database_session),
     _: None = Depends(require_permissions([StandardPermissions.AUDIT_EXPORT]))
 ):
     """
     Export audit logs in various formats for compliance and analysis.
-    
-    This endpoint supports exporting audit logs in JSON and CSV formats
-    for external analysis and compliance reporting.
     """
     try:
         # Validate format
@@ -332,7 +327,7 @@ async def export_audit_logs(
             raise HTTPException(status_code=400, detail="Unsupported export format. Use 'json' or 'csv'")
         
         # Create audit service
-        audit_service = AuditService(session, tenant_context.tenant_id, str(current_user.id))
+        audit_service = AuditService(session, str(current_user.id))
         
         # Create request object
         request = AuditLogRequest(
@@ -404,20 +399,16 @@ async def export_audit_logs(
 async def verify_audit_integrity(
     start_date: Optional[datetime] = Query(None, description="Start date for verification"),
     end_date: Optional[datetime] = Query(None, description="End date for verification"),
-    tenant_context: TenantContext = Depends(get_tenant_context),
     current_user: User = Depends(get_current_user),
     session = Depends(get_database_session),
     _: None = Depends(require_permissions([StandardPermissions.AUDIT_MANAGE]))
 ):
     """
     Verify the cryptographic integrity of audit logs.
-    
-    This endpoint performs integrity verification of audit logs using
-    checksums to detect tampering or corruption.
     """
     try:
         # Create audit service
-        audit_service = AuditService(session, tenant_context.tenant_id, str(current_user.id))
+        audit_service = AuditService(session, str(current_user.id))
         
         # Verify integrity
         verification_results = await audit_service.verify_audit_integrity(start_date, end_date)
@@ -434,20 +425,16 @@ async def create_audit_log(
     source_ip: Optional[str] = None,
     user_agent: Optional[str] = None,
     session_id: Optional[str] = None,
-    tenant_context: TenantContext = Depends(get_tenant_context),
     current_user: User = Depends(get_current_user),
     session = Depends(get_database_session),
     _: None = Depends(require_permissions([StandardPermissions.AUDIT_MANAGE]))
 ):
     """
     Create a custom audit log entry.
-    
-    This endpoint allows authorized users to create custom audit log entries
-    for application-specific events and compliance requirements.
     """
     try:
         # Create audit service
-        audit_service = AuditService(session, tenant_context.tenant_id, str(current_user.id))
+        audit_service = AuditService(session, str(current_user.id))
         
         # Create audit log
         audit_log = await audit_service.log_event(
@@ -481,9 +468,6 @@ async def create_audit_log(
 async def audit_health_check():
     """
     Health check endpoint for the audit service.
-    
-    This endpoint provides a simple health check for monitoring
-    the audit service availability.
     """
     return {
         "status": "healthy",

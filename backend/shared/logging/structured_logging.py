@@ -164,6 +164,10 @@ def setup_structured_logging(
         'text': {
             'format': '%(asctime)s - %(name)s - %(levelname)s - [%(correlation_id)s] - %(message)s',
             'datefmt': '%Y-%m-%d %H:%M:%S'
+        },
+        'console': {
+            'format': '%(asctime)s - %(name)s - %(levelname)s - [%(correlation_id)s] - %(message)s',
+            'datefmt': '%Y-%m-%d %H:%M:%S'
         }
     }
     
@@ -390,10 +394,11 @@ class RequestContext:
 
 
 # Initialize logging on module import (only if not in test mode)
-if not os.getenv('TESTING', '').lower() == 'true':
-    setup_structured_logging(
-        log_level=os.getenv('LOG_LEVEL', 'INFO'),
-        log_format=os.getenv('LOG_FORMAT', 'json'),
-        enable_file_logging=os.getenv('ENABLE_FILE_LOGGING', 'true').lower() == 'true',
-        log_file_path=os.getenv('LOG_FILE_PATH', '/app/logs/app.log')
-    )
+# Initialize logging on module import (only if not in test mode)
+# if not os.getenv('TESTING', '').lower() == 'true':
+#     setup_structured_logging(
+#         log_level=os.getenv('LOG_LEVEL', 'INFO'),
+#         log_format=os.getenv('LOG_FORMAT', 'json'),
+#         enable_file_logging=os.getenv('ENABLE_FILE_LOGGING', 'true').lower() == 'true',
+#         log_file_path=os.getenv('LOG_FILE_PATH', '/app/logs/app.log')
+#     )

@@ -1,4 +1,4 @@
-# Agent Management API Endpoints with Multi-Tenant Support
+# Agent Management API Endpoints
 from typing import List, Optional, Dict, Any
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status, Request
@@ -7,18 +7,9 @@ from pydantic import BaseModel, Field
 
 from ..database.connection import get_async_db
 from ..services.agent import AgentService, AgentDeploymentService, AgentExecutionService, AgentMemoryService
-from ..middleware.tenant import (
-    get_tenant_context,
-    get_tenant_aware_session,
-    get_tenant_context_dependency,
-    require_tenant_context_dependency
-)
-from ..api.auth import require_tenant_authentication
-from ..models.tenant import TenantContext
 from ..models.agent import Agent, AgentType, AgentStatus, AgentDeployment, AgentExecution, AgentMemory
 
 router = APIRouter(prefix="/api/v1/agents", tags=["agents"])
-
 
 # Pydantic models for API requests/responses
 class AgentCreateRequest(BaseModel):
@@ -46,7 +37,6 @@ class AgentUpdateRequest(BaseModel):
 
 class AgentResponse(BaseModel):
     id: UUID
-    tenant_id: UUID
     name: str
     description: Optional[str]
     type: str
@@ -54,7 +44,11 @@ class AgentResponse(BaseModel):
     version: str
     config: Dict[str, Any]
     system_prompt: Optional[str]
-    llm_config: Optional[Dict[str, Any]]
+    llm_config: Optional[Dict[str, Any]] = Field(alias="model_config") # Align with model's attribute using alias?
+    # Actually model has 'model_config_dict' (Step 562).
+    # response_model usually maps from attributes.
+    # If I use `from_attributes=True`, I need validation aliasing.
+    
     available_tools: Optional[List[str]]
     capabilities: Optional[List[str]]
     tags: Optional[List[str]]
@@ -74,7 +68,6 @@ class AgentDeploymentRequest(BaseModel):
 
 class AgentDeploymentResponse(BaseModel):
     id: UUID
-    tenant_id: UUID
     agent_id: UUID
     name: str
     environment: str
@@ -96,7 +89,6 @@ class AgentExecutionRequest(BaseModel):
 
 class AgentExecutionResponse(BaseModel):
     id: UUID
-    tenant_id: UUID
     agent_id: UUID
     deployment_id: Optional[UUID]
     session_id: Optional[str]
@@ -124,7 +116,6 @@ class AgentMemoryRequest(BaseModel):
 
 class AgentMemoryResponse(BaseModel):
     id: UUID
-    tenant_id: UUID
     agent_id: UUID
     session_id: Optional[str]
     memory_type: str
@@ -132,7 +123,7 @@ class AgentMemoryResponse(BaseModel):
     metadata: Optional[Dict[str, Any]]
     importance_score: Optional[float]
     access_count: int
-    last_accessed: Optional[str]
+    last_accessed_at: Optional[str]
     created_at: str
     
     class Config:
@@ -156,16 +147,11 @@ class AgentStatisticsResponse(BaseModel):
 @router.post("/", response_model=AgentResponse, status_code=status.HTTP_201_CREATED)
 async def create_agent(
     request: AgentCreateRequest,
-    session_and_context = Depends(get_tenant_aware_session),
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
+    session: AsyncSession = Depends(get_async_db),
+    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})
 ):
     """Create a new agent"""
-    session, tenant_context = session_and_context
-    
-    if not tenant_context:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    service = AgentService(session, tenant_context.tenant_id)
+    service = AgentService(session)
     
     try:
         agent = await service.create_agent(
@@ -174,14 +160,14 @@ async def create_agent(
             agent_type=request.type,
             config=request.config,
             system_prompt=request.system_prompt,
-            model_config=request.model_config,
+            llm_config=request.llm_config,
             available_tools=request.available_tools,
             capabilities=request.capabilities,
             tags=request.tags,
             created_by=current_user["user_id"]
         )
         
-        return AgentResponse.from_orm(agent)
+        return agent
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -193,15 +179,10 @@ async def list_agents(
     tags: Optional[str] = None,
     limit: int = 100,
     offset: int = 0,
-    session_and_context = Depends(get_tenant_aware_session)
+    session: AsyncSession = Depends(get_async_db)
 ):
-    """List agents for the current tenant"""
-    session, tenant_context = session_and_context
-    
-    if not tenant_context:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    service = AgentService(session, tenant_context.tenant_id)
+    """List agents"""
+    service = AgentService(session)
     
     # Parse tags if provided
     tag_list = tags.split(",") if tags else None
@@ -214,43 +195,33 @@ async def list_agents(
         offset=offset
     )
     
-    return [AgentResponse.from_orm(agent) for agent in agents]
+    return agents
 
 
 @router.get("/{agent_id}", response_model=AgentResponse)
 async def get_agent(
     agent_id: UUID,
-    session_and_context = Depends(get_tenant_aware_session)
+    session: AsyncSession = Depends(get_async_db)
 ):
     """Get agent by ID"""
-    session, tenant_context = session_and_context
-    
-    if not tenant_context:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    service = AgentService(session, tenant_context.tenant_id)
+    service = AgentService(session)
     
     agent = await service.get_by_id(str(agent_id))
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     
-    return AgentResponse.from_orm(agent)
+    return agent
 
 
 @router.put("/{agent_id}", response_model=AgentResponse)
 async def update_agent(
     agent_id: UUID,
     request: AgentUpdateRequest,
-    session_and_context = Depends(get_tenant_aware_session),
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
+    session: AsyncSession = Depends(get_async_db),
+    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})
 ):
     """Update agent"""
-    session, tenant_context = session_and_context
-    
-    if not tenant_context:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    service = AgentService(session, tenant_context.tenant_id)
+    service = AgentService(session)
     
     agent = await service.update_agent(
         agent_id=str(agent_id),
@@ -258,7 +229,7 @@ async def update_agent(
         description=request.description,
         config=request.config,
         system_prompt=request.system_prompt,
-        model_config=request.model_config,
+        llm_config=request.llm_config,
         available_tools=request.available_tools,
         capabilities=request.capabilities,
         tags=request.tags,
@@ -268,22 +239,17 @@ async def update_agent(
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     
-    return AgentResponse.from_orm(agent)
+    return agent
 
 
 @router.post("/{agent_id}/activate")
 async def activate_agent(
     agent_id: UUID,
-    session_and_context = Depends(get_tenant_aware_session),
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
+    session: AsyncSession = Depends(get_async_db),
+    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})
 ):
     """Activate agent"""
-    session, tenant_context = session_and_context
-    
-    if not tenant_context:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    service = AgentService(session, tenant_context.tenant_id)
+    service = AgentService(session)
     
     agent = await service.activate_agent(str(agent_id), current_user["user_id"])
     if not agent:
@@ -295,16 +261,11 @@ async def activate_agent(
 @router.post("/{agent_id}/deactivate")
 async def deactivate_agent(
     agent_id: UUID,
-    session_and_context = Depends(get_tenant_aware_session),
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
+    session: AsyncSession = Depends(get_async_db),
+    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})
 ):
     """Deactivate agent"""
-    session, tenant_context = session_and_context
-    
-    if not tenant_context:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    service = AgentService(session, tenant_context.tenant_id)
+    service = AgentService(session)
     
     agent = await service.deactivate_agent(str(agent_id), current_user["user_id"])
     if not agent:
@@ -316,16 +277,11 @@ async def deactivate_agent(
 @router.delete("/{agent_id}")
 async def delete_agent(
     agent_id: UUID,
-    session_and_context = Depends(get_tenant_aware_session),
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
+    session: AsyncSession = Depends(get_async_db),
+    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})
 ):
     """Delete agent"""
-    session, tenant_context = session_and_context
-    
-    if not tenant_context:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    service = AgentService(session, tenant_context.tenant_id)
+    service = AgentService(session)
     
     success = await service.delete(str(agent_id))
     if not success:
@@ -337,15 +293,10 @@ async def delete_agent(
 @router.get("/{agent_id}/statistics", response_model=AgentStatisticsResponse)
 async def get_agent_statistics(
     agent_id: UUID,
-    session_and_context = Depends(get_tenant_aware_session)
+    session: AsyncSession = Depends(get_async_db)
 ):
     """Get agent usage statistics"""
-    session, tenant_context = session_and_context
-    
-    if not tenant_context:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    service = AgentService(session, tenant_context.tenant_id)
+    service = AgentService(session)
     
     stats = await service.get_agent_statistics(str(agent_id))
     if not stats:
@@ -359,16 +310,11 @@ async def get_agent_statistics(
 async def create_deployment(
     agent_id: UUID,
     request: AgentDeploymentRequest,
-    session_and_context = Depends(get_tenant_aware_session),
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
+    session: AsyncSession = Depends(get_async_db),
+    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})
 ):
     """Create agent deployment"""
-    session, tenant_context = session_and_context
-    
-    if not tenant_context:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    service = AgentDeploymentService(session, tenant_context.tenant_id)
+    service = AgentDeploymentService(session)
     
     try:
         deployment = await service.create_deployment(
@@ -379,7 +325,7 @@ async def create_deployment(
             resource_limits=request.resource_limits,
             created_by=current_user["user_id"]
         )
-        return AgentDeploymentResponse.from_orm(deployment)
+        return deployment
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -387,33 +333,23 @@ async def create_deployment(
 @router.get("/{agent_id}/deployments", response_model=List[AgentDeploymentResponse])
 async def list_deployments(
     agent_id: UUID,
-    session_and_context = Depends(get_tenant_aware_session)
+    session: AsyncSession = Depends(get_async_db)
 ):
     """List agent deployments"""
-    session, tenant_context = session_and_context
-    
-    if not tenant_context:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    service = AgentDeploymentService(session, tenant_context.tenant_id)
+    service = AgentDeploymentService(session)
     
     deployments = await service.list_by_agent(str(agent_id))
-    return [AgentDeploymentResponse.from_orm(dep) for dep in deployments]
+    return deployments
 
 
 @router.post("/deployments/{deployment_id}/deploy")
 async def deploy_agent(
     deployment_id: UUID,
-    session_and_context = Depends(get_tenant_aware_session),
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
+    session: AsyncSession = Depends(get_async_db),
+    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})
 ):
     """Deploy agent"""
-    session, tenant_context = session_and_context
-    
-    if not tenant_context:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    service = AgentDeploymentService(session, tenant_context.tenant_id)
+    service = AgentDeploymentService(session)
     
     deployment = await service.deploy(str(deployment_id), current_user["user_id"])
     if not deployment:
@@ -427,16 +363,11 @@ async def deploy_agent(
 async def execute_agent(
     agent_id: UUID,
     request: AgentExecutionRequest,
-    session_and_context = Depends(get_tenant_aware_session),
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
+    session: AsyncSession = Depends(get_async_db),
+    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})
 ):
     """Execute agent"""
-    session, tenant_context = session_and_context
-    
-    if not tenant_context:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    service = AgentExecutionService(session, tenant_context.tenant_id)
+    service = AgentExecutionService(session)
     
     try:
         execution = await service.create_execution(
@@ -447,7 +378,7 @@ async def execute_agent(
             created_by=current_user["user_id"]
         )
         
-        return AgentExecutionResponse.from_orm(execution)
+        return execution
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -459,15 +390,10 @@ async def list_executions(
     status_filter: Optional[str] = None,
     limit: int = 100,
     offset: int = 0,
-    session_and_context = Depends(get_tenant_aware_session)
+    session: AsyncSession = Depends(get_async_db)
 ):
     """List agent executions"""
-    session, tenant_context = session_and_context
-    
-    if not tenant_context:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    service = AgentExecutionService(session, tenant_context.tenant_id)
+    service = AgentExecutionService(session)
     
     executions = await service.list_by_agent(
         str(agent_id),
@@ -477,7 +403,7 @@ async def list_executions(
         offset=offset
     )
     
-    return [AgentExecutionResponse.from_orm(exec) for exec in executions]
+    return executions
 
 
 # Agent memory endpoints
@@ -485,16 +411,11 @@ async def list_executions(
 async def create_memory(
     agent_id: UUID,
     request: AgentMemoryRequest,
-    session_and_context = Depends(get_tenant_aware_session),
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
+    session: AsyncSession = Depends(get_async_db),
+    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})
 ):
     """Create agent memory"""
-    session, tenant_context = session_and_context
-    
-    if not tenant_context:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    service = AgentMemoryService(session, tenant_context.tenant_id)
+    service = AgentMemoryService(session)
     
     try:
         memory = await service.create_memory(
@@ -506,7 +427,7 @@ async def create_memory(
             importance_score=request.importance_score,
             created_by=current_user["user_id"]
         )
-        return AgentMemoryResponse.from_orm(memory)
+        return memory
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -518,15 +439,10 @@ async def list_memories(
     memory_type: Optional[str] = None,
     limit: int = 100,
     offset: int = 0,
-    session_and_context = Depends(get_tenant_aware_session)
+    session: AsyncSession = Depends(get_async_db)
 ):
     """List agent memories"""
-    session, tenant_context = session_and_context
-    
-    if not tenant_context:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    service = AgentMemoryService(session, tenant_context.tenant_id)
+    service = AgentMemoryService(session)
     
     memories = await service.get_agent_memories(
         agent_id=str(agent_id),
@@ -536,24 +452,19 @@ async def list_memories(
         offset=offset
     )
     
-    return [AgentMemoryResponse.from_orm(memory) for memory in memories]
+    return memories
 
 
 @router.get("/memories/{memory_id}", response_model=AgentMemoryResponse)
 async def get_memory(
     memory_id: UUID,
-    session_and_context = Depends(get_tenant_aware_session)
+    session: AsyncSession = Depends(get_async_db)
 ):
     """Get and access a specific memory"""
-    session, tenant_context = session_and_context
-    
-    if not tenant_context:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    service = AgentMemoryService(session, tenant_context.tenant_id)
+    service = AgentMemoryService(session)
     
     memory = await service.access_memory(str(memory_id))
     if not memory:
         raise HTTPException(status_code=404, detail="Memory not found")
     
-    return AgentMemoryResponse.from_orm(memory)
+    return memory
