@@ -82,7 +82,7 @@ async def test_llm_model(
         elif provider_enum == LLMProviderType.ANTHROPIC:
              creds = {"api_key": llm_model.api_key}
         elif provider_enum == LLMProviderType.OLLAMA:
-             creds = {"base_url": llm_model.api_base or "http://localhost:11434"}
+             creds = {"base_url": llm_model.api_base or "http://ollama:11434"}
         elif provider_enum == LLMProviderType.AZURE_OPENAI:
              creds = {
                  "api_key": llm_model.api_key,

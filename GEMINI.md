@@ -59,6 +59,16 @@ All commands are typically run using `make` from the project root.
 *   **Model Tester**: A simple model tester has been integrated into the LLM model management page, allowing users to send sample requests to selected LLM models and view their responses. Now supports testing with OpenAI, Anthropic, and Azure OpenAI in addition to Ollama.
 *   **Agent LLM Selection**: The "Create Agent" dialog on the `/agents` page now includes a dropdown for selecting LLM models (both configured and discovered Ollama models).
 *   **Ollama Model Import**: Discovered Ollama models can now be easily imported into the configuration database with a single click.
+*   **Configurable Embedding Providers**: The system now supports both OpenAI and local (SentenceTransformers) embedding providers, with OpenAI as the default to improve startup performance and avoid large model downloads.
+
+# Configuration
+
+### Memory & Embeddings
+The memory system can be configured using environment variables:
+*   `MEMORY_EMBEDDING_PROVIDER`: "openai" (default) or "local".
+*   `MEMORY_EMBEDDING_MODEL`: e.g., "text-embedding-3-small" (default) or "all-MiniLM-L6-v2".
+*   `OPENAI_API_KEY`: Required if using the OpenAI provider.
+*   `MEMORY_VECTOR_DB_PATH`: Path to the vector database (default: `./data/chroma`).
 
 # Remaining Tasks (if any)
 *   **General Testing**: Ensure all existing and new functionalities are thoroughly tested across different providers.

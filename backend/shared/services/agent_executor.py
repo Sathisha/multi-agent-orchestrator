@@ -26,11 +26,20 @@ except ImportError:
 
 try:
     from ..services.memory_manager import MemoryManagerService, create_memory_manager_service
-except ImportError:
+except ImportError as e:
+    logger.error(f"Failed to import memory manager: {e}")
     class MemoryManagerService:
-        def __init__(self, session): pass
-        async def retrieve_memories(self, *args, **kwargs): return []
+        def __init__(self, session, tenant_id=None, memory_manager=None): 
+            self.session = session
+            self.tenant_id = tenant_id
+            self.memory_manager = memory_manager
+        async def semantic_search(self, *args, **kwargs): return []
         async def store_memory(self, *args, **kwargs): pass
+        async def get_conversation_history(self, *args, **kwargs): return []
+        async def get_user_preferences(self, *args, **kwargs): return []
+    
+    async def create_memory_manager_service(session, tenant_id):
+        return MemoryManagerService(session, tenant_id)
 
 try:
     from ..services.guardrails import GuardrailsService
@@ -323,15 +332,23 @@ class AgentExecutorService(BaseService):
             memory_context = []
             memory_enabled = context.config.get("memory_enabled", True)
             logger.debug(f"[EXEC-LOGIC] Memory enabled: {memory_enabled}")
+            
             if memory_enabled:
-                logger.debug(f"[EXEC-LOGIC] Performing semantic search for execution {context.execution_id}")
-                memory_results = await self.memory_service.semantic_search(
-                    agent_id=context.agent_id,
-                    query=str(context.input_data),
-                    limit=5
-                )
-                memory_context = [res.content for res in memory_results]
-                logger.debug(f"[EXEC-LOGIC] Retrieved {len(memory_context)} memory items")
+                if self.memory_service is not None:
+                    logger.debug(f"[EXEC-LOGIC] Performing semantic search for execution {context.execution_id}")
+                    try:
+                        memory_results = await self.memory_service.semantic_search(
+                            agent_id=context.agent_id,
+                            query=str(context.input_data),
+                            limit=5
+                        )
+                        memory_context = [res.content for res in memory_results]
+                        logger.debug(f"[EXEC-LOGIC] Retrieved {len(memory_context)} memory items")
+                    except Exception as e:
+                        logger.error(f"[EXEC-LOGIC] Memory search failed: {e}")
+                        # Continue without memory if it fails
+                else:
+                    logger.warning(f"[EXEC-LOGIC] Memory enabled but memory_service is None for execution {context.execution_id}")
 
             logger.debug(f"[EXEC-LOGIC] Preparing messages for execution {context.execution_id}")
             

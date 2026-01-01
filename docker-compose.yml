@@ -96,6 +96,10 @@ services:
       - LOG_LEVEL=INFO
       - RECREATE_DB=false # Set to true to recreate database on startup
       - ENABLE_MIGRATIONS=false # Set to true to enable Alembic migrations
+      - MEMORY_EMBEDDING_PROVIDER=${MEMORY_EMBEDDING_PROVIDER:-openai}
+      - MEMORY_EMBEDDING_MODEL=${MEMORY_EMBEDDING_MODEL:-text-embedding-3-small}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-not-required-for-ollama}
+      - MEMORY_VECTOR_DB_PATH=/app/data/chroma
     ports:
       - "8001:8000"
     volumes:
@@ -131,8 +135,6 @@ services:
       - ai-agent-network
     restart: unless-stopped
 
-
-
   # Ollama for local LLM models
   ollama:
     build:
@@ -147,7 +149,7 @@ services:
     networks:
       - ai-agent-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      test: [ "CMD", "curl", "-f", "http://localhost:11434/api/tags" ]
       interval: 10s
       timeout: 10s
       retries: 5

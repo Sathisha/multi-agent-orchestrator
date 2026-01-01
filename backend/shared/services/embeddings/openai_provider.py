@@ -40,9 +40,9 @@ class OpenAIEmbeddingProvider(BaseEmbeddingProvider):
         
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         if not self.api_key:
-            raise ValueError(
-                "OpenAI API key required. Set OPENAI_API_KEY environment variable "
-                "or pass api_key parameter"
+            self.logger.warning(
+                "OpenAI API key not found. OpenAI embedding provider initialized but "
+                "will fail during execution until key is provided."
             )
         
         self.model = model
@@ -75,6 +75,9 @@ class OpenAIEmbeddingProvider(BaseEmbeddingProvider):
         Returns:
             Embedding vector as list of floats
         """
+        if not self.api_key:
+            raise ValueError("OpenAI API key is required but not set. Configure it in settings or environment variables.")
+            
         if not self._client:
             await self.initialize()
         
@@ -106,6 +109,9 @@ class OpenAIEmbeddingProvider(BaseEmbeddingProvider):
         Returns:
             List of embedding vectors
         """
+        if not self.api_key:
+            raise ValueError("OpenAI API key is required but not set. Configure it in settings or environment variables.")
+
         if not self._client:
             await self.initialize()
         
