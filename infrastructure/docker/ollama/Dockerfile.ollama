@@ -1,0 +1,5 @@
+# infrastructure/docker/ollama/Dockerfile.ollama
+FROM ollama/ollama:latest
+
+# Install netcat-openbsd for the health check script
+RUN apt-get update && apt-get install -y netcat-openbsd

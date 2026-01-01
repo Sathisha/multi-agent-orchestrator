@@ -39,7 +39,6 @@ class LLMProviderFactory:
         provider_type: LLMProviderType,
         config: Optional[Dict[str, Any]] = None,
         credentials: Optional[Dict[str, Any]] = None,
-        tenant_id: Optional[str] = None,
         cache_key: Optional[str] = None
     ) -> BaseLLMProvider:
         """Create a new LLM provider instance.
@@ -48,7 +47,6 @@ class LLMProviderFactory:
             provider_type: Type of LLM provider to create
             config: Provider configuration dictionary
             credentials: Provider credentials dictionary
-            tenant_id: Optional tenant ID for multi-tenant deployments
             cache_key: Optional cache key for provider instance
             
         Returns:
@@ -60,7 +58,7 @@ class LLMProviderFactory:
         try:
             # Generate cache key if not provided
             if not cache_key:
-                cache_key = self._generate_cache_key(provider_type, tenant_id)
+                cache_key = self._generate_cache_key(provider_type)
             
             # Check cache first
             if cache_key in self._provider_cache:
@@ -88,7 +86,7 @@ class LLMProviderFactory:
             # Get credentials
             if not credentials:
                 credentials = await self.credential_manager.get_credentials(
-                    provider_type, tenant_id
+                    provider_type
                 )
             
             if not credentials:
@@ -115,7 +113,7 @@ class LLMProviderFactory:
             
             # Update credential validation status
             await self.credential_manager.validate_and_update_credentials(
-                provider_type, is_valid, tenant_id
+                provider_type, is_valid
             )
             
             # Cache provider instance
@@ -137,19 +135,17 @@ class LLMProviderFactory:
     
     async def get_provider(
         self, 
-        provider_type: LLMProviderType,
-        tenant_id: Optional[str] = None
+        provider_type: LLMProviderType
     ) -> Optional[BaseLLMProvider]:
         """Get cached provider instance.
         
         Args:
             provider_type: Type of LLM provider
-            tenant_id: Optional tenant ID for multi-tenant deployments
             
         Returns:
             Cached provider instance or None if not found
         """
-        cache_key = self._generate_cache_key(provider_type, tenant_id)
+        cache_key = self._generate_cache_key(provider_type)
         
         if cache_key in self._provider_cache:
             provider = self._provider_cache[cache_key]
@@ -166,8 +162,7 @@ class LLMProviderFactory:
         self, 
         provider_type: LLMProviderType,
         config: Optional[Dict[str, Any]] = None,
-        credentials: Optional[Dict[str, Any]] = None,
-        tenant_id: Optional[str] = None
+        credentials: Optional[Dict[str, Any]] = None
     ) -> BaseLLMProvider:
         """Get cached provider or create new one if not exists.
         
@@ -175,30 +170,26 @@ class LLMProviderFactory:
             provider_type: Type of LLM provider
             config: Provider configuration dictionary
             credentials: Provider credentials dictionary
-            tenant_id: Optional tenant ID for multi-tenant deployments
             
         Returns:
             LLM provider instance
         """
         # Try to get cached provider first
-        provider = await self.get_provider(provider_type, tenant_id)
+        provider = await self.get_provider(provider_type)
         
         if provider:
             return provider
         
         # Create new provider if not cached
         return await self.create_provider(
-            provider_type, config, credentials, tenant_id
+            provider_type, config, credentials
         )
     
     async def list_available_providers(
-        self, tenant_id: Optional[str] = None
+        self
     ) -> List[Dict[str, Any]]:
         """List all available providers with their status.
         
-        Args:
-            tenant_id: Optional tenant ID for multi-tenant deployments
-            
         Returns:
             List of provider information dictionaries
         """
@@ -208,7 +199,7 @@ class LLMProviderFactory:
             try:
                 # Check if credentials exist
                 credentials = await self.credential_manager.get_credentials(
-                    provider_type, tenant_id
+                    provider_type
                 )
                 
                 provider_info = {
@@ -221,7 +212,7 @@ class LLMProviderFactory:
                 if credentials:
                     try:
                         provider = await self.get_or_create_provider(
-                            provider_type, tenant_id=tenant_id
+                            provider_type
                         )
                         health = await provider.health_check()
                         provider_info["status"] = health.get("status", "unknown")
@@ -243,13 +234,10 @@ class LLMProviderFactory:
         return providers
     
     async def validate_all_providers(
-        self, tenant_id: Optional[str] = None
+        self
     ) -> Dict[str, bool]:
         """Validate all configured providers.
         
-        Args:
-            tenant_id: Optional tenant ID for multi-tenant deployments
-            
         Returns:
             Dictionary mapping provider types to validation status
         """
@@ -258,14 +246,14 @@ class LLMProviderFactory:
         for provider_type in LLMProviderType:
             try:
                 provider = await self.get_or_create_provider(
-                    provider_type, tenant_id=tenant_id
+                    provider_type
                 )
                 is_valid = await provider.validate_credentials()
                 validation_results[provider_type.value] = is_valid
                 
                 # Update credential validation status
                 await self.credential_manager.validate_and_update_credentials(
-                    provider_type, is_valid, tenant_id
+                    provider_type, is_valid
                 )
                 
             except Exception as e:
@@ -296,20 +284,16 @@ class LLMProviderFactory:
     
     def _generate_cache_key(
         self, 
-        provider_type: LLMProviderType, 
-        tenant_id: Optional[str] = None
+        provider_type: LLMProviderType
     ) -> str:
         """Generate cache key for provider instance.
         
         Args:
             provider_type: LLM provider type
-            tenant_id: Optional tenant ID
             
         Returns:
             Cache key string
         """
-        if tenant_id:
-            return f"{tenant_id}:{provider_type.value}"
         return provider_type.value
     
     def _create_provider_config(

@@ -2,7 +2,8 @@
 
 from typing import Dict, List, Optional
 
-from shared.models.agent import AgentTemplate, AgentType, LLMProvider, AgentConfig
+from shared.schemas.agent_template import AgentTemplate
+from shared.models.agent import AgentType, LLMProvider, AgentConfig
 
 
 class AgentTemplateService:

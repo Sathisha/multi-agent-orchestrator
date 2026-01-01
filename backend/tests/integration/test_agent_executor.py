@@ -24,12 +24,9 @@ async def test_agent_executor():
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     
     async with async_session() as session:
-        tenant_id = "test-tenant-123"
-        
         # Create a test agent
         test_agent = Agent(
             id="test-agent-123",
-            tenant_id=tenant_id,
             name="Test Agent",
             description="Test agent for executor testing",
             type=AgentType.CONVERSATIONAL,
@@ -51,7 +48,7 @@ async def test_agent_executor():
         
         # Test Agent Executor Service
         print("\n1. Testing Agent Executor Service")
-        executor = AgentExecutorService(session, tenant_id)
+        executor = AgentExecutorService(session)
         
         try:
             # Start execution
@@ -83,7 +80,7 @@ async def test_agent_executor():
         
         # Test Agent State Manager
         print("\n2. Testing Agent State Manager")
-        state_manager = AgentStateManager(session, tenant_id)
+        state_manager = AgentStateManager(session)
         
         try:
             # Initialize agent state
@@ -98,20 +95,17 @@ async def test_agent_executor():
             )
             print("✓ Updated agent state to RUNNING")
             
-            # Get health status
-            health = await state_manager.get_agent_health_status("test-agent-123")
-            print(f"✓ Health status: {health['status']}")
             
-            # Get tenant statistics
-            stats = await state_manager.get_tenant_statistics()
-            print(f"✓ Tenant stats: {stats['total_agents']} agents")
+            # Get statistics
+            stats = await state_manager.get_statistics()
+            print(f"✓ Stats: {stats['total_agents']} agents")
             
         except Exception as e:
             print(f"✗ State manager test failed: {str(e)}")
         
         # Test Error Handler
         print("\n3. Testing Agent Error Handler")
-        error_handler = AgentErrorHandler(session, tenant_id)
+        error_handler = AgentErrorHandler(session)
         
         try:
             # Simulate an error
@@ -156,7 +150,6 @@ async def test_api_endpoints():
     print("\nTesting Agent Executor API endpoints...")
     
     base_url = "http://localhost:8000"
-    headers = {"X-Tenant-ID": "test-tenant-123"}
     
     async with httpx.AsyncClient() as client:
         try:

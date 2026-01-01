@@ -10,7 +10,6 @@ from prometheus_client import make_asgi_app
 from shared.config.settings import get_settings
 from shared.logging.structured_logging import setup_structured_logging, get_logger
 from shared.api import api_router
-# from shared.middleware.tenant import TenantContextMiddleware
 from shared.middleware.compliance import ComplianceMiddleware
 from shared.middleware.audit import AuditMiddleware
 from shared.middleware.security import SecurityConfig, create_security_middleware_stack
@@ -93,10 +92,7 @@ app.add_middleware(
     allow_headers=settings.api.cors_headers,
 )
 
-# Add tenant context middleware (Removed)
-# app.add_middleware(TenantContextMiddleware)
-
-# Add audit middleware (should be after tenant context)
+# Add audit middleware
 app.add_middleware(AuditMiddleware)
 
 # Add compliance middleware

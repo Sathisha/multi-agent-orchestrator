@@ -144,7 +144,7 @@ class AgentStatisticsResponse(BaseModel):
 async def create_agent(
     request: AgentCreateRequest,
     session: AsyncSession = Depends(get_async_db),
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})
+    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "00000000-0000-0000-0000-000000000000"})
 ):
     """Create a new agent"""
     service = AgentService(session)
@@ -214,7 +214,7 @@ async def update_agent(
     agent_id: UUID,
     request: AgentUpdateRequest,
     session: AsyncSession = Depends(get_async_db),
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})
+    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "00000000-0000-0000-0000-000000000000"})
 ):
     """Update agent"""
     service = AgentService(session)
@@ -242,7 +242,7 @@ async def update_agent(
 async def activate_agent(
     agent_id: UUID,
     session: AsyncSession = Depends(get_async_db),
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})
+    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "00000000-0000-0000-0000-000000000000"})
 ):
     """Activate agent"""
     service = AgentService(session)
@@ -258,7 +258,7 @@ async def activate_agent(
 async def deactivate_agent(
     agent_id: UUID,
     session: AsyncSession = Depends(get_async_db),
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})
+    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "00000000-0000-0000-0000-000000000000"})
 ):
     """Deactivate agent"""
     service = AgentService(session)
@@ -274,7 +274,7 @@ async def deactivate_agent(
 async def delete_agent(
     agent_id: UUID,
     session: AsyncSession = Depends(get_async_db),
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})
+    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "00000000-0000-0000-0000-000000000000"})
 ):
     """Delete agent"""
     service = AgentService(session)
@@ -307,7 +307,7 @@ async def create_deployment(
     agent_id: UUID,
     request: AgentDeploymentRequest,
     session: AsyncSession = Depends(get_async_db),
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})
+    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "00000000-0000-0000-0000-000000000000"})
 ):
     """Create agent deployment"""
     service = AgentDeploymentService(session)
@@ -342,7 +342,7 @@ async def list_deployments(
 async def deploy_agent(
     deployment_id: UUID,
     session: AsyncSession = Depends(get_async_db),
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})
+    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "00000000-0000-0000-0000-000000000000"})
 ):
     """Deploy agent"""
     service = AgentDeploymentService(session)
@@ -360,7 +360,7 @@ async def execute_agent(
     agent_id: UUID,
     request: AgentExecutionRequest,
     session: AsyncSession = Depends(get_async_db),
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})
+    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "00000000-0000-0000-0000-000000000000"})
 ):
     """Execute agent"""
     service = AgentExecutionService(session)
@@ -408,7 +408,7 @@ async def create_memory(
     agent_id: UUID,
     request: AgentMemoryRequest,
     session: AsyncSession = Depends(get_async_db),
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})
+    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "00000000-0000-0000-0000-000000000000"})
 ):
     """Create agent memory"""
     service = AgentMemoryService(session)

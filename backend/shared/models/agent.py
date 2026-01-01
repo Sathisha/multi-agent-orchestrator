@@ -8,7 +8,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 import uuid
 
-from shared.models.base import TenantEntity, BaseEntity
+from shared.models.base import SystemEntity, BaseEntity
 
 # Enums
 class AgentType(str, Enum):
@@ -49,7 +49,7 @@ class AgentConfig(BaseModel):
     memory_enabled: bool = False
     guardrails_enabled: bool = False
 
-class Agent(TenantEntity):
+class Agent(SystemEntity):
     __tablename__ = "agents"
     
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
@@ -65,7 +65,7 @@ class Agent(TenantEntity):
     tags: Mapped[List[str]] = mapped_column(JSONB, nullable=True, server_default=text("'[]'::jsonb"))
     agent_metadata: Mapped[Dict[str, Any]] = mapped_column("agent_metadata", JSONB, nullable=True, server_default=text("'{}'::jsonb"))
 
-class AgentDeployment(TenantEntity):
+class AgentDeployment(SystemEntity):
     __tablename__ = "agent_deployments"
     
     agent_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("agents.id"), nullable=False, index=True)
@@ -76,7 +76,7 @@ class AgentDeployment(TenantEntity):
     resource_limits: Mapped[Dict[str, Any]] = mapped_column(JSONB, nullable=True)
     deployed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     
-class AgentExecution(TenantEntity):
+class AgentExecution(SystemEntity):
     __tablename__ = "agent_executions"
     
     agent_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("agents.id"), nullable=False, index=True)
@@ -92,7 +92,7 @@ class AgentExecution(TenantEntity):
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
-class AgentMemory(TenantEntity):
+class AgentMemory(SystemEntity):
     __tablename__ = "agent_memories"
     
     agent_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("agents.id"), nullable=False, index=True)
@@ -104,9 +104,4 @@ class AgentMemory(TenantEntity):
     access_count: Mapped[int] = mapped_column(Integer, default=0)
     last_accessed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
-class AgentTemplate(BaseModel):
-    id: str
-    name: str
-    description: str
-    agent_type: AgentType
-    default_config: AgentConfig
+

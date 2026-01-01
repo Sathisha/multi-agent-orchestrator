@@ -7,7 +7,7 @@ from sqlalchemy import String, Text, ForeignKey, Integer, DateTime, text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
-from shared.models.base import TenantEntity
+from shared.models.base import SystemEntity
 
 
 class WorkflowStatus(str, Enum):
@@ -40,7 +40,7 @@ class NodeType(str, Enum):
     GATEWAY = "gateway"
 
 
-class Workflow(TenantEntity):
+class Workflow(SystemEntity):
     __tablename__ = "workflows"
     
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
@@ -67,7 +67,7 @@ class Workflow(TenantEntity):
     required_mcp_servers: Mapped[List[str]] = mapped_column(JSONB, nullable=True, server_default=text("'[]'::jsonb"))
 
 
-class WorkflowExecution(TenantEntity):
+class WorkflowExecution(SystemEntity):
     __tablename__ = "workflow_executions"
     
     workflow_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("workflows.id"), nullable=False, index=True)
@@ -97,7 +97,7 @@ class WorkflowExecution(TenantEntity):
     correlation_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
 
 
-class ExecutionLog(TenantEntity):
+class ExecutionLog(SystemEntity):
     __tablename__ = "execution_logs"
     
     execution_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("workflow_executions.id"), nullable=False, index=True)

@@ -17,6 +17,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database.connection import get_async_db
+import logging
 from ..services.auth import AuthService
 from ..services.rbac import RBACService
 from ..schemas.auth import (
@@ -27,6 +28,7 @@ from ..schemas.auth import (
 router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
 security = HTTPBearer()
 
+logger = logging.getLogger(__name__)
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register_user(
@@ -84,18 +86,21 @@ async def login_user(
     
     Returns JWT access and refresh tokens for authenticated user.
     """
+    logger.info(f"Login attempt for email: {user_data.email}")
     auth_service = AuthService(db)
     
     # Authenticate user
     user = await auth_service.authenticate_user(user_data.email, user_data.password)
     
     if not user:
+        logger.warning(f"Login failed for email: {user_data.email}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
             headers={"WWW-Authenticate": "Bearer"}
         )
     
+    logger.info(f"Login successful for email: {user_data.email}")
     # Create tokens
     tokens = await auth_service.create_user_tokens(user)
     

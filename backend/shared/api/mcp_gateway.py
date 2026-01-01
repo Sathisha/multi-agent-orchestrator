@@ -15,7 +15,7 @@ from ..models.tool import (
     MCPServerRequest, MCPServerResponse, MCPServerStatus
 )
 from ..services.mcp_gateway import MCPGatewayService
-from ..services.auth import get_current_user_with_tenant
+from ..services.auth import get_current_user
 from ..models.user import User
 from ..logging.config import get_logger
 
@@ -355,13 +355,12 @@ async def call_mcp_tool(
 @router.get("/servers/{server_id}/health")
 async def check_server_health(
     server_id: UUID,
-    current_user: User = Depends(get_current_user_with_tenant),
+    current_user: User = Depends(get_current_user),
     mcp_service: MCPGatewayService = Depends(MCPGatewayService)
 ):
     """Check the health status of an MCP server."""
     try:
         server = await mcp_service.get_mcp_server(
-            tenant_id=current_user.tenant_id,
             user_id=current_user.id,
             server_id=server_id
         )

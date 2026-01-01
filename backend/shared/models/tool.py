@@ -60,8 +60,7 @@ class Tool(BaseEntity):
 
     # Since I don't have MCPServer model yet, I will comment out mcp_server usage in service if needed.
     
-    # Single-tenant field replacements (if code still refs them, we might need dummy properties?)
-    # But I will refactor the code to NOT use tenant_id.
+
 
 # Pydantic Models for Request/Response
 class ToolRequest(BaseModel):

@@ -38,16 +38,9 @@ wait_for_db() {
 
 # Function to initialize database
 init_database() {
-    echo "🔄 Initializing database..."
+    echo "🔄 Initializing database with Alembic..."
     
-    # Check if we should recreate the database
-    if [ "$RECREATE_DB" = "true" ] || [ "$RECREATE_DB" = "1" ]; then
-        echo "🗑️  Recreating database tables..."
-        python3 init_db.py --recreate
-    else
-        echo "📋 Creating database tables if they don't exist..."
-        python3 init_db.py
-    fi
+    python3 init_db.py
     
     if [ $? -eq 0 ]; then
         echo "✅ Database initialization completed successfully"
@@ -59,12 +52,13 @@ init_database() {
 
 # Function to run database migrations (if needed in future)
 run_migrations() {
-    # This is a placeholder for future Alembic migrations
-    # Currently disabled during development phase
-    if [ "$ENABLE_MIGRATIONS" = "true" ]; then
-        echo "🔄 Running database migrations..."
-        # alembic upgrade head
-        echo "⚠️  Migrations are disabled during development phase"
+    echo "🔄 Running Alembic migrations..."
+    alembic upgrade head
+    if [ $? -eq 0 ]; then
+        echo "✅ Alembic migrations completed successfully"
+    else
+        echo "❌ Alembic migrations failed"
+        exit 1
     fi
 }
 
@@ -76,17 +70,27 @@ main() {
     # Wait for database to be ready
     wait_for_db
     
-    # Initialize database
+    # Initialize database (now runs Alembic)
     init_database
     
-    # Run migrations if enabled
-    run_migrations
+    # Seed data if RECREATE_DB is true (or always in dev)
+    if [ "$RECREATE_DB" = "true" ] || [ "$ENVIRONMENT" = "development" ]; then
+        echo "🌱 Seeding database..."
+        python /app/seed_data.py
+        if [ $? -eq 0 ]; then
+            echo "✅ Database seeding completed successfully"
+        else
+            echo "❌ Database seeding failed"
+            exit 1
+        fi
+    fi
     
     echo "🎯 Starting application with command: $@"
     
     # Execute the main command
     exec "$@"
 }
+
 
 # Handle signals for graceful shutdown
 trap 'echo "🛑 Received shutdown signal, stopping..."; exit 0' SIGTERM SIGINT

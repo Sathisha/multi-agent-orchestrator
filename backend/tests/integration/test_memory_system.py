@@ -46,14 +46,13 @@ async def test_memory_system():
     print("✅ Memory manager initialized successfully")
     
     # Test data
-    tenant_id = "test-tenant-001"
     agent_id = "test-agent-001"
     session_id = "test-session-001"
     user_id = "test-user-001"
     
     # Create a mock database session (in real usage, this comes from FastAPI dependency)
     async with get_database_session() as session:
-        memory_service = MemoryManagerService(session, tenant_id, memory_manager)
+        memory_service = MemoryManagerService(session, memory_manager)
         
         print("\n📝 Testing memory storage...")
         

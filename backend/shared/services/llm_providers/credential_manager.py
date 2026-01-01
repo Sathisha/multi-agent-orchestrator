@@ -86,15 +86,13 @@ class CredentialManager:
     async def store_credentials(
         self, 
         provider_type: LLMProviderType, 
-        credentials: Dict[str, Any],
-        tenant_id: Optional[str] = None
+        credentials: Dict[str, Any]
     ) -> str:
         """Store encrypted credentials.
         
         Args:
             provider_type: LLM provider type
             credentials: Raw credentials dictionary
-            tenant_id: Optional tenant ID for multi-tenant deployments
             
         Returns:
             Credential storage key
@@ -107,12 +105,11 @@ class CredentialManager:
             cred_record = ProviderCredentials(
                 provider_type=provider_type,
                 credentials={"encrypted": encrypted_creds},
-                is_valid=False,  # Will be validated separately
-                metadata={"tenant_id": tenant_id} if tenant_id else {}
+                is_valid=False  # Will be validated separately
             )
             
             # Generate storage key
-            storage_key = self._generate_storage_key(provider_type, tenant_id)
+            storage_key = self._generate_storage_key(provider_type)
             
             # Store in cache (in production, this would be stored in database)
             self._credential_cache[storage_key] = cred_record
@@ -129,20 +126,18 @@ class CredentialManager:
     
     async def get_credentials(
         self, 
-        provider_type: LLMProviderType, 
-        tenant_id: Optional[str] = None
+        provider_type: LLMProviderType
     ) -> Optional[Dict[str, Any]]:
         """Retrieve and decrypt credentials.
         
         Args:
             provider_type: LLM provider type
-            tenant_id: Optional tenant ID for multi-tenant deployments
             
         Returns:
             Decrypted credentials dictionary or None if not found
         """
         try:
-            storage_key = self._generate_storage_key(provider_type, tenant_id)
+            storage_key = self._generate_storage_key(provider_type)
             
             # Check cache first
             if storage_key in self._credential_cache:
@@ -166,17 +161,15 @@ class CredentialManager:
     async def validate_and_update_credentials(
         self, 
         provider_type: LLMProviderType, 
-        is_valid: bool,
-        tenant_id: Optional[str] = None
+        is_valid: bool
     ) -> None:
         """Update credential validation status.
         
         Args:
             provider_type: LLM provider type
             is_valid: Whether credentials are valid
-            tenant_id: Optional tenant ID for multi-tenant deployments
         """
-        storage_key = self._generate_storage_key(provider_type, tenant_id)
+        storage_key = self._generate_storage_key(provider_type)
         
         if storage_key in self._credential_cache:
             cred_record = self._credential_cache[storage_key]
@@ -189,19 +182,17 @@ class CredentialManager:
     
     async def delete_credentials(
         self, 
-        provider_type: LLMProviderType, 
-        tenant_id: Optional[str] = None
+        provider_type: LLMProviderType
     ) -> bool:
         """Delete stored credentials.
         
         Args:
             provider_type: LLM provider type
-            tenant_id: Optional tenant ID for multi-tenant deployments
             
         Returns:
             True if credentials were deleted, False if not found
         """
-        storage_key = self._generate_storage_key(provider_type, tenant_id)
+        storage_key = self._generate_storage_key(provider_type)
         
         if storage_key in self._credential_cache:
             del self._credential_cache[storage_key]
@@ -212,20 +203,16 @@ class CredentialManager:
     
     def _generate_storage_key(
         self, 
-        provider_type: LLMProviderType, 
-        tenant_id: Optional[str] = None
+        provider_type: LLMProviderType
     ) -> str:
         """Generate storage key for credentials.
         
         Args:
             provider_type: LLM provider type
-            tenant_id: Optional tenant ID
             
         Returns:
             Storage key string
         """
-        if tenant_id:
-            return f"{tenant_id}:{provider_type.value}"
         return provider_type.value
     
     def _get_env_credentials(self, provider_type: LLMProviderType) -> Optional[Dict[str, Any]]:

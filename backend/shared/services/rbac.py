@@ -49,7 +49,6 @@ class RBACService:
             id=uuid4(),
             name=name,
             description=description,
-            # tenant_id=tenant_id, # Removed
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )
@@ -287,23 +286,27 @@ class RBACService:
                 "description": "System administrator with full access",
                 "permissions": [
                     "system.manage",
-                    "tenant.create",
-                    "tenant.delete",
                     "user.manage",
-                    "role.manage"
-                ]
-            },
-            {
-                "name": "tenant_admin",
-                "description": "Tenant administrator",
-                "permissions": [
-                    "tenant.manage",
-                    "user.invite",
-                    "user.manage",
+                    "role.manage",
                     "agent.create",
                     "agent.manage",
                     "workflow.create",
-                    "workflow.manage"
+                    "workflow.manage",
+                    "tool.create",
+                    "tool.manage",
+                    "user.invite"
+                ]
+            },
+            {
+                "name": "developer",
+                "description": "Developer with agent and workflow creation rights",
+                "permissions": [
+                    "agent.create",
+                    "agent.manage",
+                    "workflow.create",
+                    "workflow.manage",
+                    "tool.create",
+                    "tool.manage"
                 ]
             },
             {
@@ -351,11 +354,6 @@ class Permissions:
     # System permissions
     SYSTEM_MANAGE = "system.manage"
     
-    # Tenant permissions
-    TENANT_CREATE = "tenant.create"
-    TENANT_MANAGE = "tenant.manage"
-    TENANT_DELETE = "tenant.delete"
-    
     # User permissions
     USER_INVITE = "user.invite"
     USER_MANAGE = "user.manage"
@@ -398,7 +396,6 @@ class Roles:
     """Standard role constants."""
     
     SYSTEM_ADMIN = "system_admin"
-    TENANT_ADMIN = "tenant_admin"
     DEVELOPER = "developer"
     USER = "user"
 

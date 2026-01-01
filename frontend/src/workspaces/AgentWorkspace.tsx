@@ -27,6 +27,7 @@ import {
 } from '@mui/icons-material'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
 import { getAgents, createAgent, deleteAgent, updateAgent, CreateAgentRequest, UpdateAgentRequest, Agent, getAgentTemplates, AgentTemplate } from '../api/agents'
+import { getModels, discoverOllamaModels, LLMModel, OllamaModel } from '../api/llmModels' // Import LLM model API functions
 import { useNavigate } from 'react-router-dom'
 
 const AgentWorkspace: React.FC = () => {
@@ -46,8 +47,15 @@ const AgentWorkspace: React.FC = () => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
 
+  // LLM Model State
+  const [selectedLLMModelId, setSelectedLLMModelId] = useState<string | null>(null)
+  const [ollamaDiscoveryLoading, setOllamaDiscoveryLoading] = useState(false)
+  const [discoveredOllamaModels, setDiscoveredOllamaModels] = useState<OllamaModel[]>([])
+
   const { data: agents, isLoading, refetch } = useQuery('agents', getAgents)
   const { data: agentTemplates, isLoading: templatesLoading } = useQuery('agentTemplates', getAgentTemplates)
+  const { data: configuredLLMModels, isLoading: llmModelsLoading } = useQuery('llmModels', getModels)
+
 
   const createMutation = useMutation(createAgent, {
     onSuccess: () => {
@@ -57,8 +65,49 @@ const AgentWorkspace: React.FC = () => {
       setNewAgentName('')
       setNewAgentDesc('')
       setNewAgentType('conversational')
+      setSelectedLLMModelId(null);
     },
   })
+
+  const handleDiscoverOllamaModels = async () => {
+    setOllamaDiscoveryLoading(true);
+    try {
+      const models = await discoverOllamaModels();
+      setDiscoveredOllamaModels(models);
+    } catch (error) {
+      console.error("Error discovering Ollama models:", error);
+      // Optionally, show an error message to the user
+    } finally {
+      setOllamaDiscoveryLoading(false);
+    }
+  };
+
+  const allAvailableModels = useMemo(() => {
+    const combinedModels: (LLMModel | (OllamaModel & { is_configured?: boolean }))[] = [];
+
+    // Add configured LLM models
+    configuredLLMModels?.forEach(model => {
+      combinedModels.push(model);
+    });
+
+    // Add discovered Ollama models, marking them as unconfigured if not already present
+    discoveredOllamaModels.forEach(ollamaModel => {
+      const isAlreadyConfigured = configuredLLMModels?.some(
+        configuredModel => configuredModel.provider === 'ollama' && configuredModel.name === ollamaModel.name
+      );
+      if (!isAlreadyConfigured) {
+        combinedModels.push({
+          ...ollamaModel,
+          id: `ollama-${ollamaModel.name}`, // Temporary ID for selection
+          is_configured: false, // Custom flag to indicate it's not in our DB
+        });
+      }
+    });
+
+    return combinedModels;
+  }, [configuredLLMModels, discoveredOllamaModels]);
+
+
 
   const deleteMutation = useMutation(deleteAgent, {
     onSuccess: () => {
@@ -101,10 +150,15 @@ const AgentWorkspace: React.FC = () => {
   }, [agents])
 
   const handleCreate = () => {
+    if (!selectedLLMModelId) {
+      alert('Please select an LLM model.');
+      return;
+    }
     createMutation.mutate({
       name: newAgentName,
       description: newAgentDesc,
-      type: newAgentType
+      type: newAgentType,
+      llm_model_id: selectedLLMModelId // Pass the selected LLM model ID
     })
   }
 
@@ -113,7 +167,9 @@ const AgentWorkspace: React.FC = () => {
       name: template.name,
       description: template.description,
       type: template.type,
-      system_prompt: template.system_prompt
+      system_prompt: template.system_prompt,
+      llm_model_id: selectedLLMModelId, // Also pass for templates
+      config: template.config
     })
   }
 
@@ -591,7 +647,51 @@ const AgentWorkspace: React.FC = () => {
               <MenuItem value="conversational">Conversational</MenuItem>
               <MenuItem value="content-generation">Content Generation</MenuItem>
               <MenuItem value="data-analysis">Data Analysis</MenuItem>
-              <MenuItem value="code-review">Code Review</MenuItem>
+            </Select>
+          </FormControl>
+
+          {/* LLM Model Selection */}
+          <FormControl fullWidth margin="dense">
+            <InputLabel id="llm-model-select-label">LLM Model</InputLabel>
+            <Select
+              labelId="llm-model-select-label"
+              value={selectedLLMModelId || ''}
+              label="LLM Model"
+              onChange={(e) => setSelectedLLMModelId(e.target.value as string)}
+              endAdornment={
+                <InputAdornment position="end">
+                  <Tooltip title="Discover Ollama Models">
+                    <IconButton
+                      onClick={handleDiscoverOllamaModels}
+                      disabled={ollamaDiscoveryLoading || llmModelsLoading}
+                    >
+                      {ollamaDiscoveryLoading ? <CircularProgress size={20} /> : <RefreshIcon />}
+                    </IconButton>
+                  </Tooltip>
+                </InputAdornment>
+              }
+            >
+              {configuredLLMModels?.map((model) => (
+                <MenuItem key={model.id} value={model.id}>
+                  {model.name} ({model.provider})
+                </MenuItem>
+              ))}
+              {discoveredOllamaModels.map((model) => {
+                // Determine if this discovered Ollama model is already configured in our DB
+                const isConfigured = configuredLLMModels?.some(
+                  (configuredModel) => configuredModel.provider === 'ollama' && configuredModel.name === model.name
+                );
+                return (
+                  <MenuItem
+                    key={`discovered-${model.name}`}
+                    value={`discovered-${model.name}`} // Use a distinct value for unconfigured discovered models
+                    disabled={true} // Grey out and disable unconfigured models
+                    sx={{ color: isConfigured ? 'inherit' : 'gray' }}
+                  >
+                    {model.name} (Ollama - Unconfigured)
+                  </MenuItem>
+                );
+              })}
             </Select>
           </FormControl>
         </DialogContent>
@@ -599,7 +699,7 @@ const AgentWorkspace: React.FC = () => {
           <Button onClick={() => setCreateDialogOpen(false)} sx={{ color: '#969696' }}>Cancel</Button>
           <Button
             onClick={handleCreate}
-            disabled={!newAgentName || createMutation.isLoading}
+            disabled={!newAgentName || !selectedLLMModelId || createMutation.isLoading}
             variant="contained"
             sx={{ backgroundColor: '#007acc' }}
           >

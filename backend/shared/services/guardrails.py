@@ -55,7 +55,6 @@ class ContentCategory(str, Enum):
 @dataclass
 class ValidationContext:
     """Context for validation operations"""
-    tenant_id: str
     user_id: Optional[str]
     agent_id: Optional[str]
     session_id: Optional[str]
@@ -94,7 +93,6 @@ class PolicyResult:
 class Violation:
     """Guardrail violation record"""
     id: str
-    tenant_id: str
     user_id: Optional[str]
     agent_id: Optional[str]
     violation_type: ViolationType
@@ -339,9 +337,8 @@ class MLContentAnalyzer:
 class GuardrailsEngine:
     """Main guardrails engine for content validation and policy enforcement"""
     
-    def __init__(self, session: AsyncSession, tenant_id: str):
+    def __init__(self, session: AsyncSession):
         self.session = session
-        self.tenant_id = tenant_id
         self.content_filter = ContentFilter()
         self.ml_analyzer = MLContentAnalyzer()
         self.violations_cache = {}
@@ -484,11 +481,11 @@ class GuardrailsEngine:
     ) -> PolicyResult:
         """Check if action is allowed by policies"""
         try:
-            # Get tenant policies
-            tenant_policies = await self._get_tenant_policies()
+            # Get policies
+            policies = await self._get_policies()
             
             # Check each applicable policy
-            for policy in tenant_policies:
+            for policy in policies:
                 if self._policy_applies(policy, action, resource, context):
                     if not policy.get('allowed', True):
                         return PolicyResult(
@@ -526,7 +523,6 @@ class GuardrailsEngine:
                 event_type=AuditEventType.GUARDRAIL_TRIGGERED,
                 event_id=str(uuid.uuid4()),
                 correlation_id=violation.id, # Use violation id as correlation if not available
-                tenant_id=violation.tenant_id,
                 user_id=violation.user_id,
                 action="guardrail_violation",
                 resource_type="content",
@@ -552,7 +548,7 @@ class GuardrailsEngine:
             
             logger.warning(
                 f"Guardrail violation reported: {violation.violation_type.value} "
-                f"(Risk: {violation.risk_level.value}) for tenant {violation.tenant_id}"
+                f"(Risk: {violation.risk_level.value})"
             )
             
         except Exception as e:
@@ -609,7 +605,6 @@ class GuardrailsEngine:
         
         violation = Violation(
             id=f"violation_{int(time.time())}_{content_hash[:8]}",
-            tenant_id=context.tenant_id,
             user_id=context.user_id,
             agent_id=context.agent_id,
             violation_type=result.violation_types[0] if result.violation_types else ViolationType.POLICY_VIOLATION,
@@ -625,8 +620,8 @@ class GuardrailsEngine:
         
         await self.report_violation(violation)
     
-    async def _get_tenant_policies(self) -> List[Dict[str, Any]]:
-        """Get tenant-specific policies"""
+    async def _get_policies(self) -> List[Dict[str, Any]]:
+        """Get policies"""
         # This would typically load from database
         # For now, return default policies
         return [
@@ -683,7 +678,7 @@ class GuardrailsEngine:
         # For now, just log
         logger.critical(
             f"HIGH RISK VIOLATION: {violation.violation_type.value} "
-            f"in tenant {violation.tenant_id} by user {violation.user_id}"
+            f"(Risk: {violation.risk_level.value})"
         )
 
 
@@ -692,27 +687,18 @@ class GuardrailsService(BaseService):
     
     def __init__(self, session: AsyncSession):
         super().__init__(session, AuditLog)
-        self.engines = {}  # Cache engines per tenant
-    
-    def get_engine(self, tenant_id: str) -> GuardrailsEngine:
-        """Get or create guardrails engine for tenant"""
-        if tenant_id not in self.engines:
-            self.engines[tenant_id] = GuardrailsEngine(self.session, tenant_id)
-        return self.engines[tenant_id]
+        self.engine = GuardrailsEngine(self.session) # Use a single engine since no tenant
     
     async def validate_agent_input(
         self,
-        tenant_id: str,
         agent_id: str,
         user_id: str,
         content: str,
         session_id: Optional[str] = None
     ) -> ValidationResult:
         """Validate agent input content"""
-        engine = self.get_engine(tenant_id)
         
         context = ValidationContext(
-            tenant_id=tenant_id,
             user_id=user_id,
             agent_id=agent_id,
             session_id=session_id,
@@ -722,21 +708,18 @@ class GuardrailsService(BaseService):
             metadata={}
         )
         
-        return await engine.validate_input(content, context)
+        return await self.engine.validate_input(content, context)
     
     async def validate_agent_output(
         self,
-        tenant_id: str,
         agent_id: str,
         user_id: str,
         content: str,
         session_id: Optional[str] = None
     ) -> ValidationResult:
         """Validate agent output content"""
-        engine = self.get_engine(tenant_id)
         
         context = ValidationContext(
-            tenant_id=tenant_id,
             user_id=user_id,
             agent_id=agent_id,
             session_id=session_id,
@@ -746,27 +729,25 @@ class GuardrailsService(BaseService):
             metadata={}
         )
         
-        return await engine.validate_output(content, context)
+        return await self.engine.validate_output(content, context)
     
     async def check_agent_policy(
         self,
-        tenant_id: str,
         user_id: str,
         action: str,
         resource: str,
         context: Optional[Dict[str, Any]] = None
     ) -> PolicyResult:
-        """Check if action is allowed by tenant policies"""
-        engine = self.get_engine(tenant_id)
-        return await engine.check_policy(action, resource, user_id, context or {})
+        """Check if action is allowed by policies"""
+        
+        return await self.engine.check_policy(action, resource, user_id, context or {})
     
     async def get_violation_stats(
         self,
-        tenant_id: str,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None
     ) -> Dict[str, Any]:
-        """Get violation statistics for tenant"""
+        """Get violation statistics"""
         if start_date is None:
             start_date = datetime.utcnow() - timedelta(days=30)
         if end_date is None:
@@ -783,7 +764,6 @@ class GuardrailsService(BaseService):
             ).label('high_violations')
         ).where(
             and_(
-                AuditLog.tenant_id == tenant_id,
                 AuditLog.action == 'guardrail_violation',
                 AuditLog.timestamp >= start_date,
                 AuditLog.timestamp <= end_date
@@ -794,7 +774,6 @@ class GuardrailsService(BaseService):
         stats = result.first()
         
         return {
-            'tenant_id': tenant_id,
             'period': {
                 'start_date': start_date.isoformat(),
                 'end_date': end_date.isoformat()

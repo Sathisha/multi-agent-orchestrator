@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.user import User, UserStatus
 from ..models.rbac import UserRole
+from ..models.tenant import Tenant, TenantUser
 from ..config.settings import get_settings
 from ..database.connection import get_async_db
 
@@ -178,7 +179,6 @@ class AuthService:
             "sub": str(user.id),
             "email": user.email,
             "username": user.username,
-            # removed tenant_id and is_system_admin/roles if not present in basic user model
         }
         
         access_token = self.create_access_token(token_data)
@@ -243,6 +243,30 @@ class AuthService:
         logger.info(f"Password reset for user: {email}")
         return True
 
+    async def get_user_and_tenant_by_id(self, user_id: UUID) -> Optional[Dict[str, Any]]:
+        """Get user and their associated tenant by user ID."""
+        user_query = select(User).options(
+            selectinload(User.roles).selectinload(UserRole.role)
+        ).where(User.id == user_id)
+        user_result = await self.session.execute(user_query)
+        user = user_result.unique().scalar_one_or_none()
+
+        if not user:
+            return None
+
+        tenant_user_query = select(TenantUser).where(TenantUser.user_id == user_id)
+        tenant_user_result = await self.session.execute(tenant_user_query)
+        tenant_user = tenant_user_result.scalar_one_or_none()
+
+        tenant = None
+        if tenant_user:
+            tenant_query = select(Tenant).where(Tenant.id == tenant_user.tenant_id)
+            tenant_result = await self.session.execute(tenant_query)
+            tenant = tenant_result.scalar_one_or_none()
+        
+        return {"user": user, "tenant": tenant}
+
+
 # FastAPI Dependencies
 security = HTTPBearer()
 
@@ -287,13 +311,44 @@ async def get_current_user(
     
     return user
 
-
 async def get_current_user_with_tenant(
     token: str = Depends(security),
     session: AsyncSession = Depends(get_async_db)
-) -> User:
+) -> Dict[str, Any]:
     """
-    FastAPI dependency to get the current authenticated user from a JWT token.
-    Alias for get_current_user for compatibility.
+    FastAPI dependency to get the current authenticated user and their tenant from a JWT token.
     """
-    return await get_current_user(token, session)
+    # Extract token from Bearer format
+    if hasattr(token, 'credentials'):
+        token_str = token.credentials
+    else:
+        token_str = str(token)
+    
+    auth_service = AuthService(session)
+    payload = auth_service.decode_token(token_str)
+    
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    user_and_tenant_data = await auth_service.get_user_and_tenant_by_id(UUID(user_id))
+    
+    if not user_and_tenant_data or not user_and_tenant_data["user"]:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    return user_and_tenant_data

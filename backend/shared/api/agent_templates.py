@@ -5,7 +5,8 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel, Field
 
 from ..services.agent_templates import AgentTemplateService
-from ..models.agent import AgentTemplate, AgentConfig, AgentType, LLMProvider
+from shared.schemas.agent_template import AgentTemplate
+from shared.models.agent import AgentConfig, AgentType, LLMProvider
 
 router = APIRouter(prefix="/api/v1/agent-templates", tags=["agent-templates"])
 

@@ -16,12 +16,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_async_db
-from ..middleware.tenant import get_tenant_context, TenantContext
-# Temporarily commented out to fix import issues
-# from ..services.memory_manager import (
-#     MemoryManagerService, MemoryType, ImportanceLevel, MemorySearchResult,
-#     create_memory_manager_service
-# )
+from ..services.memory_manager import (
+    MemoryManagerService, MemoryType, ImportanceLevel, MemorySearchResult,
+    create_memory_manager_service, get_memory_manager
+)
 from ..models.base import BaseRequest, BaseResponse
 
 
@@ -97,8 +95,7 @@ router = APIRouter(prefix="/api/v1/memory", tags=["Memory Management"])
 @router.post("/store", response_model=MemoryResponse)
 async def store_memory(
     request: StoreMemoryRequest,
-    session: AsyncSession = Depends(get_async_db),
-    tenant_context: TenantContext = Depends(get_tenant_context)
+    session: AsyncSession = Depends(get_async_db)
 ):
     """
     Store a new memory for an agent.
@@ -110,7 +107,7 @@ async def store_memory(
     - Episodic and semantic memories
     """
     try:
-        memory_service = await create_memory_manager_service(session, tenant_context.tenant_id)
+        memory_service = await create_memory_manager_service(session)
         
         memory_id = await memory_service.store_memory(
             agent_id=request.agent_id,
@@ -120,12 +117,12 @@ async def store_memory(
             metadata=request.metadata,
             importance_score=request.importance_score,
             expires_at=request.expires_at,
-            created_by=tenant_context.user_id
+            created_by="system" # Placeholder for user_id
         )
         
         # Retrieve the stored memory to return complete information
         memory = await memory_service.memory_manager.access_memory(
-            session, tenant_context.tenant_id, memory_id
+            session, memory_id
         )
         
         if not memory:
@@ -153,8 +150,7 @@ async def store_memory(
 @router.post("/search", response_model=List[SearchResultResponse])
 async def search_memories(
     request: MemorySearchRequest,
-    session: AsyncSession = Depends(get_async_db),
-    tenant_context: TenantContext = Depends(get_tenant_context)
+    session: AsyncSession = Depends(get_async_db)
 ):
     """
     Perform semantic search on agent memories.
@@ -163,7 +159,7 @@ async def search_memories(
     ranked by both similarity and importance scores.
     """
     try:
-        memory_service = await create_memory_manager_service(session, tenant_context.tenant_id)
+        memory_service = await create_memory_manager_service(session)
         
         results = await memory_service.semantic_search(
             agent_id=request.agent_id,
@@ -199,8 +195,7 @@ async def get_conversation_history(
     agent_id: str,
     session_id: str,
     limit: Optional[int] = Query(50, ge=1, le=200, description="Maximum messages to return"),
-    session: AsyncSession = Depends(get_async_db),
-    tenant_context: TenantContext = Depends(get_tenant_context)
+    session: AsyncSession = Depends(get_async_db)
 ):
     """
     Get conversation history for a specific agent and session.
@@ -209,7 +204,7 @@ async def get_conversation_history(
     conversation continuity.
     """
     try:
-        memory_service = await create_memory_manager_service(session, tenant_context.tenant_id)
+        memory_service = await create_memory_manager_service(session)
         
         history = await memory_service.get_conversation_history(
             agent_id=agent_id,
@@ -241,8 +236,7 @@ async def get_conversation_history(
 async def get_user_preferences(
     agent_id: str,
     user_id: Optional[str] = Query(None, description="Filter by specific user"),
-    session: AsyncSession = Depends(get_async_db),
-    tenant_context: TenantContext = Depends(get_tenant_context)
+    session: AsyncSession = Depends(get_async_db)
 ):
     """
     Get user preferences and important facts for an agent.
@@ -251,7 +245,7 @@ async def get_user_preferences(
     to help personalize agent responses.
     """
     try:
-        memory_service = await create_memory_manager_service(session, tenant_context.tenant_id)
+        memory_service = await create_memory_manager_service(session)
         
         preferences = await memory_service.get_user_preferences(
             agent_id=agent_id,
@@ -281,8 +275,7 @@ async def get_user_preferences(
 @router.post("/manage-capacity/{agent_id}")
 async def manage_memory_capacity(
     agent_id: str,
-    session: AsyncSession = Depends(get_async_db),
-    tenant_context: TenantContext = Depends(get_tenant_context)
+    session: AsyncSession = Depends(get_async_db)
 ):
     """
     Manage memory capacity for an agent.
@@ -291,7 +284,7 @@ async def manage_memory_capacity(
     using intelligent scoring to preserve the most valuable memories.
     """
     try:
-        memory_service = await create_memory_manager_service(session, tenant_context.tenant_id)
+        memory_service = await create_memory_manager_service(session)
         
         removed_count = await memory_service.manage_memory_capacity(agent_id)
         
@@ -307,24 +300,22 @@ async def manage_memory_capacity(
 
 @router.post("/cleanup-expired")
 async def cleanup_expired_memories(
-    session: AsyncSession = Depends(get_async_db),
-    tenant_context: TenantContext = Depends(get_tenant_context)
+    session: AsyncSession = Depends(get_async_db)
 ):
     """
-    Clean up expired memories for the tenant.
+    Clean up expired memories.
     
     Removes memories that have passed their expiration date
     to free up storage space and maintain performance.
     """
     try:
-        memory_service = await create_memory_manager_service(session, tenant_context.tenant_id)
+        memory_service = await create_memory_manager_service(session)
         
         cleaned_count = await memory_service.cleanup_expired_memories()
         
         return {
             "message": "Expired memories cleaned up successfully",
-            "memories_cleaned": cleaned_count,
-            "tenant_id": tenant_context.tenant_id
+            "memories_cleaned": cleaned_count
         }
         
     except Exception as e:
@@ -334,17 +325,16 @@ async def cleanup_expired_memories(
 @router.get("/statistics", response_model=MemoryStatisticsResponse)
 async def get_memory_statistics(
     agent_id: Optional[str] = Query(None, description="Filter by specific agent"),
-    session: AsyncSession = Depends(get_async_db),
-    tenant_context: TenantContext = Depends(get_tenant_context)
+    session: AsyncSession = Depends(get_async_db)
 ):
     """
-    Get memory usage statistics for the tenant or specific agent.
+    Get memory usage statistics for a specific agent.
     
     Provides insights into memory usage patterns, types of memories stored,
     and system performance metrics.
     """
     try:
-        memory_service = await create_memory_manager_service(session, tenant_context.tenant_id)
+        memory_service = await create_memory_manager_service(session)
         
         stats = await memory_service.get_statistics(agent_id)
         
@@ -363,10 +353,7 @@ async def memory_system_health():
     embedding model, and system components.
     """
     try:
-        # Temporarily commented out to fix import issues
-        # from ..services.memory_manager import get_memory_manager
-        # 
-        # memory_manager = await get_memory_manager()
+        memory_manager = await get_memory_manager()
         
         # Basic health checks
         health_status = {
@@ -375,7 +362,7 @@ async def memory_system_health():
             "vector_db_path": memory_manager.config.vector_db_path,
             "max_memories_per_agent": memory_manager.config.max_memories_per_agent,
             "similarity_threshold": memory_manager.config.similarity_threshold,
-            "system_stats": memory_manager._stats.copy()
+            "system_stats": memory_manager.stats.copy()
         }
         
         return health_status

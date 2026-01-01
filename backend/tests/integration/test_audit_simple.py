@@ -31,7 +31,6 @@ def test_audit_log_checksum():
     
     # Create a mock audit log
     log = AuditLog(
-        tenant_id="test-tenant",
         event_type=AuditEventType.USER_LOGIN,
         event_id="test-event-001",
         timestamp=datetime.utcnow(),
@@ -110,7 +109,6 @@ def main():
         print("✅ Tool and MCP server access auditing")
         print("✅ Compliance reporting and forensic analysis features")
         print("✅ Automatic audit middleware for all API requests")
-        print("✅ Multi-tenant audit isolation and security")
         print("✅ Performance-optimized with proper indexing")
         
         print("\n🔧 Implementation Details:")

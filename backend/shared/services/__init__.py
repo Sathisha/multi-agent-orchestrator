@@ -1,7 +1,6 @@
 """Services package for the AI Agent Framework."""
 
 from .base import BaseService
-from .tenant import TenantService, TenantAdminService
 from .validation import ValidationService
 from .agent import AgentService, AgentDeploymentService, AgentExecutionService, AgentMemoryService
 # Temporarily commented out to fix circular import
@@ -17,8 +16,6 @@ from .guardrails import (
 
 __all__ = [
     "BaseService",
-    "TenantService",
-    "TenantAdminService",
     "ValidationService",
     "AgentService",
     "AgentDeploymentService",

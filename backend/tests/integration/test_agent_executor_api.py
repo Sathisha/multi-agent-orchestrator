@@ -9,7 +9,6 @@ async def test_api_endpoints():
     print("=" * 50)
     
     base_url = "http://localhost:8000"
-    headers = {"X-Tenant-ID": "test-tenant-123"}
     
     async with httpx.AsyncClient(timeout=10.0) as client:
         # Test 1: Health endpoint
@@ -33,7 +32,6 @@ async def test_api_endpoints():
                 data = response.json()
                 print(f"✓ System status working:")
                 print(f"  Active executions: {data.get('total_active_executions', 0)}")
-                print(f"  Tenant count: {data.get('tenant_count', 0)}")
             else:
                 print(f"✗ System status failed: {response.status_code}")
                 print(f"  Response: {response.text}")
@@ -44,8 +42,7 @@ async def test_api_endpoints():
         print("\n3. Testing list active executions...")
         try:
             response = await client.get(
-                f"{base_url}/api/v1/agent-executor/executions/active",
-                headers=headers
+                f"{base_url}/api/v1/agent-executor/executions/active"
             )
             if response.status_code == 200:
                 data = response.json()
@@ -79,6 +76,3 @@ async def test_api_endpoints():
                 print(f"✗ Main health failed: {response.status_code}")
         except Exception as e:
             print(f"✗ Main health error: {str(e)}")
-
-if __name__ == "__main__":
-    asyncio.run(test_api_endpoints())

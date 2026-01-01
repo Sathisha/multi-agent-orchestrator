@@ -163,14 +163,12 @@ class TestGuardrailsEngine:
     
     def setup_method(self):
         self.mock_session = Mock(spec=AsyncSession)
-        self.tenant_id = "test-tenant-123"
-        self.engine = GuardrailsEngine(self.mock_session, self.tenant_id)
+        self.engine = GuardrailsEngine(self.mock_session)
     
     @pytest.mark.asyncio
     async def test_validate_input_safe_content(self):
         """Test input validation with safe content"""
         context = ValidationContext(
-            tenant_id=self.tenant_id,
             user_id="user-123",
             agent_id="agent-123",
             session_id="session-123",
@@ -192,7 +190,6 @@ class TestGuardrailsEngine:
     async def test_validate_input_harmful_content(self):
         """Test input validation with harmful content"""
         context = ValidationContext(
-            tenant_id=self.tenant_id,
             user_id="user-123",
             agent_id="agent-123",
             session_id="session-123",
@@ -214,7 +211,6 @@ class TestGuardrailsEngine:
     async def test_validate_input_pii_content(self):
         """Test input validation with PII content"""
         context = ValidationContext(
-            tenant_id=self.tenant_id,
             user_id="user-123",
             agent_id="agent-123",
             session_id="session-123",
@@ -236,7 +232,6 @@ class TestGuardrailsEngine:
     async def test_validate_output_lenient(self):
         """Test output validation is more lenient than input"""
         context = ValidationContext(
-            tenant_id=self.tenant_id,
             user_id="user-123",
             agent_id="agent-123",
             session_id="session-123",
@@ -299,7 +294,6 @@ class TestGuardrailsService:
     def setup_method(self):
         self.mock_session = Mock(spec=AsyncSession)
         self.service = GuardrailsService(self.mock_session)
-        self.tenant_id = "test-tenant-123"
     
     @pytest.mark.asyncio
     async def test_validate_agent_input(self):
@@ -320,7 +314,6 @@ class TestGuardrailsService:
             mock_validate.return_value = mock_result
             
             result = await self.service.validate_agent_input(
-                tenant_id=self.tenant_id,
                 agent_id="agent-123",
                 user_id="user-123",
                 content="Safe content to validate"
@@ -349,7 +342,6 @@ class TestGuardrailsService:
             mock_validate.return_value = mock_result
             
             result = await self.service.validate_agent_output(
-                tenant_id=self.tenant_id,
                 agent_id="agent-123",
                 user_id="user-123",
                 content="Agent response content"
@@ -374,7 +366,6 @@ class TestGuardrailsService:
             mock_check.return_value = mock_result
             
             result = await self.service.check_agent_policy(
-                tenant_id=self.tenant_id,
                 user_id="user-123",
                 action="read",
                 resource="agent"
@@ -387,11 +378,11 @@ class TestGuardrailsService:
     def test_get_engine_caching(self):
         """Test that engines are cached per tenant"""
         # First call creates engine
-        engine1 = self.service.get_engine(self.tenant_id)
+        engine1 = self.service.get_engine("test-tenant-123")
         assert engine1 is not None
         
         # Second call returns same engine
-        engine2 = self.service.get_engine(self.tenant_id)
+        engine2 = self.service.get_engine("test-tenant-123")
         assert engine1 is engine2
         
         # Different tenant gets different engine
@@ -403,7 +394,7 @@ class TestGuardrailsService:
 async def test_risk_score_calculation():
     """Test risk score calculation logic"""
     mock_session = Mock(spec=AsyncSession)
-    engine = GuardrailsEngine(mock_session, "test-tenant")
+    engine = GuardrailsEngine(mock_session)
     
     # Test low risk
     low_risk_score = engine._calculate_risk_score(
@@ -427,7 +418,7 @@ async def test_risk_score_calculation():
 def test_risk_level_determination():
     """Test risk level determination from score"""
     mock_session = Mock(spec=AsyncSession)
-    engine = GuardrailsEngine(mock_session, "test-tenant")
+    engine = GuardrailsEngine(mock_session)
     
     assert engine._determine_risk_level(0.1) == RiskLevel.LOW
     assert engine._determine_risk_level(0.4) == RiskLevel.MEDIUM

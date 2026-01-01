@@ -30,8 +30,7 @@ class CacheStrategy(str, Enum):
 
 @dataclass
 class CacheConfig:
-    """Cache configuration for tenant"""
-    tenant_id: str
+    """Cache configuration"""
     max_memory_mb: int = 100
     default_ttl_seconds: int = 300
     strategy: CacheStrategy = CacheStrategy.LRU
@@ -44,7 +43,6 @@ class CacheConfig:
 @dataclass
 class CacheStats:
     """Cache statistics"""
-    tenant_id: str
     hits: int = 0
     misses: int = 0
     evictions: int = 0
@@ -53,13 +51,12 @@ class CacheStats:
     avg_response_time_ms: float = 0.0
 
 
-class TenantAwareCache:
-    """Multi-level tenant-aware caching system"""
+class AppCache:
+    """Multi-level caching system"""
     
     def __init__(self, redis_client: redis.Redis, config: CacheConfig):
         self.redis = redis_client
         self.config = config
-        self.tenant_id = config.tenant_id
         
         # L1 Cache (in-memory)
         self._l1_cache: Dict[str, Any] = {}
@@ -67,10 +64,10 @@ class TenantAwareCache:
         self._l1_access_counts: Dict[str, int] = {}
         
         # Cache statistics
-        self.stats = CacheStats(tenant_id=config.tenant_id)
+        self.stats = CacheStats()
         
-        # Cache key prefix for tenant isolation
-        self.key_prefix = f"tenant:{self.tenant_id}"
+        # Cache key prefix
+        self.key_prefix = "app"
     
     def _generate_cache_key(self, key: str, namespace: str = "default") -> str:
         """Generate tenant-scoped cache key"""
@@ -236,11 +233,11 @@ class TenantAwareCache:
                 l2_count += 1
             
             total_deleted = l1_count + l2_count
-            logger.info(f"Invalidated all {total_deleted} cache entries for tenant {self.tenant_id}")
+            logger.info(f"Invalidated all {total_deleted} cache entries")
             return total_deleted
             
         except Exception as e:
-            logger.error(f"Tenant cache invalidation error: {e}")
+            logger.error(f"Cache invalidation error: {e}")
             return 0
     
     async def get_stats(self) -> CacheStats:
@@ -363,123 +360,3 @@ class TenantAwareCache:
         else:
             self.stats.avg_response_time_ms = (self.stats.avg_response_time_ms * 0.9) + (response_time_ms * 0.1)
 
-
-class TenantCacheManager:
-    """Manager for tenant-specific cache instances"""
-    
-    def __init__(self, redis_client: redis.Redis):
-        self.redis = redis_client
-        self._tenant_caches: Dict[str, TenantAwareCache] = {}
-        self._default_config = CacheConfig(tenant_id="default")
-    
-    async def get_tenant_cache(
-        self,
-        tenant_id: str,
-        config: Optional[CacheConfig] = None
-    ) -> TenantAwareCache:
-        """Get or create tenant-specific cache instance"""
-        if tenant_id not in self._tenant_caches:
-            cache_config = config or CacheConfig(tenant_id=tenant_id)
-            self._tenant_caches[tenant_id] = TenantAwareCache(self.redis, cache_config)
-        
-        return self._tenant_caches[tenant_id]
-    
-    async def get_all_tenant_stats(self) -> Dict[str, CacheStats]:
-        """Get cache statistics for all tenants"""
-        stats = {}
-        for tenant_id, cache in self._tenant_caches.items():
-            stats[tenant_id] = await cache.get_stats()
-        return stats
-    
-    async def invalidate_all_tenants(self) -> Dict[str, int]:
-        """Invalidate cache for all tenants"""
-        results = {}
-        for tenant_id, cache in self._tenant_caches.items():
-            results[tenant_id] = await cache.invalidate_tenant()
-        return results
-    
-    async def cleanup_inactive_caches(self, inactive_threshold_hours: int = 24):
-        """Remove cache instances for inactive tenants"""
-        # This would typically check tenant activity from database
-        # For now, we'll just log the cleanup attempt
-        logger.info(f"Cache cleanup check for inactive tenants (threshold: {inactive_threshold_hours}h)")
-
-
-# Cache decorators for easy usage
-def tenant_cached(
-    ttl: int = 300,
-    namespace: str = "default",
-    key_func: Optional[callable] = None
-):
-    """Decorator for caching function results with tenant awareness"""
-    def decorator(func):
-        async def wrapper(*args, **kwargs):
-            # Extract tenant_id from arguments
-            tenant_id = kwargs.get('tenant_id')
-            if not tenant_id and args and hasattr(args[0], 'tenant_id'):
-                tenant_id = args[0].tenant_id
-            
-            if not tenant_id:
-                # No tenant context, execute without caching
-                return await func(*args, **kwargs)
-            
-            # Generate cache key
-            if key_func:
-                cache_key = key_func(*args, **kwargs)
-            else:
-                cache_key = f"{func.__name__}:{hash(str(args[1:]) + str(kwargs))}"
-            
-            # Get tenant cache
-            cache_manager = TenantCacheManager(redis.Redis())  # Would be injected
-            cache = await cache_manager.get_tenant_cache(tenant_id)
-            
-            # Try cache first
-            cached_result = await cache.get(cache_key, namespace)
-            if cached_result is not None:
-                return cached_result
-            
-            # Execute function and cache result
-            result = await func(*args, **kwargs)
-            await cache.set(cache_key, result, ttl, namespace)
-            return result
-        
-        return wrapper
-    return decorator
-
-
-# Cache warming utilities
-class CacheWarmer:
-    """Utility for warming up tenant caches"""
-    
-    def __init__(self, cache_manager: TenantCacheManager):
-        self.cache_manager = cache_manager
-    
-    async def warm_tenant_cache(
-        self,
-        tenant_id: str,
-        warm_functions: List[callable],
-        warm_data: Dict[str, Any]
-    ):
-        """Warm up cache for a specific tenant"""
-        cache = await self.cache_manager.get_tenant_cache(tenant_id)
-        
-        for func in warm_functions:
-            try:
-                # Execute function with warm data to populate cache
-                await func(tenant_id=tenant_id, **warm_data)
-                logger.info(f"Warmed cache for {func.__name__} in tenant {tenant_id}")
-            except Exception as e:
-                logger.error(f"Cache warming error for {func.__name__}: {e}")
-    
-    async def warm_all_tenants(
-        self,
-        tenant_ids: List[str],
-        warm_functions: List[callable],
-        warm_data: Dict[str, Any]
-    ):
-        """Warm up caches for multiple tenants"""
-        tasks = [
-            self.warm_tenant_cache(tenant_id, warm_functions, warm_data)
-            for tenant_id in tenant_ids
-        ]
-        await asyncio.gather(*tasks, return_exceptions=True)

@@ -89,11 +89,10 @@ async def test_guardrails_engine():
     
     # Mock session
     mock_session = Mock(spec=AsyncSession)
-    engine = GuardrailsEngine(mock_session, "test-tenant")
+    engine = GuardrailsEngine(mock_session)
     
     # Test safe content validation
     context = ValidationContext(
-        tenant_id="test-tenant",
         user_id="test-user",
         agent_id="test-agent",
         session_id="test-session",
@@ -131,7 +130,7 @@ async def test_risk_calculation():
     print("Testing Risk Calculation...")
     
     mock_session = Mock(spec=AsyncSession)
-    engine = GuardrailsEngine(mock_session, "test-tenant")
+    engine = GuardrailsEngine(mock_session)
     
     # Test low risk
     low_risk = engine._calculate_risk_score(

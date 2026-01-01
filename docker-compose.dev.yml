@@ -4,6 +4,9 @@
 services:
   # Backend service with development-specific settings
   backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     environment:
       - RECREATE_DB=true  # Always recreate database in development
       - DEBUG=true
@@ -15,11 +18,11 @@ services:
       - chroma_data:/app/data/chroma
       - /app/__pycache__  # Exclude pycache from volume mount
       - /app/.pytest_cache  # Exclude pytest cache
-    # Override command for development with auto-reload
     command: python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     
   # PostgreSQL with development-specific settings
   postgres:
+    image: postgres:15-alpine
     environment:
       POSTGRES_DB: ai_agent_framework
       POSTGRES_USER: postgres
@@ -38,29 +41,14 @@ services:
     
   # Redis with development-specific settings
   redis:
+    image: redis:latest
     # Expose port for direct Redis access during development
     ports:
       - "6379:6379"
     # Disable persistence for faster startup in development
     command: redis-server --save "" --appendonly no
 
-  # Development frontend service (for hot reload)
-  frontend-dev:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile.dev
-    container_name: ai-agent-framework-frontend-dev
-    ports:
-      - "3001:3000"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    environment:
-      - NODE_ENV=development
-      - CHOKIDAR_USEPOLLING=true
-    networks:
-      - ai-agent-network
-    restart: unless-stopped
+
 
 volumes:
   chroma_data:

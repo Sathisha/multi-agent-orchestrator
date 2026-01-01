@@ -15,8 +15,8 @@ from .id_generator import IDGeneratorService
 class AgentVersioningService(BaseService):
     """Service for managing agent versions and rollback capabilities."""
     
-    def __init__(self, session: AsyncSession, tenant_id: str):
-        super().__init__(session, Agent, tenant_id)
+    def __init__(self, session: AsyncSession):
+        super().__init__(session, Agent)
     
     async def create_version(
         self,
@@ -45,7 +45,6 @@ class AgentVersioningService(BaseService):
         # Create new agent version
         new_agent = Agent(
             id=IDGeneratorService.generate_agent_id(),
-            tenant_id=self.tenant_id,
             name=current_agent.name,
             description=current_agent.description,
             type=current_agent.type,
@@ -94,12 +93,9 @@ class AgentVersioningService(BaseService):
         
         # Get all versions (including root and all children)
         stmt = select(Agent).where(
-            and_(
-                Agent.tenant_id == self.tenant_id,
-                or_(
-                    Agent.id == root_agent_id,
-                    Agent.parent_agent_id == root_agent_id
-                )
+            or_(
+                Agent.id == root_agent_id,
+                Agent.parent_agent_id == root_agent_id
             )
         ).order_by(desc(Agent.created_at))
         

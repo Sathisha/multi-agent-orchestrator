@@ -6,8 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from ..services.agent_versioning import AgentVersioningService
-from ..middleware.tenant import get_tenant_aware_session
-from ..models.agent import AgentResponse
+from ..schemas.agent import AgentResponse
+from ..models.user import User
+from ..services.auth import get_current_user
+from ..database.connection import get_async_db
 
 router = APIRouter(prefix="/api/v1/agents", tags=["agent-versioning"])
 
@@ -50,23 +52,18 @@ class VersionHistoryEntry(BaseModel):
 async def create_agent_version(
     agent_id: UUID,
     request: CreateVersionRequest,
-    session_and_context = Depends(get_tenant_aware_session),
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
+    session: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Create a new version of an agent."""
-    session, tenant_context = session_and_context
-    
-    if not tenant_context:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    service = AgentVersioningService(session, tenant_context.tenant_id)
+    service = AgentVersioningService(session)
     
     try:
         new_version = await service.create_version(
             agent_id=str(agent_id),
             version=request.version,
             changes=request.changes,
-            created_by=current_user["user_id"]
+            created_by=str(current_user.id)
         )
         return AgentResponse.from_orm(new_version)
     except ValueError as e:
@@ -76,15 +73,10 @@ async def create_agent_version(
 @router.get("/{agent_id}/versions", response_model=List[AgentResponse])
 async def list_agent_versions(
     agent_id: UUID,
-    session_and_context = Depends(get_tenant_aware_session)
+    session: AsyncSession = Depends(get_async_db)
 ):
     """List all versions of an agent."""
-    session, tenant_context = session_and_context
-    
-    if not tenant_context:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    service = AgentVersioningService(session, tenant_context.tenant_id)
+    service = AgentVersioningService(session)
     
     versions = await service.get_agent_versions(str(agent_id))
     return [AgentResponse.from_orm(version) for version in versions]
@@ -94,15 +86,10 @@ async def list_agent_versions(
 async def get_agent_version(
     agent_id: UUID,
     version: str,
-    session_and_context = Depends(get_tenant_aware_session)
+    session: AsyncSession = Depends(get_async_db)
 ):
     """Get a specific version of an agent."""
-    session, tenant_context = session_and_context
-    
-    if not tenant_context:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    service = AgentVersioningService(session, tenant_context.tenant_id)
+    service = AgentVersioningService(session)
     
     agent_version = await service.get_version_by_number(str(agent_id), version)
     if not agent_version:
@@ -118,22 +105,17 @@ async def get_agent_version(
 async def rollback_agent(
     agent_id: UUID,
     request: RollbackRequest,
-    session_and_context = Depends(get_tenant_aware_session),
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
+    session: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Rollback an agent to a specific version."""
-    session, tenant_context = session_and_context
-    
-    if not tenant_context:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    service = AgentVersioningService(session, tenant_context.tenant_id)
+    service = AgentVersioningService(session)
     
     try:
         rolled_back_agent = await service.rollback_to_version(
             agent_id=str(agent_id),
             target_version=request.target_version,
-            updated_by=current_user["user_id"]
+            updated_by=str(current_user.id)
         )
         return AgentResponse.from_orm(rolled_back_agent)
     except ValueError as e:
@@ -145,15 +127,10 @@ async def compare_agent_versions(
     agent_id: UUID,
     version1: str,
     version2: str,
-    session_and_context = Depends(get_tenant_aware_session)
+    session: AsyncSession = Depends(get_async_db)
 ):
     """Compare two versions of an agent."""
-    session, tenant_context = session_and_context
-    
-    if not tenant_context:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    service = AgentVersioningService(session, tenant_context.tenant_id)
+    service = AgentVersioningService(session)
     
     try:
         comparison = await service.compare_versions(str(agent_id), version1, version2)
@@ -165,15 +142,10 @@ async def compare_agent_versions(
 @router.get("/{agent_id}/history", response_model=List[VersionHistoryEntry])
 async def get_agent_version_history(
     agent_id: UUID,
-    session_and_context = Depends(get_tenant_aware_session)
+    session: AsyncSession = Depends(get_async_db)
 ):
     """Get version history for an agent."""
-    session, tenant_context = session_and_context
-    
-    if not tenant_context:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    service = AgentVersioningService(session, tenant_context.tenant_id)
+    service = AgentVersioningService(session)
     
     history = await service.get_version_history(str(agent_id))
     return [VersionHistoryEntry(**entry) for entry in history]
@@ -183,22 +155,17 @@ async def get_agent_version_history(
 async def activate_agent_version(
     agent_id: UUID,
     version: str,
-    session_and_context = Depends(get_tenant_aware_session),
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "system"})  # TODO: Replace with actual auth
+    session: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Activate a specific version of an agent."""
-    session, tenant_context = session_and_context
-    
-    if not tenant_context:
-        raise HTTPException(status_code=400, detail="Tenant context required")
-    
-    service = AgentVersioningService(session, tenant_context.tenant_id)
+    service = AgentVersioningService(session)
     
     try:
         activated_agent = await service.activate_version(
             agent_id=str(agent_id),
             version=version,
-            updated_by=current_user["user_id"]
+            updated_by=str(current_user.id)
         )
         return AgentResponse.from_orm(activated_agent)
     except ValueError as e:

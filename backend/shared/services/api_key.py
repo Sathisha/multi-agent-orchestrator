@@ -47,8 +47,7 @@ class APIKeyService:
         name: str,
         description: Optional[str] = None,
         expires_at: Optional[datetime] = None,
-        permissions: Optional[List[str]] = None,
-        tenant_id: Optional[UUID] = None
+        permissions: Optional[List[str]] = None
     ) -> tuple[APIKey, str]:
         """
         Create a new API key.
@@ -65,7 +64,6 @@ class APIKeyService:
         api_key = APIKey(
             id=uuid4(),
             user_id=user_id,
-            tenant_id=tenant_id,
             name=name,
             description=description,
             key_hash=key_hash,

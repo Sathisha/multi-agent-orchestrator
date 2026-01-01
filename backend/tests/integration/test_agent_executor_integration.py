@@ -67,7 +67,7 @@ async def test_integration():
         
         # Test global state manager
         global_stats = await global_state_manager.get_global_statistics()
-        print(f"✓ Global state manager: {global_stats['total_tenants']} tenants")
+        print(f"✓ Global state manager: {global_stats['total_agents']} agents")
         
         # Test global error handler
         error_stats = await global_error_handler.get_global_error_statistics(hours=1)
@@ -80,14 +80,12 @@ async def test_integration():
     print("\n4. Testing model imports...")
     try:
         from shared.models.agent import Agent, AgentExecution, AgentStatus, AgentType
-        from shared.models.base import TenantEntity
         
         print("✓ Agent models imported successfully")
         
         # Test model creation (without database save)
         test_agent = Agent(
             id="test-agent-integration",
-            tenant_id="test-tenant-integration",
             name="Integration Test Agent",
             type=AgentType.CONVERSATIONAL,
             status=AgentStatus.ACTIVE,
@@ -145,7 +143,6 @@ async def test_integration():
     # Test 7: Middleware integration
     print("\n7. Testing middleware integration...")
     try:
-        from shared.middleware.tenant import TenantContextMiddleware
         from shared.middleware.security import SecurityConfig
         
         print("✓ Middleware classes imported successfully")

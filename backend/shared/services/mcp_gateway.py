@@ -58,7 +58,6 @@ class MCPGatewayService(BaseService):
     
     async def create_mcp_server(
         self,
-        tenant_id: UUID,
         user_id: UUID,
         server_request: MCPServerRequest
     ) -> MCPServerResponse:
@@ -68,18 +67,14 @@ class MCPGatewayService(BaseService):
         await self.rbac_service.check_permission(
             user_id=user_id,
             resource="tool",
-            action="create",
-            tenant_id=tenant_id
+            action="create"
         )
         
         async with get_database_session() as session:
-            # Check if server name already exists for this tenant
+            # Check if server name already exists
             existing_server = await session.execute(
                 select(MCPServer).where(
-                    and_(
-                        MCPServer.tenant_id == tenant_id,
-                        MCPServer.name == server_request.name
-                    )
+                    MCPServer.name == server_request.name
                 )
             )
             if existing_server.scalar_one_or_none():
@@ -88,10 +83,9 @@ class MCPGatewayService(BaseService):
             # Create MCP server instance
             mcp_server = MCPServer(
                 id=uuid4(),
-                tenant_id=tenant_id,
                 created_by=user_id,
                 updated_by=user_id,
-                **server_request.model_dump(exclude={'tenant_id'})
+                **server_request.model_dump()
             )
             
             session.add(mcp_server)
@@ -103,7 +97,6 @@ class MCPGatewayService(BaseService):
                 session=session,
                 event_type=AuditEventType.MCP_SERVER_CONNECTED,
                 user_id=user_id,
-                tenant_id=tenant_id,
                 resource_id=str(mcp_server.id),
                 details={
                     "server_name": mcp_server.name,
@@ -119,7 +112,6 @@ class MCPGatewayService(BaseService):
                 "MCP server created successfully",
                 server_id=str(mcp_server.id),
                 server_name=mcp_server.name,
-                tenant_id=str(tenant_id),
                 user_id=str(user_id)
             )
             
@@ -127,7 +119,6 @@ class MCPGatewayService(BaseService):
     
     async def get_mcp_server(
         self,
-        tenant_id: UUID,
         user_id: UUID,
         server_id: UUID
     ) -> Optional[MCPServerResponse]:
@@ -137,8 +128,7 @@ class MCPGatewayService(BaseService):
         await self.rbac_service.check_permission(
             user_id=user_id,
             resource="tool",
-            action="read",
-            tenant_id=tenant_id
+            action="read"
         )
         
         async with get_database_session() as session:
@@ -146,10 +136,7 @@ class MCPGatewayService(BaseService):
                 select(MCPServer)
                 .options(selectinload(MCPServer.tools))
                 .where(
-                    and_(
-                        MCPServer.id == server_id,
-                        MCPServer.tenant_id == tenant_id
-                    )
+                    MCPServer.id == server_id
                 )
             )
             server = result.scalar_one_or_none()
@@ -161,7 +148,6 @@ class MCPGatewayService(BaseService):
     
     async def list_mcp_servers(
         self,
-        tenant_id: UUID,
         user_id: UUID,
         status: Optional[MCPServerStatus] = None,
         category: Optional[str] = None,
@@ -174,12 +160,11 @@ class MCPGatewayService(BaseService):
         await self.rbac_service.check_permission(
             user_id=user_id,
             resource="tool",
-            action="read",
-            tenant_id=tenant_id
+            action="read"
         )
         
         async with get_database_session() as session:
-            query = select(MCPServer).where(MCPServer.tenant_id == tenant_id)
+            query = select(MCPServer)
             
             # Apply filters
             if status:
@@ -197,7 +182,6 @@ class MCPGatewayService(BaseService):
     
     async def update_mcp_server(
         self,
-        tenant_id: UUID,
         user_id: UUID,
         server_id: UUID,
         server_request: MCPServerRequest
@@ -208,18 +192,14 @@ class MCPGatewayService(BaseService):
         await self.rbac_service.check_permission(
             user_id=user_id,
             resource="tool",
-            action="update",
-            tenant_id=tenant_id
+            action="update"
         )
         
         async with get_database_session() as session:
             # Get existing server
             result = await session.execute(
                 select(MCPServer).where(
-                    and_(
-                        MCPServer.id == server_id,
-                        MCPServer.tenant_id == tenant_id
-                    )
+                    MCPServer.id == server_id
                 )
             )
             server = result.scalar_one_or_none()
@@ -256,7 +236,6 @@ class MCPGatewayService(BaseService):
                 session=session,
                 event_type=AuditEventType.MCP_SERVER_CONNECTED,
                 user_id=user_id,
-                tenant_id=tenant_id,
                 resource_id=str(server.id),
                 details={
                     "server_name": server.name,
@@ -273,7 +252,6 @@ class MCPGatewayService(BaseService):
                 "MCP server updated successfully",
                 server_id=str(server.id),
                 server_name=server.name,
-                tenant_id=str(tenant_id),
                 user_id=str(user_id)
             )
             
@@ -281,7 +259,6 @@ class MCPGatewayService(BaseService):
     
     async def delete_mcp_server(
         self,
-        tenant_id: UUID,
         user_id: UUID,
         server_id: UUID
     ) -> bool:
@@ -291,18 +268,14 @@ class MCPGatewayService(BaseService):
         await self.rbac_service.check_permission(
             user_id=user_id,
             resource="tool",
-            action="delete",
-            tenant_id=tenant_id
+            action="delete"
         )
         
         async with get_database_session() as session:
             # Get existing server
             result = await session.execute(
                 select(MCPServer).where(
-                    and_(
-                        MCPServer.id == server_id,
-                        MCPServer.tenant_id == tenant_id
-                    )
+                    MCPServer.id == server_id
                 )
             )
             server = result.scalar_one_or_none()
@@ -328,7 +301,6 @@ class MCPGatewayService(BaseService):
                 session=session,
                 event_type=AuditEventType.MCP_SERVER_DISCONNECTED,
                 user_id=user_id,
-                tenant_id=tenant_id,
                 resource_id=str(server_id),
                 details=server_info
             )
@@ -336,7 +308,6 @@ class MCPGatewayService(BaseService):
             logger.info(
                 "MCP server deleted successfully",
                 server_id=str(server_id),
-                tenant_id=str(tenant_id),
                 user_id=str(user_id)
             )
             
@@ -344,7 +315,6 @@ class MCPGatewayService(BaseService):
     
     async def connect_to_server(
         self,
-        tenant_id: UUID,
         user_id: UUID,
         server_id: UUID
     ) -> Dict[str, Any]:
@@ -354,18 +324,14 @@ class MCPGatewayService(BaseService):
         await self.rbac_service.check_permission(
             user_id=user_id,
             resource="tool",
-            action="execute",
-            tenant_id=tenant_id
+            action="execute"
         )
         
         async with get_database_session() as session:
             # Get server
             result = await session.execute(
                 select(MCPServer).where(
-                    and_(
-                        MCPServer.id == server_id,
-                        MCPServer.tenant_id == tenant_id
-                    )
+                    MCPServer.id == server_id
                 )
             )
             server = result.scalar_one_or_none()
@@ -386,7 +352,6 @@ class MCPGatewayService(BaseService):
     
     async def discover_tools(
         self,
-        tenant_id: UUID,
         user_id: UUID,
         server_id: UUID,
         force_refresh: bool = False
@@ -397,11 +362,10 @@ class MCPGatewayService(BaseService):
         await self.rbac_service.check_permission(
             user_id=user_id,
             resource="tool",
-            action="read",
-            tenant_id=tenant_id
+            action="read"
         )
         
-        cache_key = f"{tenant_id}:{server_id}"
+        cache_key = f"{server_id}"
         
         # Check cache first
         if not force_refresh and cache_key in self._discovery_cache:
@@ -413,10 +377,7 @@ class MCPGatewayService(BaseService):
             # Get server
             result = await session.execute(
                 select(MCPServer).where(
-                    and_(
-                        MCPServer.id == server_id,
-                        MCPServer.tenant_id == tenant_id
-                    )
+                    MCPServer.id == server_id
                 )
             )
             server = result.scalar_one_or_none()
@@ -449,12 +410,11 @@ class MCPGatewayService(BaseService):
     
     async def call_mcp_tool(
         self,
-        tenant_id: UUID,
         user_id: UUID,
         server_id: UUID,
         tool_name: str,
         inputs: Dict[str, Any],
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """Call a tool on an MCP server."""
         
@@ -462,18 +422,14 @@ class MCPGatewayService(BaseService):
         await self.rbac_service.check_permission(
             user_id=user_id,
             resource="tool",
-            action="execute",
-            tenant_id=tenant_id
+            action="execute"
         )
         
         async with get_database_session() as session:
             # Get server
             result = await session.execute(
                 select(MCPServer).where(
-                    and_(
-                        MCPServer.id == server_id,
-                        MCPServer.tenant_id == tenant_id
-                    )
+                    MCPServer.id == server_id
                 )
             )
             server = result.scalar_one_or_none()
@@ -509,7 +465,6 @@ class MCPGatewayService(BaseService):
                     session=session,
                     event_type=AuditEventType.MCP_CALL_MADE,
                     user_id=user_id,
-                    tenant_id=tenant_id,
                     resource_id=str(server.id),
                     details={
                         "server_name": server.name,
@@ -971,7 +926,6 @@ class MCPGatewayService(BaseService):
             existing_tool = await session.execute(
                 select(Tool).where(
                     and_(
-                        Tool.tenant_id == server.tenant_id,
                         Tool.mcp_server_id == server.id,
                         Tool.mcp_tool_name == tool_info["name"]
                     )
@@ -982,7 +936,6 @@ class MCPGatewayService(BaseService):
                 # Create new tool entry
                 tool = Tool(
                     id=uuid4(),
-                    tenant_id=server.tenant_id,
                     name=f"{server.name}_{tool_info['name']}",
                     display_name=tool_info.get("display_name", tool_info["name"]),
                     description=tool_info.get("description", ""),

@@ -8,6 +8,7 @@ import {
   Monitor as MonitoringIcon,
   Settings as SettingsIcon,
   Menu as MenuIcon,
+  Dns as LLMIcon,
 } from '@mui/icons-material'
 
 interface ActivityBarProps {
@@ -26,6 +27,7 @@ const ActivityBar: React.FC<ActivityBarProps> = ({
     { id: 'agents', icon: AgentIcon, label: 'Agents', path: '/agents' },
     { id: 'workflows', icon: WorkflowIcon, label: 'Workflows', path: '/workflows' },
     { id: 'tools', icon: ToolsIcon, label: 'Tools', path: '/tools' },
+    { id: 'models', icon: LLMIcon, label: 'LLM Models', path: '/models' },
     { id: 'monitoring', icon: MonitoringIcon, label: 'Monitoring', path: '/monitoring' },
   ]
 
@@ -35,7 +37,7 @@ const ActivityBar: React.FC<ActivityBarProps> = ({
   }
 
   const isActive = (path: string) => {
-    return location.pathname === path || (path === '/agents' && location.pathname === '/')
+    return location.pathname.startsWith(path)
   }
 
   return (
@@ -82,15 +84,18 @@ const ActivityBar: React.FC<ActivityBarProps> = ({
                 '&:hover': {
                   backgroundColor: active ? '#007acc' : '#2a2d2e',
                 },
-                '&:before': active ? {
+                position: 'relative',
+                '&::before': {
                   content: '""',
                   position: 'absolute',
                   left: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: 2,
-                  backgroundColor: '#007acc',
-                } : undefined,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  height: active ? '70%' : 0,
+                  width: '2px',
+                  backgroundColor: '#ffffff',
+                  transition: 'height 0.2s ease',
+                },
               }}
             >
               <Icon />

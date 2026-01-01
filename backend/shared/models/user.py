@@ -81,7 +81,6 @@ class User(SystemEntity):
     
     # Relationships
     roles = relationship("UserRole", back_populates="user", cascade="all, delete-orphan")
-    # tenants = relationship("TenantUser", back_populates="user")
     
     def has_permission(self, resource_type: str, action: str) -> bool:
         """Check if user has permission."""

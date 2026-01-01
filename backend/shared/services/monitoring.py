@@ -371,7 +371,7 @@ class HealthChecker:
         # Check Keycloak
         try:
             async with httpx.AsyncClient() as client:
-                response = await client.get('http://keycloak:8080/health', timeout=5.0)
+                response = await client.get('http://keycloak:8080/', timeout=5.0)
                 services_status['keycloak'] = {
                     'status': 'healthy' if response.status_code == 200 else 'unhealthy',
                     'response_time_ms': response.elapsed.total_seconds() * 1000

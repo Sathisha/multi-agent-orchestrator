@@ -295,12 +295,11 @@ class AgentExecutorService(BaseService):
     async def _execute_agent_background(self, context: AgentExecutionContext):
         """Wrapper to run execution with a fresh session."""
         async with AsyncSessionLocal() as session:
-            # Update self.session for this background task context (safe since this instance is transient/owned by task effectively)
-            self.session = session
-            # Re-init services with new session
-            self.memory_service = await create_memory_manager_service(session, "default")
-            self.guardrails_service = GuardrailsService(session)
-            await self._execute_agent_logic(context)
+            # Create a fresh executor instance for the background task
+            # this avoids "another operation in progress" errors by not sharing sessions
+            executor = AgentExecutorService(session)
+            executor.memory_service = await create_memory_manager_service(session, "default")
+            await executor._execute_agent_logic(context)
 
     async def _execute_agent_logic(self, context: AgentExecutionContext) -> AgentExecutionResult:
         start_time = time.time()
@@ -402,7 +401,7 @@ class AgentExecutorService(BaseService):
             system_prompt += f"\nContext: {memory_context}"
         return {
             "provider": agent.config.get("llm_provider", "ollama"),
-            "model": agent.config.get("model_name", "llama2"),
+            "model": agent.config.get("model_name", "llama3"),
             "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": str(context.input_data)}],
             "stream": False
         }

@@ -25,7 +25,6 @@ print("\n2. Testing data structures...")
 try:
     runtime_info = AgentRuntimeInfo(
         agent_id="test-agent-123",
-        tenant_id="test-tenant-123",
         state=AgentState.IDLE,
         active_executions=0,
         total_executions=0

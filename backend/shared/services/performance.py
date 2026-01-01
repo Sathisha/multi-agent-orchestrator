@@ -35,7 +35,6 @@ class AlertSeverity(str, Enum):
 @dataclass
 class PerformanceMetric:
     """Performance metric data point"""
-    tenant_id: str
     metric_type: MetricType
     value: float
     timestamp: datetime
@@ -45,7 +44,6 @@ class PerformanceMetric:
 @dataclass
 class PerformanceThreshold:
     """Performance threshold configuration"""
-    tenant_id: str
     metric_type: MetricType
     warning_threshold: float
     critical_threshold: float
@@ -56,7 +54,6 @@ class PerformanceThreshold:
 @dataclass
 class PerformanceAlert:
     """Performance alert"""
-    tenant_id: str
     metric_type: MetricType
     severity: AlertSeverity
     current_value: float
@@ -66,11 +63,10 @@ class PerformanceAlert:
     resolved: bool = False
 
 
-class TenantPerformanceMonitor:
-    """Performance monitoring for individual tenants"""
+class PerformanceMonitor:
+    """Performance monitoring"""
     
-    def __init__(self, tenant_id: str, max_history_points: int = 1000):
-        self.tenant_id = tenant_id
+    def __init__(self, max_history_points: int = 1000):
         self.max_history_points = max_history_points
         
         # Metric storage (in-memory for real-time monitoring)
@@ -92,7 +88,6 @@ class TenantPerformanceMonitor:
     ):
         """Record a performance metric"""
         metric = PerformanceMetric(
-            tenant_id=self.tenant_id,
             metric_type=metric_type,
             value=value,
             timestamp=datetime.utcnow(),
@@ -137,7 +132,6 @@ class TenantPerformanceMonitor:
     ):
         """Set performance thresholds for alerts"""
         self._thresholds[metric_type] = PerformanceThreshold(
-            tenant_id=self.tenant_id,
             metric_type=metric_type,
             warning_threshold=warning,
             critical_threshold=critical,
@@ -165,7 +159,6 @@ class TenantPerformanceMonitor:
         
         if severity:
             alert = PerformanceAlert(
-                tenant_id=self.tenant_id,
                 metric_type=metric.metric_type,
                 severity=severity,
                 current_value=metric.value,
@@ -175,7 +168,7 @@ class TenantPerformanceMonitor:
             )
             
             self._active_alerts.append(alert)
-            logger.warning(f"Performance alert for tenant {self.tenant_id}: {alert.message}")
+            logger.warning(f"Performance alert: {alert.message}")
     
     def get_current_metrics(self) -> Dict[str, Any]:
         """Get current performance metrics summary"""
@@ -193,7 +186,6 @@ class TenantPerformanceMonitor:
                 }
         
         return {
-            "tenant_id": self.tenant_id,
             "timestamp": datetime.utcnow().isoformat(),
             "metrics": metrics_summary,
             "active_alerts": len([a for a in self._active_alerts if not a.resolved]),
@@ -243,99 +235,43 @@ class TenantPerformanceMonitor:
 
 
 class SystemPerformanceMonitor:
-    """System-wide performance monitoring across all tenants"""
+    """System-wide performance monitoring"""
     
     def __init__(self):
-        self._tenant_monitors: Dict[str, TenantPerformanceMonitor] = {}
+        self._monitor = PerformanceMonitor()
         self._system_start_time = datetime.utcnow()
     
-    def get_tenant_monitor(self, tenant_id: str) -> TenantPerformanceMonitor:
-        """Get or create tenant performance monitor"""
-        if tenant_id not in self._tenant_monitors:
-            monitor = TenantPerformanceMonitor(tenant_id)
-            
-            # Set default thresholds
-            monitor.set_threshold(MetricType.RESPONSE_TIME, 200, 500, 1000)  # ms
-            monitor.set_threshold(MetricType.ERROR_RATE, 1.0, 5.0, 10.0)     # %
-            monitor.set_threshold(MetricType.MEMORY_USAGE, 70.0, 85.0, 95.0) # %
-            monitor.set_threshold(MetricType.CPU_USAGE, 70.0, 85.0, 95.0)    # %
-            
-            self._tenant_monitors[tenant_id] = monitor
-        
-        return self._tenant_monitors[tenant_id]
+    def get_monitor(self) -> PerformanceMonitor:
+        """Get performance monitor"""
+        return self._monitor
     
     async def get_system_overview(self) -> Dict[str, Any]:
         """Get system-wide performance overview"""
-        total_tenants = len(self._tenant_monitors)
-        total_alerts = sum(
-            len(monitor.get_active_alerts())
-            for monitor in self._tenant_monitors.values()
-        )
         
         # System resource usage
         system_memory = psutil.virtual_memory()
         system_cpu = psutil.cpu_percent(interval=1)
         
-        # Aggregate tenant metrics
-        total_requests = sum(monitor._request_count for monitor in self._tenant_monitors.values())
-        total_errors = sum(monitor._error_count for monitor in self._tenant_monitors.values())
+        # Aggregate metrics from the single monitor instance
+        metrics_summary = self._monitor.get_current_metrics()
         
         return {
             "system_uptime_seconds": (datetime.utcnow() - self._system_start_time).total_seconds(),
-            "total_tenants": total_tenants,
-            "total_active_alerts": total_alerts,
             "system_resources": {
                 "memory_usage_percent": system_memory.percent,
                 "memory_available_gb": system_memory.available / (1024**3),
                 "cpu_usage_percent": system_cpu
             },
             "aggregate_metrics": {
-                "total_requests": total_requests,
-                "total_errors": total_errors,
-                "system_error_rate": (total_errors / max(total_requests, 1)) * 100
+                "total_requests": metrics_summary.get("total_requests", 0),
+                "total_errors": metrics_summary.get("error_count", 0),
+                "system_error_rate": (
+                    (metrics_summary.get("error_count", 0) / max(metrics_summary.get("total_requests", 1), 1)) * 100
+                )
             },
             "timestamp": datetime.utcnow().isoformat()
         }
-    
-    async def get_tenant_rankings(self, metric_type: MetricType) -> List[Dict[str, Any]]:
-        """Get tenant rankings by performance metric"""
-        rankings = []
-        
-        for tenant_id, monitor in self._tenant_monitors.items():
-            current_metrics = monitor.get_current_metrics()
-            metric_value = current_metrics.get("metrics", {}).get(metric_type.value, {}).get("current", 0)
-            
-            rankings.append({
-                "tenant_id": tenant_id,
-                "metric_value": metric_value,
-                "total_requests": monitor._request_count,
-                "error_count": monitor._error_count
-            })
-        
-        # Sort by metric value (descending for most metrics)
-        reverse_sort = metric_type not in [MetricType.RESPONSE_TIME, MetricType.ERROR_RATE]
-        rankings.sort(key=lambda x: x["metric_value"], reverse=reverse_sort)
-        
-        return rankings
-    
-    async def get_performance_summary(
-        self,
-        timeframe_minutes: int = 60
-    ) -> Dict[str, Any]:
-        """Get performance summary for all tenants"""
-        tenant_summaries = {}
-        
-        for tenant_id, monitor in self._tenant_monitors.items():
-            tenant_summaries[tenant_id] = monitor.get_current_metrics()
-        
-        system_overview = await self.get_system_overview()
-        
-        return {
-            "system_overview": system_overview,
-            "tenant_performance": tenant_summaries,
-            "timeframe_minutes": timeframe_minutes,
-            "generated_at": datetime.utcnow().isoformat()
-        }
+
 
 
 # Performance monitoring decorators
@@ -346,11 +282,6 @@ def monitor_performance(metric_type: MetricType = MetricType.RESPONSE_TIME):
             start_time = time.time()
             success = True
             
-            # Extract tenant_id
-            tenant_id = kwargs.get('tenant_id')
-            if not tenant_id and args and hasattr(args[0], 'tenant_id'):
-                tenant_id = args[0].tenant_id
-            
             try:
                 result = await func(*args, **kwargs)
                 return result
@@ -358,39 +289,37 @@ def monitor_performance(metric_type: MetricType = MetricType.RESPONSE_TIME):
                 success = False
                 raise e
             finally:
-                if tenant_id:
-                    execution_time = (time.time() - start_time) * 1000  # Convert to ms
-                    
-                    # Get system monitor (would be injected in production)
-                    system_monitor = SystemPerformanceMonitor()
-                    tenant_monitor = system_monitor.get_tenant_monitor(tenant_id)
-                    
-                    if metric_type == MetricType.RESPONSE_TIME:
-                        tenant_monitor.record_request(execution_time, success)
-                    else:
-                        tenant_monitor.record_metric(metric_type, execution_time)
+                execution_time = (time.time() - start_time) * 1000  # Convert to ms
+                
+                # Get system monitor (would be injected in production)
+                system_monitor = SystemPerformanceMonitor()
+                monitor = system_monitor.get_monitor()
+                
+                if metric_type == MetricType.RESPONSE_TIME:
+                    monitor.record_request(execution_time, success)
+                else:
+                    monitor.record_metric(metric_type, execution_time)
         
         return wrapper
     return decorator
 
 
 class PerformanceOptimizer:
-    """Service for optimizing tenant performance"""
+    """Service for optimizing performance"""
     
     def __init__(self, system_monitor: SystemPerformanceMonitor):
         self.system_monitor = system_monitor
     
-    async def analyze_tenant_performance(self, tenant_id: str) -> Dict[str, Any]:
-        """Analyze performance for a specific tenant"""
-        monitor = self.system_monitor.get_tenant_monitor(tenant_id)
+    async def analyze_performance(self) -> Dict[str, Any]:
+        """Analyze performance"""
+        monitor = self.system_monitor.get_monitor()
         current_metrics = monitor.get_current_metrics()
         active_alerts = monitor.get_active_alerts()
         
         # Generate optimization recommendations
-        recommendations = await self._generate_recommendations(tenant_id, current_metrics)
+        recommendations = await self._generate_recommendations(current_metrics)
         
         return {
-            "tenant_id": tenant_id,
             "current_performance": current_metrics,
             "active_alerts": active_alerts,
             "recommendations": recommendations,
@@ -399,7 +328,6 @@ class PerformanceOptimizer:
     
     async def _generate_recommendations(
         self,
-        tenant_id: str,
         metrics: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
         """Generate performance optimization recommendations"""
@@ -443,9 +371,9 @@ class PerformanceOptimizer:
         
         return recommendations
     
-    async def optimize_tenant_resources(self, tenant_id: str) -> Dict[str, Any]:
-        """Automatically optimize tenant resources"""
-        analysis = await self.analyze_tenant_performance(tenant_id)
+    async def optimize_resources(self) -> Dict[str, Any]:
+        """Automatically optimize resources"""
+        analysis = await self.analyze_performance()
         optimizations_applied = []
         
         # Apply automatic optimizations based on recommendations
@@ -467,7 +395,6 @@ class PerformanceOptimizer:
                 })
         
         return {
-            "tenant_id": tenant_id,
             "optimizations_applied": optimizations_applied,
             "optimization_timestamp": datetime.utcnow().isoformat()
         }
@@ -481,7 +408,3 @@ def get_system_monitor() -> SystemPerformanceMonitor:
     """Get global system performance monitor"""
     return _system_monitor
 
-
-def get_tenant_monitor(tenant_id: str) -> TenantPerformanceMonitor:
-    """Get tenant-specific performance monitor"""
-    return _system_monitor.get_tenant_monitor(tenant_id)

@@ -33,13 +33,6 @@ class AuthInitService:
             {"name": StandardPermissions.SYSTEM_ADMIN, "resource": "system", "action": "admin", "description": "Full system administration"},
             {"name": StandardPermissions.SYSTEM_MANAGE, "resource": "system", "action": "manage", "description": "System management"},
             
-            # Tenant permissions
-            {"name": StandardPermissions.TENANT_CREATE, "resource": "tenant", "action": "create", "description": "Create tenants"},
-            {"name": StandardPermissions.TENANT_READ, "resource": "tenant", "action": "read", "description": "View tenant information"},
-            {"name": StandardPermissions.TENANT_UPDATE, "resource": "tenant", "action": "update", "description": "Update tenant settings"},
-            {"name": StandardPermissions.TENANT_DELETE, "resource": "tenant", "action": "delete", "description": "Delete tenants"},
-            {"name": StandardPermissions.TENANT_MANAGE, "resource": "tenant", "action": "manage", "description": "Full tenant management"},
-            
             # User permissions
             {"name": StandardPermissions.USER_CREATE, "resource": "user", "action": "create", "description": "Create users"},
             {"name": StandardPermissions.USER_READ, "resource": "user", "action": "read", "description": "View user information"},
@@ -112,7 +105,7 @@ class AuthInitService:
         await self.session.commit()
         return created_permissions
     
-    async def initialize_roles(self, tenant_id=None) -> List[Role]:
+    async def initialize_roles(self) -> List[Role]:
         """Initialize standard roles."""
         roles_data = [
             {
@@ -121,11 +114,6 @@ class AuthInitService:
                 "permissions": [
                     StandardPermissions.SYSTEM_ADMIN,
                     StandardPermissions.SYSTEM_MANAGE,
-                    StandardPermissions.TENANT_CREATE,
-                    StandardPermissions.TENANT_READ,
-                    StandardPermissions.TENANT_UPDATE,
-                    StandardPermissions.TENANT_DELETE,
-                    StandardPermissions.TENANT_MANAGE,
                     StandardPermissions.USER_CREATE,
                     StandardPermissions.USER_READ,
                     StandardPermissions.USER_UPDATE,
@@ -141,41 +129,6 @@ class AuthInitService:
                     StandardPermissions.AUDIT_READ,
                     StandardPermissions.AUDIT_EXPORT,
                     StandardPermissions.AUDIT_MANAGE,
-                ]
-            },
-            {
-                "name": StandardRoles.TENANT_ADMIN,
-                "description": "Tenant administrator with full access within their tenant",
-                "permissions": [
-                    StandardPermissions.TENANT_READ,
-                    StandardPermissions.TENANT_UPDATE,
-                    StandardPermissions.USER_CREATE,
-                    StandardPermissions.USER_READ,
-                    StandardPermissions.USER_UPDATE,
-                    StandardPermissions.USER_DELETE,
-                    StandardPermissions.USER_MANAGE,
-                    StandardPermissions.USER_INVITE,
-                    StandardPermissions.ROLE_READ,
-                    StandardPermissions.ROLE_ASSIGN,
-                    StandardPermissions.AGENT_CREATE,
-                    StandardPermissions.AGENT_READ,
-                    StandardPermissions.AGENT_UPDATE,
-                    StandardPermissions.AGENT_DELETE,
-                    StandardPermissions.AGENT_EXECUTE,
-                    StandardPermissions.AGENT_MANAGE,
-                    StandardPermissions.WORKFLOW_CREATE,
-                    StandardPermissions.WORKFLOW_READ,
-                    StandardPermissions.WORKFLOW_UPDATE,
-                    StandardPermissions.WORKFLOW_DELETE,
-                    StandardPermissions.WORKFLOW_EXECUTE,
-                    StandardPermissions.WORKFLOW_MANAGE,
-                    StandardPermissions.TOOL_CREATE,
-                    StandardPermissions.TOOL_READ,
-                    StandardPermissions.TOOL_UPDATE,
-                    StandardPermissions.TOOL_DELETE,
-                    StandardPermissions.TOOL_EXECUTE,
-                    StandardPermissions.TOOL_MANAGE,
-                    StandardPermissions.AUDIT_READ,
                 ]
             },
             {
@@ -230,21 +183,19 @@ class AuthInitService:
                 role = await self.rbac_service.create_role(
                     name=role_data["name"],
                     description=role_data["description"],
-                    tenant_id=tenant_id,
                     permissions=role_data["permissions"]
                 )
                 
                 # Mark system roles
-                if tenant_id is None:
-                    role.is_system_role = True
+                role.is_system_role = True
                 
                 created_roles.append(role)
-                logger.info(f"Created role: {role_data['name']} (tenant: {tenant_id})")
+                logger.info(f"Created role: {role_data['name']}")
                 
             except ValueError:
                 # Role already exists
-                logger.info(f"Role already exists: {role_data['name']} (tenant: {tenant_id})")
-                existing_role = await self.rbac_service.get_role_by_name(role_data["name"], tenant_id)
+                logger.info(f"Role already exists: {role_data['name']}")
+                existing_role = await self.rbac_service.get_role_by_name(role_data["name"])
                 if existing_role:
                     created_roles.append(existing_role)
         
@@ -263,8 +214,7 @@ class AuthInitService:
             admin_user = await self.auth_service.register_user(
                 email=email,
                 password=password,
-                full_name=full_name,
-                tenant_id=None  # System user
+                full_name=full_name
             )
             
             # Mark as system admin
@@ -301,7 +251,7 @@ class AuthInitService:
         
         # 2. Initialize system roles
         logger.info("Creating system roles...")
-        await self.initialize_roles(tenant_id=None)
+        await self.initialize_roles()
         
         # 3. Create system administrator
         logger.info("Creating system administrator...")

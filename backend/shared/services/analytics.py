@@ -1,4 +1,3 @@
-# Tenant Analytics and Reporting Service
 from typing import Dict, Any, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, desc, text
@@ -6,7 +5,6 @@ from datetime import datetime, timedelta
 from enum import Enum
 import logging
 
-from ..models.tenant import Tenant, TenantUser
 from ..models.agent import Agent, AgentExecution
 from ..models.workflow import Workflow, WorkflowExecution
 from ..models.audit import AuditLog
@@ -24,12 +22,11 @@ class AnalyticsTimeframe(str, Enum):
     LAST_YEAR = "1y"
 
 
-class TenantAnalyticsService:
-    """Service for tenant analytics and reporting"""
+class AnalyticsService(BaseService):
+    """Service for analytics and reporting"""
     
-    def __init__(self, session: AsyncSession, tenant_id: str):
+    def __init__(self, session: AsyncSession):
         self.session = session
-        self.tenant_id = tenant_id
     
     def _get_timeframe_start(self, timeframe: AnalyticsTimeframe) -> datetime:
         """Get start datetime for timeframe"""
@@ -48,32 +45,20 @@ class TenantAnalyticsService:
         else:
             return now - timedelta(days=30)  # Default to 30 days
     
-    async def get_tenant_overview(self) -> Dict[str, Any]:
-        """Get high-level tenant overview statistics"""
-        # Get tenant info
-        tenant_stmt = select(Tenant).where(Tenant.id == self.tenant_id)
-        tenant_result = await self.session.execute(tenant_stmt)
-        tenant = tenant_result.scalar_one_or_none()
-        
-        if not tenant:
-            raise ValueError(f"Tenant {self.tenant_id} not found")
+    async def get_overview(self) -> Dict[str, Any]:
+        """Get high-level overview statistics"""
         
         # Get counts
         agents_count = await self.session.execute(
-            select(func.count(Agent.id)).where(Agent.tenant_id == self.tenant_id)
+            select(func.count(Agent.id))
         )
         
         workflows_count = await self.session.execute(
-            select(func.count(Workflow.id)).where(Workflow.tenant_id == self.tenant_id)
+            select(func.count(Workflow.id))
         )
         
         users_count = await self.session.execute(
-            select(func.count(TenantUser.id)).where(
-                and_(
-                    TenantUser.tenant_id == self.tenant_id,
-                    TenantUser.status == "active"
-                )
-            )
+            select(func.count(User.id)).where(User.is_active == True)
         )
         
         # Get recent activity (last 30 days)
@@ -81,27 +66,17 @@ class TenantAnalyticsService:
         
         recent_executions = await self.session.execute(
             select(func.count(AgentExecution.id)).where(
-                and_(
-                    AgentExecution.tenant_id == self.tenant_id,
-                    AgentExecution.created_at >= thirty_days_ago
-                )
+                AgentExecution.created_at >= thirty_days_ago
             )
         )
         
         recent_workflow_executions = await self.session.execute(
             select(func.count(WorkflowExecution.id)).where(
-                and_(
-                    WorkflowExecution.tenant_id == self.tenant_id,
-                    WorkflowExecution.created_at >= thirty_days_ago
-                )
+                WorkflowExecution.created_at >= thirty_days_ago
             )
         )
         
         return {
-            "tenant_id": self.tenant_id,
-            "tenant_name": tenant.name,
-            "tenant_status": tenant.status,
-            "created_at": tenant.created_at.isoformat(),
             "totals": {
                 "agents": agents_count.scalar() or 0,
                 "workflows": workflows_count.scalar() or 0,
@@ -132,7 +107,6 @@ class TenantAnalyticsService:
                 func.sum(AgentExecution.cost).label('total_cost')
             ).where(
                 and_(
-                    AgentExecution.tenant_id == self.tenant_id,
                     AgentExecution.created_at >= start_date,
                     AgentExecution.created_at <= end_date
                 )
@@ -152,7 +126,6 @@ class TenantAnalyticsService:
                 ).label('avg_workflow_duration')
             ).where(
                 and_(
-                    WorkflowExecution.tenant_id == self.tenant_id,
                     WorkflowExecution.created_at >= start_date,
                     WorkflowExecution.created_at <= end_date
                 )
@@ -171,7 +144,6 @@ class TenantAnalyticsService:
                 AgentExecution, Agent.id == AgentExecution.agent_id
             ).where(
                 and_(
-                    Agent.tenant_id == self.tenant_id,
                     AgentExecution.created_at >= start_date,
                     AgentExecution.created_at <= end_date
                 )
@@ -232,14 +204,12 @@ class TenantAnalyticsService:
                     COUNT(CASE WHEN status = 'completed' THEN 1 END) as successful,
                     COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed
                 FROM agent_executions 
-                WHERE tenant_id = :tenant_id 
-                    AND created_at >= :start_date 
+                WHERE created_at >= :start_date 
                     AND created_at <= :end_date
                 GROUP BY DATE(created_at)
                 ORDER BY date
             """),
             {
-                "tenant_id": self.tenant_id,
                 "start_date": start_date,
                 "end_date": end_date
             }
@@ -254,14 +224,12 @@ class TenantAnalyticsService:
                     COUNT(CASE WHEN status = 'completed' THEN 1 END) as successful,
                     COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed
                 FROM workflow_executions 
-                WHERE tenant_id = :tenant_id 
-                    AND created_at >= :start_date 
+                WHERE created_at >= :start_date 
                     AND created_at <= :end_date
                 GROUP BY DATE(created_at)
                 ORDER BY date
             """),
             {
-                "tenant_id": self.tenant_id,
                 "start_date": start_date,
                 "end_date": end_date
             }
@@ -308,7 +276,6 @@ class TenantAnalyticsService:
                 func.count(AgentExecution.id).label('error_count')
             ).where(
                 and_(
-                    AgentExecution.tenant_id == self.tenant_id,
                     AgentExecution.status == 'failed',
                     AgentExecution.error_message.isnot(None),
                     AgentExecution.created_at >= start_date,
@@ -324,7 +291,6 @@ class TenantAnalyticsService:
                 func.count(WorkflowExecution.id).label('error_count')
             ).where(
                 and_(
-                    WorkflowExecution.tenant_id == self.tenant_id,
                     WorkflowExecution.status == 'failed',
                     WorkflowExecution.error_message.isnot(None),
                     WorkflowExecution.created_at >= start_date,
@@ -371,7 +337,6 @@ class TenantAnalyticsService:
                 func.max(AuditLog.timestamp).label('last_activity')
             ).where(
                 and_(
-                    AuditLog.tenant_id == self.tenant_id,
                     AuditLog.user_id.isnot(None),
                     AuditLog.timestamp >= start_date,
                     AuditLog.timestamp <= end_date
@@ -386,7 +351,6 @@ class TenantAnalyticsService:
                 func.count(AuditLog.id).label('event_count')
             ).where(
                 and_(
-                    AuditLog.tenant_id == self.tenant_id,
                     AuditLog.timestamp >= start_date,
                     AuditLog.timestamp <= end_date
                 )
@@ -416,21 +380,21 @@ class TenantAnalyticsService:
             ]
         }
     
-    async def generate_tenant_report(
+    async def generate_report(
         self,
         timeframe: AnalyticsTimeframe = AnalyticsTimeframe.LAST_30_DAYS
     ) -> Dict[str, Any]:
-        """Generate comprehensive tenant report"""
-        overview = await self.get_tenant_overview()
+        """Generate comprehensive report"""
+        overview = await self.get_overview()
         usage = await self.get_usage_analytics(timeframe)
         daily_activity = await self.get_daily_activity(timeframe)
         errors = await self.get_error_analytics(timeframe)
         user_activity = await self.get_user_activity(timeframe)
         
         return {
-            "report_id": f"tenant-report-{self.tenant_id}-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}",
+            "report_id": f"report-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}",
             "generated_at": datetime.utcnow().isoformat(),
-            "tenant_overview": overview,
+            "overview": overview,
             "usage_analytics": usage,
             "daily_activity": daily_activity,
             "error_analytics": errors,

@@ -23,7 +23,6 @@ class AuditSystemTester:
     def __init__(self, base_url: str = "http://localhost:8000"):
         self.base_url = base_url
         self.client = httpx.AsyncClient(base_url=base_url, timeout=30.0)
-        self.tenant_id = "test-tenant-001"
         self.user_id = "test-user-001"
         self.auth_headers = {}
     
@@ -33,7 +32,7 @@ class AuditSystemTester:
         
         # Create test session
         async with get_database_session() as session:
-            audit_service = AuditService(session, self.tenant_id, self.user_id)
+            audit_service = AuditService(session, self.user_id)
             
             # Create sample audit events
             sample_events = [
@@ -109,7 +108,6 @@ class AuditSystemTester:
             
             # Verify the event was logged
             assert audit_log.event_type == AuditEventType.WORKFLOW_EXECUTED
-            assert audit_log.tenant_id == self.tenant_id
             assert audit_log.checksum is not None
             assert audit_log.verify_integrity()
             

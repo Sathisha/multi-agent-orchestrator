@@ -50,15 +50,13 @@ class LLMService:
     async def store_credentials(
         self,
         provider_type: str,
-        credentials: Dict[str, Any],
-        tenant_id: Optional[str] = None
+        credentials: Dict[str, Any]
     ) -> bool:
         """Store LLM provider credentials.
         
         Args:
             provider_type: LLM provider type string
             credentials: Credentials dictionary
-            tenant_id: Optional tenant ID for multi-tenant deployments
             
         Returns:
             True if credentials stored successfully
@@ -72,19 +70,19 @@ class LLMService:
             
             # Store encrypted credentials
             storage_key = await self.credential_manager.store_credentials(
-                provider_enum, credentials, tenant_id
+                provider_enum, credentials
             )
             
             # Validate credentials by creating provider
             provider = await self.provider_factory.create_provider(
-                provider_enum, tenant_id=tenant_id
+                provider_enum
             )
             
             is_valid = await provider.validate_credentials()
             
             # Update validation status
             await self.credential_manager.validate_and_update_credentials(
-                provider_enum, is_valid, tenant_id
+                provider_enum, is_valid
             )
             
             self.logger.info(f"Stored and validated credentials for {provider_type}")
@@ -106,14 +104,12 @@ class LLMService:
     
     async def validate_credentials(
         self,
-        provider_type: str,
-        tenant_id: Optional[str] = None
+        provider_type: str
     ) -> bool:
         """Validate stored LLM provider credentials.
         
         Args:
             provider_type: LLM provider type string
-            tenant_id: Optional tenant ID for multi-tenant deployments
             
         Returns:
             True if credentials are valid
@@ -121,14 +117,14 @@ class LLMService:
         try:
             provider_enum = LLMProviderType(provider_type)
             provider = await self.provider_factory.get_or_create_provider(
-                provider_enum, tenant_id=tenant_id
+                provider_enum
             )
             
             is_valid = await provider.validate_credentials()
             
             # Update validation status
             await self.credential_manager.validate_and_update_credentials(
-                provider_enum, is_valid, tenant_id
+                provider_enum, is_valid
             )
             
             return is_valid
@@ -139,14 +135,12 @@ class LLMService:
     
     async def get_available_models(
         self,
-        provider_type: str,
-        tenant_id: Optional[str] = None
+        provider_type: str
     ) -> List[str]:
         """Get available models for a provider.
         
         Args:
             provider_type: LLM provider type string
-            tenant_id: Optional tenant ID for multi-tenant deployments
             
         Returns:
             List of available model names
@@ -157,7 +151,7 @@ class LLMService:
         try:
             provider_enum = LLMProviderType(provider_type)
             provider = await self.provider_factory.get_or_create_provider(
-                provider_enum, tenant_id=tenant_id
+                provider_enum
             )
             
             return await provider.get_available_models()
@@ -174,7 +168,6 @@ class LLMService:
         self,
         messages: List[Dict[str, str]],
         agent_config: AgentConfig,
-        tenant_id: Optional[str] = None,
         stream: bool = False
     ) -> LLMResponse:
         """Generate response using configured LLM provider.
@@ -182,7 +175,6 @@ class LLMService:
         Args:
             messages: List of message dictionaries with 'role' and 'content'
             agent_config: Agent configuration containing LLM settings
-            tenant_id: Optional tenant ID for multi-tenant deployments
             stream: Whether to stream the response
             
         Returns:
@@ -218,12 +210,12 @@ class LLMService:
                 provider_enum = LLMProviderType(agent_config.llm_provider)
             
             provider = await self.provider_factory.get_or_create_provider(
-                provider_enum, tenant_id=tenant_id
+                provider_enum
             )
             
             # Generate response with fallback
             response = await self._generate_with_fallback(
-                request, provider, agent_config, tenant_id
+                request, provider, agent_config
             )
             
             # Track request statistics
@@ -266,15 +258,13 @@ class LLMService:
     async def stream_response(
         self,
         messages: List[Dict[str, str]],
-        agent_config: AgentConfig,
-        tenant_id: Optional[str] = None
+        agent_config: AgentConfig
     ) -> AsyncGenerator[str, None]:
         """Stream response using configured LLM provider.
         
         Args:
             messages: List of message dictionaries with 'role' and 'content'
             agent_config: Agent configuration containing LLM settings
-            tenant_id: Optional tenant ID for multi-tenant deployments
             
         Yields:
             Response content chunks
@@ -307,7 +297,7 @@ class LLMService:
                 provider_enum = LLMProviderType(agent_config.llm_provider)
             
             provider = await self.provider_factory.get_or_create_provider(
-                provider_enum, tenant_id=tenant_id
+                provider_enum
             )
             
             # Stream response
@@ -327,14 +317,12 @@ class LLMService:
     
     async def get_provider_health(
         self,
-        provider_type: Optional[str] = None,
-        tenant_id: Optional[str] = None
+        provider_type: Optional[str] = None
     ) -> Dict[str, Any]:
         """Get health status for providers.
         
         Args:
             provider_type: Optional specific provider type to check
-            tenant_id: Optional tenant ID for multi-tenant deployments
             
         Returns:
             Health status dictionary
@@ -344,7 +332,7 @@ class LLMService:
             try:
                 provider_enum = LLMProviderType(provider_type)
                 provider = await self.provider_factory.get_or_create_provider(
-                    provider_enum, tenant_id=tenant_id
+                    provider_enum
                 )
                 return await provider.health_check()
             except Exception as e:
@@ -359,7 +347,7 @@ class LLMService:
             for provider_enum in LLMProviderType:
                 try:
                     provider = await self.provider_factory.get_provider(
-                        provider_enum, tenant_id
+                        provider_enum
                     )
                     if provider:
                         health_status[provider_enum.value] = await provider.health_check()
@@ -377,17 +365,14 @@ class LLMService:
             return health_status
     
     async def list_providers(
-        self, tenant_id: Optional[str] = None
+        self
     ) -> List[Dict[str, Any]]:
         """List all available providers with their status.
         
-        Args:
-            tenant_id: Optional tenant ID for multi-tenant deployments
-            
         Returns:
             List of provider information
         """
-        return await self.provider_factory.list_available_providers(tenant_id)
+        return await self.provider_factory.list_available_providers()
     
     def get_request_statistics(self) -> Dict[str, Any]:
         """Get request statistics for monitoring.
@@ -401,8 +386,7 @@ class LLMService:
         self,
         request: LLMRequest,
         primary_provider: BaseLLMProvider,
-        agent_config: AgentConfig,
-        tenant_id: Optional[str] = None
+        agent_config: AgentConfig
     ) -> LLMResponse:
         """Generate response with fallback to other providers.
         
@@ -410,7 +394,6 @@ class LLMService:
             request: LLM request object
             primary_provider: Primary provider to try first
             agent_config: Agent configuration
-            tenant_id: Optional tenant ID
             
         Returns:
             LLM response object
@@ -445,7 +428,7 @@ class LLMService:
             
             try:
                 fallback_provider = await self.provider_factory.get_provider(
-                    fallback_type, tenant_id
+                    fallback_type
                 )
                 
                 if not fallback_provider:

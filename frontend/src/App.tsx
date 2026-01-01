@@ -6,6 +6,7 @@ import ToolsWorkspace from './workspaces/ToolsWorkspace'
 import MonitoringWorkspace from './workspaces/MonitoringWorkspace'
 import AgentDetailWorkspace from './workspaces/AgentDetailWorkspace'
 import WorkflowDetailWorkspace from './workspaces/WorkflowDetailWorkspace'
+import LLMModelsWorkspace from './workspaces/LLMModelsWorkspace'
 import LoginPage from './components/auth/LoginPage'
 import ProtectedRoute from './routes/ProtectedRoute'
 
@@ -25,6 +26,7 @@ function App() {
           <Route path="/workflows/:workflowId" element={<WorkflowDetailWorkspace />} />
           <Route path="/tools" element={<ToolsWorkspace />} />
           <Route path="/monitoring" element={<MonitoringWorkspace />} />
+          <Route path="/models" element={<LLMModelsWorkspace />} />
         </Route>
       </Route>
 

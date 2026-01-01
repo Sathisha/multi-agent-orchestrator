@@ -5,7 +5,7 @@ from sqlalchemy import String, Boolean, Text, ForeignKey, Table, Column, text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from shared.models.base import BaseEntity, TenantEntity, SystemEntity
+from shared.models.base import BaseEntity, SystemEntity
 from shared.database.connection import Base
 
 # Association table for Role-Permission
@@ -25,7 +25,7 @@ class Permission(SystemEntity):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     conditions: Mapped[Dict[str, Any]] = mapped_column(JSONB, nullable=True, server_default=text("'{}'::jsonb"))
 
-class Role(TenantEntity):
+class Role(SystemEntity):
     __tablename__ = "roles"
     
     name: Mapped[str] = mapped_column(String(100), nullable=False)

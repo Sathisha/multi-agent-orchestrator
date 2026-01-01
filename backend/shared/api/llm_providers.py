@@ -1,12 +1,11 @@
-"""LLM Provider API endpoints."""
-
 from typing import Dict, List, Optional, Any
 from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel, Field
 
 from ..services.llm_service import LLMService
 from ..services.llm_providers import LLMError, LLMProviderType
-from ..middleware.tenant import get_tenant_context, TenantContext
+from ..services.auth import get_current_user
+from ..models.user import User
 
 router = APIRouter(prefix="/api/v1/llm-providers", tags=["llm-providers"])
 
@@ -74,14 +73,12 @@ llm_service = LLMService()
 
 @router.post("/credentials", response_model=CredentialsResponse)
 async def store_credentials(
-    request: CredentialsRequest,
-    tenant_context: TenantContext = Depends(get_tenant_context)
+    request: CredentialsRequest
 ):
     """Store LLM provider credentials.
     
     Args:
         request: Credentials request
-        tenant_context: Tenant context for multi-tenant deployments
         
     Returns:
         Credentials response with validation status
@@ -100,8 +97,7 @@ async def store_credentials(
         # Store credentials
         is_valid = await llm_service.store_credentials(
             request.provider_type,
-            request.credentials,
-            tenant_context.tenant_id if tenant_context else None
+            request.credentials
         )
         
         return CredentialsResponse(
@@ -124,14 +120,12 @@ async def store_credentials(
 
 @router.post("/credentials/{provider_type}/validate", response_model=CredentialsResponse)
 async def validate_credentials(
-    provider_type: str,
-    tenant_context: TenantContext = Depends(get_tenant_context)
+    provider_type: str
 ):
     """Validate stored LLM provider credentials.
     
     Args:
         provider_type: LLM provider type
-        tenant_context: Tenant context for multi-tenant deployments
         
     Returns:
         Validation response
@@ -149,8 +143,7 @@ async def validate_credentials(
         
         # Validate credentials
         is_valid = await llm_service.validate_credentials(
-            provider_type,
-            tenant_context.tenant_id if tenant_context else None
+            provider_type
         )
         
         return CredentialsResponse(
@@ -168,20 +161,14 @@ async def validate_credentials(
 
 @router.get("/", response_model=ProviderListResponse)
 async def list_providers(
-    tenant_context: TenantContext = Depends(get_tenant_context)
 ):
     """List all available LLM providers with their status.
     
-    Args:
-        tenant_context: Tenant context for multi-tenant deployments
-        
     Returns:
         List of provider information
     """
     try:
-        providers = await llm_service.list_providers(
-            tenant_context.tenant_id if tenant_context else None
-        )
+        providers = await llm_service.list_providers()
         
         return ProviderListResponse(providers=providers)
         
@@ -194,14 +181,12 @@ async def list_providers(
 
 @router.get("/{provider_type}/models", response_model=ModelsResponse)
 async def get_available_models(
-    provider_type: str,
-    tenant_context: TenantContext = Depends(get_tenant_context)
+    provider_type: str
 ):
     """Get available models for a specific provider.
     
     Args:
         provider_type: LLM provider type
-        tenant_context: Tenant context for multi-tenant deployments
         
     Returns:
         Available models response
@@ -219,8 +204,7 @@ async def get_available_models(
         
         # Get available models
         models = await llm_service.get_available_models(
-            provider_type,
-            tenant_context.tenant_id if tenant_context else None
+            provider_type
         )
         
         return ModelsResponse(
@@ -242,14 +226,12 @@ async def get_available_models(
 
 @router.get("/health", response_model=Dict[str, Any])
 async def get_provider_health(
-    provider_type: Optional[str] = None,
-    tenant_context: TenantContext = Depends(get_tenant_context)
+    provider_type: Optional[str] = None
 ):
     """Get health status for LLM providers.
     
     Args:
         provider_type: Optional specific provider type to check
-        tenant_context: Tenant context for multi-tenant deployments
         
     Returns:
         Health status information
@@ -262,8 +244,7 @@ async def get_provider_health(
             )
         
         health_status = await llm_service.get_provider_health(
-            provider_type,
-            tenant_context.tenant_id if tenant_context else None
+            provider_type
         )
         
         return health_status
@@ -277,14 +258,12 @@ async def get_provider_health(
 
 @router.post("/test", response_model=TestResponse)
 async def test_provider(
-    request: TestRequest,
-    tenant_context: TenantContext = Depends(get_tenant_context)
+    request: TestRequest
 ):
     """Test LLM provider with a simple request.
     
     Args:
         request: Test request
-        tenant_context: Tenant context for multi-tenant deployments
         
     Returns:
         Test response
@@ -313,8 +292,7 @@ async def test_provider(
         
         response = await llm_service.generate_response(
             messages,
-            test_config,
-            tenant_context.tenant_id if tenant_context else None
+            test_config
         )
         
         return TestResponse(

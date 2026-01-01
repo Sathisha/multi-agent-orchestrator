@@ -14,7 +14,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./infrastructure/docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d ai_agent_framework"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d ai_agent_framework" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -31,7 +31,7 @@ services:
       - redis_data:/data
     command: redis-server --appendonly yes
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -73,8 +73,8 @@ services:
       KONG_ADMIN_ERROR_LOG: /dev/stderr
       KONG_ADMIN_LISTEN: 0.0.0.0:8001
     ports:
-      - "8000:8000"  # Proxy port
-      - "8002:8001"  # Admin API port
+      - "8000:8000" # Proxy port
+      - "8002:8001" # Admin API port
     volumes:
       - ./infrastructure/docker/kong/kong.yml:/kong/declarative/kong.yml
     networks:
@@ -94,14 +94,14 @@ services:
       - ENVIRONMENT=development
       - DEBUG=true
       - LOG_LEVEL=INFO
-      - RECREATE_DB=false  # Set to true to recreate database on startup
-      - ENABLE_MIGRATIONS=false  # Set to true to enable Alembic migrations
+      - RECREATE_DB=false # Set to true to recreate database on startup
+      - ENABLE_MIGRATIONS=false # Set to true to enable Alembic migrations
     ports:
       - "8001:8000"
     volumes:
       - ./backend:/app
       - chroma_data:/app/data/chroma
-      - /app/__pycache__  # Exclude pycache from volume mount
+      - /app/__pycache__ # Exclude pycache from volume mount
     depends_on:
       postgres:
         condition: service_healthy
@@ -111,7 +111,7 @@ services:
       - ai-agent-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      test: [ "CMD-SHELL", "curl -f http://localhost:8000/health || exit 1" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -131,46 +131,60 @@ services:
       - ai-agent-network
     restart: unless-stopped
 
-  # Development frontend service (for hot reload)
-  frontend-dev:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile.dev
-    container_name: ai-agent-framework-frontend-dev
-    ports:
-      - "3001:3000"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    environment:
-      - NODE_ENV=development
-      - CHOKIDAR_USEPOLLING=true
-    networks:
-      - ai-agent-network
-    restart: unless-stopped
-    profiles:
-      - dev
+
 
   # Ollama for local LLM models
   ollama:
-    image: ollama/ollama:latest
+    build:
+      context: ./infrastructure/docker/ollama
+      dockerfile: Dockerfile.ollama
     container_name: ai-agent-framework-ollama
     ports:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
+      - ./infrastructure/docker/ollama/until_ready.sh:/usr/bin/until_ready.sh
     networks:
       - ai-agent-network
-    # Pull a small model for testing
-    entrypoint: ["/bin/bash", "-c", "ollama serve & sleep 10 && ollama pull llama3.2 && wait"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    entrypoint: >
+      /bin/bash -c "
+        ollama serve &
+        /usr/bin/until_ready.sh 11434;
+        
+        # Pull llama2 if not available
+        if ! ollama list | grep -q 'llama2'; then
+          echo 'Pulling llama2 model...'
+          ollama pull llama2
+        fi;
+        
+        # Pull deepseek-coder if not available
+        if ! ollama list | grep -q 'deepseek-coder'; then
+          echo 'Pulling deepseek-coder model...'
+          ollama pull deepseek-coder
+        fi;
+        
+        # Pull gemma if not available
+        if ! ollama list | grep -q 'gemma'; then
+          echo 'Pulling gemma model...'
+          ollama pull gemma
+        fi;
+        
+        wait
+      "
 
   # Camunda Platform 8 Community Edition
   zeebe:
     image: camunda/zeebe:8.3.0
     container_name: ai-agent-framework-zeebe
     ports:
-      - "26500:26500"  # Gateway port
-      - "9600:9600"    # Monitoring port
+      - "26500:26500" # Gateway port
+      - "9600:9600" # Monitoring port
     environment:
       - ZEEBE_BROKER_GATEWAY_ENABLE=true
       - ZEEBE_BROKER_GATEWAY_HOST=0.0.0.0
@@ -182,7 +196,7 @@ services:
     networks:
       - ai-agent-network
     healthcheck:
-      test: ["CMD-SHELL", "timeout 10s bash -c ':> /dev/tcp/127.0.0.1/9600' || exit 1"]
+      test: [ "CMD-SHELL", "timeout 10s bash -c ':> /dev/tcp/127.0.0.1/9600' || exit 1" ]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -221,7 +235,7 @@ services:
     networks:
       - ai-agent-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      test: [ "CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1" ]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -280,6 +294,7 @@ volumes:
   ollama_data:
   zeebe_data:
   elasticsearch_data:
+
 
 networks:
   ai-agent-network:

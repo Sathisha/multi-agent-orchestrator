@@ -24,6 +24,7 @@ export interface CreateAgentRequest {
     config?: Record<string, any>
     system_prompt?: string
     llm_config?: Record<string, any>
+    llm_model_id?: string;
     available_tools?: string[]
     capabilities?: string[]
     tags?: string[]
@@ -99,6 +100,7 @@ export interface AgentTemplate {
     system_prompt: string;
     icon: string;
     color: string;
+    config?: Record<string, any>;
 }
 
 export const getExecutionStatus = async (executionId: string): Promise<ExecutionStatusResponse> => {

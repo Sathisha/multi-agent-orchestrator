@@ -66,11 +66,10 @@ async def test_memory_manager_basic():
         
         # Test collection management
         print("\n📁 Testing collection management...")
-        tenant_id = "test-tenant"
         agent_id = "test-agent"
         
-        collection = await memory_manager._get_or_create_collection(tenant_id, agent_id)
-        collection_name = memory_manager._get_collection_name(tenant_id, agent_id)
+        collection = await memory_manager._get_or_create_collection(agent_id)
+        collection_name = memory_manager._get_collection_name(agent_id)
         
         print(f"  Collection name: {collection_name}")
         print(f"  Collection created: {collection is not None}")
