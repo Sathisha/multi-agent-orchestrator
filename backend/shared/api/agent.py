@@ -1,4 +1,4 @@
-# Agent Management API Endpoints
+from datetime import datetime
 from typing import List, Optional, Dict, Any
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status, Request
@@ -43,17 +43,13 @@ class AgentResponse(BaseModel):
     status: str
     version: str
     config: Dict[str, Any]
-    system_prompt: Optional[str]
-    llm_config: Optional[Dict[str, Any]] = Field(alias="model_config") # Align with model's attribute using alias?
-    # Actually model has 'model_config_dict' (Step 562).
-    # response_model usually maps from attributes.
-    # If I use `from_attributes=True`, I need validation aliasing.
-    
-    available_tools: Optional[List[str]]
-    capabilities: Optional[List[str]]
-    tags: Optional[List[str]]
-    created_at: str
-    updated_at: str
+    system_prompt: Optional[str] = None
+    llm_config: Optional[Dict[str, Any]] = Field(None, validation_alias="model_config_dict")
+    available_tools: Optional[List[str]] = None
+    capabilities: Optional[List[str]] = None
+    tags: Optional[List[str]] = None
+    created_at: datetime
+    updated_at: datetime
     
     class Config:
         from_attributes = True
@@ -73,9 +69,9 @@ class AgentDeploymentResponse(BaseModel):
     environment: str
     status: str
     config: Optional[Dict[str, Any]]
-    resource_limits: Optional[Dict[str, Any]]
-    deployed_at: Optional[str]
-    created_at: str
+    resource_limits: Optional[Dict[str, Any]] = None
+    deployed_at: Optional[datetime] = None
+    created_at: datetime
     
     class Config:
         from_attributes = True
@@ -97,10 +93,10 @@ class AgentExecutionResponse(BaseModel):
     status: str
     error_message: Optional[str]
     tokens_used: Optional[int]
-    execution_time_ms: Optional[int]
-    cost: Optional[float]
-    started_at: Optional[str]
-    completed_at: Optional[str]
+    execution_time_ms: Optional[int] = None
+    cost: Optional[float] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
     
     class Config:
         from_attributes = True
@@ -121,10 +117,10 @@ class AgentMemoryResponse(BaseModel):
     memory_type: str
     content: str
     metadata: Optional[Dict[str, Any]]
-    importance_score: Optional[float]
-    access_count: int
-    last_accessed_at: Optional[str]
-    created_at: str
+    importance_score: Optional[float] = None
+    access_count: int = 0
+    last_accessed_at: Optional[datetime] = None
+    created_at: datetime
     
     class Config:
         from_attributes = True
@@ -144,7 +140,7 @@ class AgentStatisticsResponse(BaseModel):
 
 
 # Agent CRUD endpoints
-@router.post("/", response_model=AgentResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=AgentResponse, status_code=status.HTTP_201_CREATED)
 async def create_agent(
     request: AgentCreateRequest,
     session: AsyncSession = Depends(get_async_db),
@@ -172,7 +168,7 @@ async def create_agent(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/", response_model=List[AgentResponse])
+@router.get("", response_model=List[AgentResponse])
 async def list_agents(
     agent_type: Optional[AgentType] = None,
     status_filter: Optional[AgentStatus] = None,

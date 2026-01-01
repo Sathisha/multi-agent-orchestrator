@@ -12,6 +12,7 @@ export interface Agent {
     available_tools?: string[]
     capabilities?: string[]
     tags?: string[]
+    execution_count: number
     created_at: string
     updated_at: string
 }
@@ -89,7 +90,23 @@ export const executeAgent = async (agentId: string, data: ExecuteAgentRequest): 
     return response.data
 }
 
+
+export interface AgentTemplate {
+    id: string;
+    name: string;
+    description: string;
+    type: string;
+    system_prompt: string;
+    icon: string;
+    color: string;
+}
+
 export const getExecutionStatus = async (executionId: string): Promise<ExecutionStatusResponse> => {
     const response = await apiClient.get<ExecutionStatusResponse>(`/agent-executor/executions/${executionId}/status`)
+    return response.data
+}
+
+export const getAgentTemplates = async (): Promise<AgentTemplate[]> => {
+    const response = await apiClient.get<AgentTemplate[]>('/agent-templates')
     return response.data
 }

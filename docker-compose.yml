@@ -162,7 +162,7 @@ services:
     networks:
       - ai-agent-network
     # Pull a small model for testing
-    entrypoint: ["/bin/bash", "-c", "ollama serve & sleep 10 && ollama pull llama2:7b-chat && wait"]
+    entrypoint: ["/bin/bash", "-c", "ollama serve & sleep 10 && ollama pull llama3.2 && wait"]
 
   # Camunda Platform 8 Community Edition
   zeebe:

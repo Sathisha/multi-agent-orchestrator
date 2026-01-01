@@ -96,7 +96,7 @@ class AuditService(BaseService):
             
             # Create audit log entry
             audit_log = AuditLog(
-                event_type=event_type,
+                event_type=event_type.value if hasattr(event_type, 'value') else str(event_type),
                 event_id=event_id,
                 correlation_id=correlation_id or self.correlation_id,
                 timestamp=datetime.utcnow(),
@@ -110,8 +110,8 @@ class AuditService(BaseService):
                 resource_id=resource_id,
                 resource_name=resource_name,
                 action=action,
-                outcome=outcome,
-                severity=severity,
+                outcome=outcome.value if hasattr(outcome, 'value') else str(outcome),
+                severity=severity.value if hasattr(severity, 'value') else str(severity),
                 message=message,
                 details=details or {},
                 request_data=request_data or {},

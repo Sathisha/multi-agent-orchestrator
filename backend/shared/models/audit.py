@@ -148,7 +148,7 @@ class ComplianceReport(BaseModel):
 class AuditLog(BaseEntity):
     __tablename__ = "audit_logs"
     
-    event_type: Mapped[AuditEventType] = mapped_column(String(50), nullable=False, index=True)
+    event_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     event_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     correlation_id: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
@@ -166,8 +166,8 @@ class AuditLog(BaseEntity):
     resource_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     
     action: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
-    outcome: Mapped[AuditOutcome] = mapped_column(String(20), nullable=False, default=AuditOutcome.SUCCESS, index=True)
-    severity: Mapped[AuditSeverity] = mapped_column(String(20), nullable=False, default=AuditSeverity.LOW, index=True)
+    outcome: Mapped[str] = mapped_column(String(20), nullable=False, default=AuditOutcome.SUCCESS, index=True)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False, default=AuditSeverity.LOW, index=True)
     message: Mapped[str] = mapped_column(Text, nullable=True)
     
     details: Mapped[Dict[str, Any]] = mapped_column(JSONB, nullable=True, server_default=text("'{}'::jsonb"))

@@ -38,7 +38,7 @@ async def list_tenants(
     }
 
 
-@router.post("/")
+@router.post("")
 async def create_tenant(
     tenant_data: Dict[str, Any],
     db: AsyncSession = Depends(get_async_db)

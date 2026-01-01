@@ -63,9 +63,8 @@ class WorkflowOrchestratorService(BaseService):
         # We'll instantiate services on demand or use what's passed if it's stateless enough.
         # Since AgentExecutorService is refactored to be per-session, we shouldn't hold a long-lived instance here.
         self.agent_executor = None # Will instantiate per task
-        
-        self.memory_manager = memory_manager or MemoryManagerService(None)
-        self.guardrails_service = guardrails_service or GuardrailsService(None)
+        self.memory_manager = memory_manager
+        self.guardrails_service = guardrails_service
         
         self.bpmn_validator = BPMNValidator()
         self.dependency_analyzer = DependencyAnalyzer()

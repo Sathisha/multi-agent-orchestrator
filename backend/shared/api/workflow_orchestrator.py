@@ -54,7 +54,7 @@ async def shutdown_event():
     except Exception as e:
         logger.error(f"Error during shutdown: {e}")
 
-@router.post("/", response_model=WorkflowResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=WorkflowResponse, status_code=status.HTTP_201_CREATED)
 async def create_workflow(
     workflow_request: WorkflowRequest,
     session: AsyncSession = Depends(get_async_db),
@@ -99,7 +99,7 @@ async def create_workflow(
         logger.error(f"Failed to create workflow: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/", response_model=List[WorkflowResponse])
+@router.get("", response_model=List[WorkflowResponse])
 async def list_workflows(
     status_filter: Optional[WorkflowStatus] = Query(None),
     category: Optional[str] = Query(None),

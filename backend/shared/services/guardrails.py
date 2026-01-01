@@ -8,12 +8,13 @@ import logging
 import json
 import re
 import asyncio
+import uuid
 from dataclasses import dataclass
 import hashlib
 import time
 
 from ..models.tenant import Tenant
-from ..models.audit import AuditLog
+from ..models.audit import AuditLog, AuditEventType, AuditOutcome, AuditSeverity
 from .base import BaseService
 
 logger = logging.getLogger(__name__)
@@ -522,6 +523,9 @@ class GuardrailsEngine:
         try:
             # Create audit log entry
             audit_entry = AuditLog(
+                event_type=AuditEventType.GUARDRAIL_TRIGGERED,
+                event_id=str(uuid.uuid4()),
+                correlation_id=violation.id, # Use violation id as correlation if not available
                 tenant_id=violation.tenant_id,
                 user_id=violation.user_id,
                 action="guardrail_violation",
@@ -534,7 +538,8 @@ class GuardrailsEngine:
                     'agent_id': violation.agent_id,
                     'context': violation.context.__dict__
                 },
-                success=False,
+                outcome=AuditOutcome.FAILURE,
+                severity=AuditSeverity.HIGH if violation.risk_level in [RiskLevel.HIGH, RiskLevel.CRITICAL] else AuditSeverity.MEDIUM,
                 timestamp=violation.timestamp
             )
             
@@ -686,7 +691,7 @@ class GuardrailsService(BaseService):
     """Service wrapper for guardrails engine"""
     
     def __init__(self, session: AsyncSession):
-        super().__init__(session)
+        super().__init__(session, AuditLog)
         self.engines = {}  # Cache engines per tenant
     
     def get_engine(self, tenant_id: str) -> GuardrailsEngine:

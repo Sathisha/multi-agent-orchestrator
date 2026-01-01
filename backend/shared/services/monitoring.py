@@ -533,10 +533,10 @@ class MonitoringService:
                 key = f"health_check:{name}"
                 data = {
                     'status': result.status.value,
-                    'duration_ms': result.duration_ms,
+                    'duration_ms': str(result.duration_ms),
                     'timestamp': result.timestamp.isoformat(),
-                    'details': json.dumps(result.details) if result.details else None,
-                    'error': result.error
+                    'details': json.dumps(result.details) if result.details else "",
+                    'error': result.error or ""
                 }
                 
                 await self.redis_client.hset(key, mapping=data)
@@ -609,7 +609,7 @@ class MonitoringService:
                 alert_data = {
                     **alert,
                     'timestamp': datetime.utcnow().isoformat(),
-                    'acknowledged': False
+                    'acknowledged': "0"
                 }
                 
                 await self.redis_client.hset(alert_id, mapping=alert_data)

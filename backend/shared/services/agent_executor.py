@@ -25,7 +25,7 @@ except ImportError:
             return {"content": "Mock response", "usage": {"total_tokens": 10}}
 
 try:
-    from ..services.memory_manager import MemoryManagerService
+    from ..services.memory_manager import MemoryManagerService, create_memory_manager_service
 except ImportError:
     class MemoryManagerService:
         def __init__(self, session): pass
@@ -141,11 +141,11 @@ class AgentExecutorService(BaseService):
     
     def __init__(self, session: AsyncSession):
         # We pass None as tenant_id to BaseService as we handle removals
-        super().__init__(session, AgentExecution) # BaseService might have optional tenant_id
+        super().__init__(session=session, model_class=AgentExecution) # BaseService might have optional tenant_id
         # Access shared state from singleton
         self.lifecycle = lifecycle_manager
         self.llm_service = LLMService()
-        self.memory_service = MemoryManagerService(session)
+        self.memory_service = None
         self.guardrails_service = GuardrailsService(session)
         
     async def start_agent_execution(
@@ -298,7 +298,7 @@ class AgentExecutorService(BaseService):
             # Update self.session for this background task context (safe since this instance is transient/owned by task effectively)
             self.session = session
             # Re-init services with new session
-            self.memory_service = MemoryManagerService(session)
+            self.memory_service = await create_memory_manager_service(session, "default")
             self.guardrails_service = GuardrailsService(session)
             await self._execute_agent_logic(context)
 
@@ -312,11 +312,12 @@ class AgentExecutorService(BaseService):
             # Guardrails, Memory... (Simplified logic for brevity but preserving key flows)
             memory_context = []
             if context.config.get("memory_enabled", True):
-                memory_context = await self.memory_service.retrieve_memories(
+                memory_results = await self.memory_service.semantic_search(
                     agent_id=context.agent_id,
                     query=str(context.input_data),
                     limit=5
                 )
+                memory_context = [res.content for res in memory_results]
 
             llm_request = self._prepare_llm_request(agent, context, memory_context)
             

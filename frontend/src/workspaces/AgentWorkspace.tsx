@@ -26,48 +26,8 @@ import {
   Schedule as ScheduleIcon
 } from '@mui/icons-material'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
-import { getAgents, createAgent, deleteAgent, updateAgent, CreateAgentRequest, UpdateAgentRequest, Agent } from '../api/agents'
+import { getAgents, createAgent, deleteAgent, updateAgent, CreateAgentRequest, UpdateAgentRequest, Agent, getAgentTemplates, AgentTemplate } from '../api/agents'
 import { useNavigate } from 'react-router-dom'
-
-// Agent Templates
-const AGENT_TEMPLATES = [
-  {
-    id: 'customer-support',
-    name: 'Customer Support Agent',
-    description: 'Handles customer inquiries and provides support',
-    type: 'conversational',
-    icon: '💬',
-    systemPrompt: 'You are a helpful customer support agent. Be polite, professional, and solve customer issues efficiently.',
-    color: '#4ec9b0'
-  },
-  {
-    id: 'content-writer',
-    name: 'Content Writer',
-    description: 'Generates high-quality content for various purposes',
-    type: 'content-generation',
-    icon: '✍️',
-    systemPrompt: 'You are a creative content writer. Generate engaging, well-structured content.',
-    color: '#569cd6'
-  },
-  {
-    id: 'data-analyst',
-    name: 'Data Analyst',
-    description: 'Analyzes data and provides insights',
-    type: 'data-analysis',
-    icon: '📊',
-    systemPrompt: 'You are a data analyst. Analyze data thoroughly and provide actionable insights.',
-    color: '#dcdcaa'
-  },
-  {
-    id: 'code-reviewer',
-    name: 'Code Reviewer',
-    description: 'Reviews code and suggests improvements',
-    type: 'code-review',
-    icon: '🔍',
-    systemPrompt: 'You are an expert code reviewer. Provide constructive feedback and best practices.',
-    color: '#ce9178'
-  }
-]
 
 const AgentWorkspace: React.FC = () => {
   const navigate = useNavigate()
@@ -87,6 +47,7 @@ const AgentWorkspace: React.FC = () => {
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
 
   const { data: agents, isLoading, refetch } = useQuery('agents', getAgents)
+  const { data: agentTemplates, isLoading: templatesLoading } = useQuery('agentTemplates', getAgentTemplates)
 
   const createMutation = useMutation(createAgent, {
     onSuccess: () => {
@@ -147,12 +108,12 @@ const AgentWorkspace: React.FC = () => {
     })
   }
 
-  const handleCreateFromTemplate = (template: typeof AGENT_TEMPLATES[0]) => {
+  const handleCreateFromTemplate = (template: AgentTemplate) => {
     createMutation.mutate({
       name: template.name,
       description: template.description,
       type: template.type,
-      system_prompt: template.systemPrompt
+      system_prompt: template.system_prompt
     })
   }
 
@@ -198,12 +159,12 @@ const AgentWorkspace: React.FC = () => {
   }
 
   const getAgentIcon = (type: string) => {
-    const template = AGENT_TEMPLATES.find(t => t.type === type)
+    const template = agentTemplates?.find(t => t.type === type)
     return template?.icon || '🤖'
   }
 
   const getAgentColor = (type: string) => {
-    const template = AGENT_TEMPLATES.find(t => t.type === type)
+    const template = agentTemplates?.find(t => t.type === type)
     return template?.color || '#569cd6'
   }
 
@@ -654,53 +615,59 @@ const AgentWorkspace: React.FC = () => {
         </DialogTitle>
         <DialogContent sx={{ bgcolor: '#1e1e1e', pt: 3 }}>
           <Grid container spacing={2}>
-            {AGENT_TEMPLATES.map((template) => (
-              <Grid item xs={12} sm={6} key={template.id}>
-                <Card
-                  sx={{
-                    bgcolor: '#252526',
-                    border: '1px solid #2d2d30',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    '&:hover': {
-                      borderColor: template.color,
-                      transform: 'translateY(-2px)',
-                      boxShadow: `0 4px 12px ${template.color}40`,
-                    }
-                  }}
-                  onClick={() => handleCreateFromTemplate(template)}
-                >
-                  <CardContent>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                      <Avatar
-                        sx={{
-                          bgcolor: `${template.color}20`,
-                          color: template.color,
-                          fontSize: '24px'
-                        }}
-                      >
-                        {template.icon}
-                      </Avatar>
-                      <Typography variant="h6" sx={{ color: '#cccccc' }}>
-                        {template.name}
+            {templatesLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', width: '100%', mt: 4 }}>
+                <CircularProgress />
+              </Box>
+            ) : (
+              agentTemplates?.map((template) => (
+                <Grid item xs={12} sm={6} key={template.id}>
+                  <Card
+                    sx={{
+                      bgcolor: '#252526',
+                      border: '1px solid #2d2d30',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      '&:hover': {
+                        borderColor: template.color,
+                        transform: 'translateY(-2px)',
+                        boxShadow: `0 4px 12px ${template.color}40`,
+                      }
+                    }}
+                    onClick={() => handleCreateFromTemplate(template)}
+                  >
+                    <CardContent>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                        <Avatar
+                          sx={{
+                            bgcolor: `${template.color}20`,
+                            color: template.color,
+                            fontSize: '24px'
+                          }}
+                        >
+                          {template.icon}
+                        </Avatar>
+                        <Typography variant="h6" sx={{ color: '#cccccc' }}>
+                          {template.name}
+                        </Typography>
+                      </Box>
+                      <Typography variant="body2" sx={{ color: '#969696', mb: 1 }}>
+                        {template.description}
                       </Typography>
-                    </Box>
-                    <Typography variant="body2" sx={{ color: '#969696', mb: 1 }}>
-                      {template.description}
-                    </Typography>
-                    <Chip
-                      label={template.type}
-                      size="small"
-                      sx={{
-                        fontSize: '10px',
-                        backgroundColor: `${template.color}20`,
-                        color: template.color,
-                      }}
-                    />
-                  </CardContent>
-                </Card>
-              </Grid>
-            ))}
+                      <Chip
+                        label={template.type}
+                        size="small"
+                        sx={{
+                          fontSize: '10px',
+                          backgroundColor: `${template.color}20`,
+                          color: template.color,
+                        }}
+                      />
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))
+            )}
           </Grid>
         </DialogContent>
         <DialogActions sx={{ bgcolor: '#252526' }}>

@@ -32,7 +32,7 @@ def get_tool_registry_service(
     return ToolRegistryService(session)
 
 
-@router.post("/", response_model=ToolResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ToolResponse, status_code=status.HTTP_201_CREATED)
 async def create_tool(
     tool_request: ToolRequest,
     current_user: User = Depends(get_current_user),
@@ -52,7 +52,7 @@ async def create_tool(
         raise HTTPException(status_code=500, detail="Failed to create tool")
 
 
-@router.get("/", response_model=List[ToolResponse])
+@router.get("", response_model=List[ToolResponse])
 async def list_tools(
     tool_type: Optional[ToolType] = Query(None),
     status: Optional[ToolStatus] = Query(None),

@@ -52,6 +52,12 @@ const AgentDetailWorkspace: React.FC = () => {
     const [model, setModel] = useState('gpt-4')
     const [temperature, setTemperature] = useState(0.7)
     const [maxTokens, setMaxTokens] = useState(2000)
+    const [capabilities, setCapabilities] = useState({
+        context_memory_enabled: true,
+        knowledge_base_retrieval: true,
+        internet_search_access: false,
+        code_interpreter: true,
+    })
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' })
 
@@ -73,6 +79,12 @@ const AgentDetailWorkspace: React.FC = () => {
                 setModel(data.config?.model || 'gpt-4')
                 setTemperature(data.config?.temperature || 0.7)
                 setMaxTokens(data.config?.max_tokens || 2000)
+                setCapabilities(data.config?.capabilities || {
+                    context_memory_enabled: true,
+                    knowledge_base_retrieval: true,
+                    internet_search_access: false,
+                    code_interpreter: true,
+                })
             }
         }
     )
@@ -101,7 +113,8 @@ const AgentDetailWorkspace: React.FC = () => {
                 ...agent?.config,
                 model,
                 temperature,
-                max_tokens: maxTokens
+                max_tokens: maxTokens,
+                capabilities,
             }
         })
     }
@@ -109,6 +122,7 @@ const AgentDetailWorkspace: React.FC = () => {
     const scrollToBottom = () => {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
+
 
     useEffect(() => {
         scrollToBottom()
@@ -391,23 +405,24 @@ const AgentDetailWorkspace: React.FC = () => {
                                         <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>Performance</Typography>
                                     </Box>
 
-                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <Typography variant="body2" sx={{ color: '#969696' }}>Total Executions</Typography>
-                                            <Typography variant="h5" sx={{ fontWeight: 700 }}>12</Typography>
-                                        </Box>
-                                        <Divider sx={{ borderColor: 'rgba(255, 255, 255, 0.05)' }} />
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <Typography variant="body2" sx={{ color: '#969696' }}>Avg. Response Time</Typography>
-                                            <Typography variant="h5" sx={{ fontWeight: 700, color: '#4caf50' }}>1.2s</Typography>
-                                        </Box>
-                                        <Divider sx={{ borderColor: 'rgba(255, 255, 255, 0.05)' }} />
-                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <Typography variant="body2" sx={{ color: '#969696' }}>Success Rate</Typography>
-                                            <Typography variant="h5" sx={{ fontWeight: 700, color: '#007acc' }}>98%</Typography>
-                                        </Box>
-                                    </Box>
-
+                                                                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                                <Typography variant="body2" sx={{ color: '#969696' }}>Total Executions</Typography>
+                                                                                <Typography variant="h5" sx={{ fontWeight: 700 }}>{agent.execution_count}</Typography>
+                                                                            </Box>
+                                                                            <Divider sx={{ borderColor: 'rgba(255, 255, 255, 0.05)' }} />
+                                                                            {/* TODO: Implement avg response time */}
+                                                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                                <Typography variant="body2" sx={{ color: '#969696' }}>Avg. Response Time</Typography>
+                                                                                <Typography variant="h5" sx={{ fontWeight: 700, color: '#4caf50' }}>1.2s</Typography>
+                                                                            </Box>
+                                                                            <Divider sx={{ borderColor: 'rgba(255, 255, 255, 0.05)' }} />
+                                                                            {/* TODO: Implement success rate */}
+                                                                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                                <Typography variant="body2" sx={{ color: '#969696' }}>Success Rate</Typography>
+                                                                                <Typography variant="h5" sx={{ fontWeight: 700, color: '#007acc' }}>98%</Typography>
+                                                                            </Box>
+                                                                        </Box>
                                     <Button
                                         fullWidth
                                         variant="outlined"
@@ -434,8 +449,14 @@ const AgentDetailWorkspace: React.FC = () => {
                                 </Tooltip>
                             </Box>
                             <Box sx={{ display: 'flex', gap: 1 }}>
-                                <Button size="small" variant="text" startIcon={<ContentCopy />} sx={{ color: '#888', textTransform: 'none' }}>Copy</Button>
-                                <Button size="small" variant="text" startIcon={<Refresh />} sx={{ color: '#888', textTransform: 'none' }}>Revert</Button>
+                                <Button size="small" variant="text" startIcon={<ContentCopy />} sx={{ color: '#888', textTransform: 'none' }} onClick={() => {
+                                    navigator.clipboard.writeText(systemPrompt)
+                                    setSnackbar({ open: true, message: 'Copied to clipboard', severity: 'success' })
+                                }}>Copy</Button>
+                                <Button size="small" variant="text" startIcon={<Refresh />} sx={{ color: '#888', textTransform: 'none' }} onClick={() => {
+                                    setSystemPrompt(agent.system_prompt || '')
+                                    setSnackbar({ open: true, message: 'Reverted to original prompt', severity: 'success' })
+                                }}>Revert</Button>
                             </Box>
                         </Box>
                         <Box sx={{
@@ -644,19 +665,19 @@ const AgentDetailWorkspace: React.FC = () => {
 
                             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                                 <FormControlLabel
-                                    control={<Switch checked={true} sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: '#007acc' } }} />}
+                                    control={<Switch checked={capabilities.context_memory_enabled} onChange={(e) => { setCapabilities({ ...capabilities, context_memory_enabled: e.target.checked }); setHasUnsavedChanges(true) }} sx={{ '& .MuiSwitch-switchBase.Mui-checked': { color: '#007acc' } }} />}
                                     label={<Typography variant="body2">Context Memory Enabled</Typography>}
                                 />
                                 <FormControlLabel
-                                    control={<Switch checked={true} />}
+                                    control={<Switch checked={capabilities.knowledge_base_retrieval} onChange={(e) => { setCapabilities({ ...capabilities, knowledge_base_retrieval: e.target.checked }); setHasUnsavedChanges(true) }} />}
                                     label={<Typography variant="body2">Knowledge Base Retrieval (RAG)</Typography>}
                                 />
                                 <FormControlLabel
-                                    control={<Switch checked={false} />}
+                                    control={<Switch checked={capabilities.internet_search_access} onChange={(e) => { setCapabilities({ ...capabilities, internet_search_access: e.target.checked }); setHasUnsavedChanges(true) }} />}
                                     label={<Typography variant="body2">Internet Search Access</Typography>}
                                 />
                                 <FormControlLabel
-                                    control={<Switch checked={true} />}
+                                    control={<Switch checked={capabilities.code_interpreter} onChange={(e) => { setCapabilities({ ...capabilities, code_interpreter: e.target.checked }); setHasUnsavedChanges(true) }} />}
                                     label={<Typography variant="body2">Code Interpreter</Typography>}
                                 />
                             </Box>
