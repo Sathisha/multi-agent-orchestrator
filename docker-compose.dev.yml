@@ -29,8 +29,12 @@ services:
     ports:
       - "5432:5432"
     # Use tmpfs for faster database operations in development
-    tmpfs:
-      - /var/lib/postgresql/data:noexec,nosuid,size=1g
+    volumes:
+      - type: tmpfs
+        target: /var/lib/postgresql/data
+        tmpfs:
+          size: 1000000000
+      - ./infrastructure/docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     
   # Redis with development-specific settings
   redis:
@@ -39,6 +43,24 @@ services:
       - "6379:6379"
     # Disable persistence for faster startup in development
     command: redis-server --save "" --appendonly no
+
+  # Development frontend service (for hot reload)
+  frontend-dev:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: ai-agent-framework-frontend-dev
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+    networks:
+      - ai-agent-network
+    restart: unless-stopped
 
 volumes:
   chroma_data:

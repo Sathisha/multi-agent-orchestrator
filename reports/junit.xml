@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest" errors="1" failures="0" skipped="0" tests="1" time="3.562" timestamp="2026-01-01T10:26:24.411030" hostname="docker-desktop"><testcase classname="" name="tests.properties.test_agent_templates" time="0.000"><error message="collection failure">/usr/local/lib/python3.11/site-packages/_pytest/runner.py:341: in from_call
+    result: Optional[TResult] = func()
+        cls        = &lt;class '_pytest.runner.CallInfo'&gt;
+        duration   = 0.06294026500108885
+        excinfo    = &lt;ExceptionInfo 3 validation errors for AgentTemplate
+agent_type
+  Field required [type=missing, input_value={'id': 'ch...enabled': True}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.5/v/missing tblen=18&gt;
+        func       = &lt;function pytest_make_collect_report.&lt;locals&gt;.&lt;lambda&gt; at 0x75232e773b00&gt;
+        precise_start = 19524.65365643
+        precise_stop = 19524.716596695
+        reraise    = None
+        result     = None
+        start      = 1767263185.9002542
+        stop       = 1767263185.9631963
+        when       = 'collect'
+/usr/local/lib/python3.11/site-packages/_pytest/runner.py:372: in &lt;lambda&gt;
+    call = CallInfo.from_call(lambda: list(collector.collect()), "collect")
+        collector  = &lt;Module test_agent_templates.py&gt;
+/usr/local/lib/python3.11/site-packages/_pytest/python.py:531: in collect
+    self._inject_setup_module_fixture()
+        __class__  = &lt;class '_pytest.python.Module'&gt;
+        self       = &lt;Module test_agent_templates.py&gt;
+/usr/local/lib/python3.11/site-packages/_pytest/python.py:545: in _inject_setup_module_fixture
+    self.obj, ("setUpModule", "setup_module")
+        has_nose   = True
+        self       = &lt;Module test_agent_templates.py&gt;
+/usr/local/lib/python3.11/site-packages/_pytest/python.py:310: in obj
+    self._obj = obj = self._getobj()
+        obj        = None
+        self       = &lt;Module test_agent_templates.py&gt;
+/usr/local/lib/python3.11/site-packages/_pytest/python.py:528: in _getobj
+    return self._importtestmodule()
+        self       = &lt;Module test_agent_templates.py&gt;
+/usr/local/lib/python3.11/site-packages/_pytest/python.py:617: in _importtestmodule
+    mod = import_path(self.path, mode=importmode, root=self.config.rootpath)
+        importmode = 'prepend'
+        self       = &lt;Module test_agent_templates.py&gt;
+/usr/local/lib/python3.11/site-packages/_pytest/pathlib.py:567: in import_path
+    importlib.import_module(module_name)
+        mode       = &lt;ImportMode.prepend: 'prepend'&gt;
+        module_name = 'tests.properties.test_agent_templates'
+        names      = ['tests', 'properties', 'test_agent_templates']
+        p          = PosixPath('/app/backend/tests/properties/test_agent_templates.py')
+        path       = PosixPath('/app/backend/tests/properties/test_agent_templates.py')
+        pkg_path   = PosixPath('/app/backend/tests')
+        pkg_root   = PosixPath('/app/backend')
+        root       = PosixPath('/app/backend')
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+        level      = 0
+        name       = 'tests.properties.test_agent_templates'
+        package    = None
+&lt;frozen importlib._bootstrap&gt;:1204: in _gcd_import
+    ???
+        level      = 0
+        name       = 'tests.properties.test_agent_templates'
+        package    = None
+&lt;frozen importlib._bootstrap&gt;:1176: in _find_and_load
+    ???
+        import_    = &lt;function _gcd_import at 0x7524ae107d80&gt;
+        module     = &lt;object object at 0x7524ae13c050&gt;
+        name       = 'tests.properties.test_agent_templates'
+&lt;frozen importlib._bootstrap&gt;:1147: in _find_and_load_unlocked
+    ???
+        child      = 'test_agent_templates'
+        import_    = &lt;function _gcd_import at 0x7524ae107d80&gt;
+        name       = 'tests.properties.test_agent_templates'
+        parent     = 'tests.properties'
+        parent_module = &lt;module 'tests.properties' from '/app/backend/tests/properties/__init__.py'&gt;
+        parent_spec = ModuleSpec(name='tests.properties', loader=&lt;_frozen_importlib_external.SourceFileLoader object at 0x75232e19fe10&gt;, origin='/app/backend/tests/properties/__init__.py', submodule_search_locations=['/app/backend/tests/properties'])
+        path       = ['/app/backend/tests/properties']
+        spec       = ModuleSpec(name='tests.properties.test_agent_templates', loader=&lt;_pytest.assertion.rewrite.AssertionRewritingHook object at 0x7524ad3d9b90&gt;, origin='/app/backend/tests/properties/test_agent_templates.py')
+&lt;frozen importlib._bootstrap&gt;:690: in _load_unlocked
+    ???
+        module     = &lt;module 'tests.properties.test_agent_templates' from '/app/backend/tests/properties/test_agent_templates.py'&gt;
+        spec       = ModuleSpec(name='tests.properties.test_agent_templates', loader=&lt;_pytest.assertion.rewrite.AssertionRewritingHook object at 0x7524ad3d9b90&gt;, origin='/app/backend/tests/properties/test_agent_templates.py')
+/usr/local/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:186: in exec_module
+    exec(co, module.__dict__)
+        cache_dir  = PosixPath('/app/backend/tests/properties/__pycache__')
+        cache_name = 'test_agent_templates.cpython-311-pytest-7.4.3.pyc'
+        co         = &lt;code object &lt;module&gt; at 0x75232e0ff6e0, file "/app/tests/properties/test_agent_templates.py", line 1&gt;
+        fn         = PosixPath('/app/backend/tests/properties/test_agent_templates.py')
+        module     = &lt;module 'tests.properties.test_agent_templates' from '/app/backend/tests/properties/test_agent_templates.py'&gt;
+        ok         = True
+        pyc        = PosixPath('/app/backend/tests/properties/__pycache__/test_agent_templates.cpython-311-pytest-7.4.3.pyc')
+        self       = &lt;_pytest.assertion.rewrite.AssertionRewritingHook object at 0x7524ad3d9b90&gt;
+        state      = &lt;_pytest.assertion.AssertionState object at 0x7524ad3e2150&gt;
+        write      = True
+/app/tests/properties/test_agent_templates.py:13: in &lt;module&gt;
+    ???
+        AgentConfig = &lt;class 'shared.models.agent.AgentConfig'&gt;
+        AgentTemplate = &lt;class 'shared.models.agent.AgentTemplate'&gt;
+        AgentType  = &lt;enum 'AgentType'&gt;
+        Any        = typing.Any
+        Dict       = typing.Dict
+        LLMProvider = &lt;enum 'LLMProvider'&gt;
+        __builtins__ = &lt;builtins&gt;
+        __cached__ = '/app/backend/tests/properties/__pycache__/test_agent_templates.cpython-311.pyc'
+        __doc__    = '\nProperty-based tests for agent template configuration completeness.\n\n**Feature: ai-agent-framework, Property 1: Template Configuration Completeness**\n**Validates: Requirements 1.2**\n'
+        __file__   = '/app/backend/tests/properties/test_agent_templates.py'
+        __loader__ = &lt;_pytest.assertion.rewrite.AssertionRewritingHook object at 0x7524ad3d9b90&gt;
+        __name__   = 'tests.properties.test_agent_templates'
+        __package__ = 'tests.properties'
+        __spec__   = ModuleSpec(name='tests.properties.test_agent_templates', loader=&lt;_pytest.assertion.rewrite.AssertionRewritingHook object at 0x7524ad3d9b90&gt;, origin='/app/backend/tests/properties/test_agent_templates.py')
+        assume     = &lt;function assume at 0x75232e4a2f20&gt;
+        given      = &lt;function given at 0x75232e0f8360&gt;
+        pytest     = &lt;module 'pytest' from '/usr/local/lib/python3.11/site-packages/pytest/__init__.py'&gt;
+        st         = &lt;module 'hypothesis.strategies' from '/usr/local/lib/python3.11/site-packages/hypothesis/strategies/__init__.py'&gt;
+shared/services/agent_templates.py:8: in &lt;module&gt;
+    class AgentTemplateService:
+        AgentConfig = &lt;class 'shared.models.agent.AgentConfig'&gt;
+        AgentTemplate = &lt;class 'shared.models.agent.AgentTemplate'&gt;
+        AgentType  = &lt;enum 'AgentType'&gt;
+        Dict       = typing.Dict
+        LLMProvider = &lt;enum 'LLMProvider'&gt;
+        List       = typing.List
+        Optional   = typing.Optional
+        __builtins__ = &lt;builtins&gt;
+        __cached__ = '/app/backend/shared/services/__pycache__/agent_templates.cpython-311.pyc'
+        __doc__    = 'Agent template service for managing pre-built agent configurations.'
+        __file__   = '/app/backend/shared/services/agent_templates.py'
+        __loader__ = &lt;_frozen_importlib_external.SourceFileLoader object at 0x75232e1ac790&gt;
+        __name__   = 'shared.services.agent_templates'
+        __package__ = 'shared.services'
+        __spec__   = ModuleSpec(name='shared.services.agent_templates', loader=&lt;_frozen_importlib_external.SourceFileLoader object at 0x75232e1ac790&gt;, origin='/app/backend/shared/services/agent_templates.py')
+shared/services/agent_templates.py:13: in AgentTemplateService
+    "chatbot-basic": AgentTemplate(
+E   pydantic_core._pydantic_core.ValidationError: 3 validation errors for AgentTemplate
+E   agent_type
+E     Field required [type=missing, input_value={'id': 'chatbot-basic', '..., 'guardrails_enabled']}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.5/v/missing
+E   default_config.name
+E     Field required [type=missing, input_value={'llm_provider': 'ollama'...ardrails_enabled': True}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.5/v/missing
+E   default_config.model
+E     Field required [type=missing, input_value={'llm_provider': 'ollama'...ardrails_enabled': True}, input_type=dict]
+E       For further information visit https://errors.pydantic.dev/2.5/v/missing
+        __annotations__ = {}
+        __doc__    = 'Service for managing agent templates and their default configurations.'
+        __module__ = 'shared.services.agent_templates'
+        __qualname__ = 'AgentTemplateService'</error></testcase></testsuite></testsuites>

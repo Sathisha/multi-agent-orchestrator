@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..database import get_database_session
+from ..database import get_async_db
 from ..middleware.tenant import get_tenant_context, TenantContext
 # Temporarily commented out to fix import issues
 # from ..services.memory_manager import (
@@ -97,7 +97,7 @@ router = APIRouter(prefix="/api/v1/memory", tags=["Memory Management"])
 @router.post("/store", response_model=MemoryResponse)
 async def store_memory(
     request: StoreMemoryRequest,
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     tenant_context: TenantContext = Depends(get_tenant_context)
 ):
     """
@@ -153,7 +153,7 @@ async def store_memory(
 @router.post("/search", response_model=List[SearchResultResponse])
 async def search_memories(
     request: MemorySearchRequest,
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     tenant_context: TenantContext = Depends(get_tenant_context)
 ):
     """
@@ -199,7 +199,7 @@ async def get_conversation_history(
     agent_id: str,
     session_id: str,
     limit: Optional[int] = Query(50, ge=1, le=200, description="Maximum messages to return"),
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     tenant_context: TenantContext = Depends(get_tenant_context)
 ):
     """
@@ -241,7 +241,7 @@ async def get_conversation_history(
 async def get_user_preferences(
     agent_id: str,
     user_id: Optional[str] = Query(None, description="Filter by specific user"),
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     tenant_context: TenantContext = Depends(get_tenant_context)
 ):
     """
@@ -281,7 +281,7 @@ async def get_user_preferences(
 @router.post("/manage-capacity/{agent_id}")
 async def manage_memory_capacity(
     agent_id: str,
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     tenant_context: TenantContext = Depends(get_tenant_context)
 ):
     """
@@ -307,7 +307,7 @@ async def manage_memory_capacity(
 
 @router.post("/cleanup-expired")
 async def cleanup_expired_memories(
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     tenant_context: TenantContext = Depends(get_tenant_context)
 ):
     """
@@ -334,7 +334,7 @@ async def cleanup_expired_memories(
 @router.get("/statistics", response_model=MemoryStatisticsResponse)
 async def get_memory_statistics(
     agent_id: Optional[str] = Query(None, description="Filter by specific agent"),
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     tenant_context: TenantContext = Depends(get_tenant_context)
 ):
     """

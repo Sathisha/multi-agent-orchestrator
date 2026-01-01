@@ -8,20 +8,23 @@ help:
 	@echo "======================================"
 	@echo ""
 	@echo "Setup & Infrastructure:"
-	@echo "  setup       - Set up development environment with auto DB recreation"
-	@echo "  build       - Build Docker images"
-	@echo "  start       - Start core services (postgres, redis)"
-	@echo "  start-dev   - Start development environment with auto DB recreation"
-	@echo "  start-prod  - Start production-like environment (no DB recreation)"
-	@echo "  start-all   - Start all services"
-	@echo "  start-all-dev - Start all services in development mode"
-	@echo "  api         - Start API server in development mode"
-	@echo "  api-prod    - Start API server in production mode"
-	@echo "  stop        - Stop all services"
-	@echo "  clean       - Clean up containers and volumes"
+	@echo "  setup            - Set up development environment with auto DB recreation"
+	@echo "  build            - Build Docker images"
+	@echo "  build-backend    - Build backend Docker image"
+	@echo "  build-frontend   - Build frontend Docker image"
+	@echo "  start            - Start all services (equivalent to 'docker-compose up -d')"
+	@echo "  start-dev        - Start development environment with auto DB recreation (frontend and backend)"
+	@echo "  start-prod       - Start production-like environment (no DB recreation)"
+	@echo "  start-all-dev    - Start all services in development mode"
+	@echo "  restart-backend  - Restart backend service"
+	@echo "  restart-frontend - Restart frontend service"
+	@echo "  api              - Start API server in development mode"
+	@echo "  api-prod         - Start API server in production mode"
+	@echo "  stop             - Stop all services"
+	@echo "  clean            - Clean up containers and volumes"
 	@echo ""
 	@echo "Testing (run in existing development containers):"
-	@echo "  NOTE: Ensure development containers are running with 'make start'"
+	@echo "  NOTE: Ensure development containers are running with 'make start' or 'make start-dev'"
 	@echo "  test            - Run all tests"
 	@echo "  test-v          - Run all tests with verbose output"
 	@echo "  test-unit       - Run unit tests only"
@@ -44,9 +47,7 @@ help:
 	@echo "  format    - Format code with black and isort"
 	@echo "  lint      - Lint code with flake8 and mypy"
 	@echo ""
-	@echo "Database (now automated):"
-	@echo "  init-db     - Manual database initialization (automated in containers)"
-	@echo "  recreate-db - Manual database recreation (automated in dev mode)"
+	@echo "Database (manual operations - usually automated):"
 	@echo "  force-recreate-db - Force database recreation"
 	@echo ""
 	@echo "Utilities:"
@@ -67,19 +68,37 @@ build:
 	@echo "🔨 Building Docker images..."
 	@docker-compose build
 
-# Start core development services with database auto-initialization
+# Build backend image
+build-backend:
+	@echo "🔨 Building backend Docker image..."
+	@docker-compose build backend
+
+# Build frontend image
+build-frontend:
+	@echo "🔨 Building frontend Docker image..."
+	@docker-compose build frontend
+
+# Restart backend service
+restart-backend:
+	@echo "🔄 Restarting backend service..."
+	@docker-compose restart backend
+
+# Restart frontend service
+restart-frontend:
+	@echo "🔄 Restarting frontend service..."
+	@docker-compose restart frontend
+
+# Start all services
 start:
-	@echo "🚀 Starting core services (postgres, redis)..."
-	@docker-compose up -d postgres redis
-	@echo "⏳ Waiting for services to be ready..."
-	@sleep 10
+	@echo "🚀 Starting all services..."
+	@docker-compose up -d
 
 # Start development environment with auto database recreation
 start-dev:
 	@echo "🚀 Starting development environment with database auto-initialization..."
 	@docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres redis
 	@echo "⏳ Waiting for database to be ready..."
-	@sleep 10
+	@timeout 10
 	@echo "🔄 Starting backend with automatic database recreation..."
 	@docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d backend
 

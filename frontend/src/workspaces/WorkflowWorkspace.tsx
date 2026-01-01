@@ -131,7 +131,10 @@ const WorkflowWorkspace: React.FC = () => {
           <Grid container spacing={2}>
             {workflows?.map((wf) => (
               <Grid item xs={12} md={4} key={wf.id}>
-                <Card sx={{ bgcolor: '#252526', border: '1px solid #2d2d30' }}>
+                <Card
+                  sx={{ bgcolor: '#252526', border: '1px solid #2d2d30', cursor: 'pointer', '&:hover': { borderColor: '#007acc' } }}
+                  onClick={() => navigate(`/workflows/${wf.id}`)}
+                >
                   <CardContent>
                     <Typography variant="subtitle1" color="#cccccc">{wf.name}</Typography>
                     <Typography variant="body2" color="#969696" noWrap>{wf.description || 'No description'}</Typography>

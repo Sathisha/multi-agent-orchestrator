@@ -1,11 +1,12 @@
 import React from 'react'
 import { Box, Typography, IconButton, Chip } from '@mui/material'
-import { 
+import {
   Terminal as TerminalIcon,
   CheckCircle as CheckIcon,
   Error as ErrorIcon,
   Warning as WarningIcon,
 } from '@mui/icons-material'
+import UserMenu from './UserMenu'
 
 interface StatusBarProps {
   onToggleTerminal: () => void
@@ -33,7 +34,7 @@ const StatusBar: React.FC<StatusBarProps> = ({ onToggleTerminal, terminalOpen })
             Backend Connected
           </Typography>
         </Box>
-        
+
         <Chip
           label="0 Agents Running"
           size="small"
@@ -58,7 +59,7 @@ const StatusBar: React.FC<StatusBarProps> = ({ onToggleTerminal, terminalOpen })
             0
           </Typography>
         </Box>
-        
+
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
           <WarningIcon sx={{ fontSize: 14, color: '#ffffff' }} />
           <Typography variant="caption" sx={{ color: '#ffffff', fontSize: '11px' }}>
@@ -87,6 +88,9 @@ const StatusBar: React.FC<StatusBarProps> = ({ onToggleTerminal, terminalOpen })
         <Typography variant="caption" sx={{ color: '#ffffff', fontSize: '11px' }}>
           Development
         </Typography>
+
+        {/* User Menu */}
+        <UserMenu />
       </Box>
     </Box>
   )

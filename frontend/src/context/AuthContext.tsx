@@ -19,16 +19,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     useEffect(() => {
         const initAuth = async () => {
             const token = localStorage.getItem('token')
+            console.log('[AuthContext] Initializing auth, token:', token ? 'exists' : 'none')
             if (token) {
                 try {
                     const userData = await getCurrentUser()
+                    console.log('[AuthContext] User loaded:', userData.email)
                     setUser(userData)
                 } catch (error) {
-                    console.error('Failed to fetch user', error)
+                    console.error('[AuthContext] Failed to fetch user', error)
                     localStorage.removeItem('token')
+                    localStorage.removeItem('refreshToken')
                 }
             }
             setIsLoading(false)
+            console.log('[AuthContext] Auth initialized, isAuthenticated:', !!token)
         }
         initAuth()
     }, [])

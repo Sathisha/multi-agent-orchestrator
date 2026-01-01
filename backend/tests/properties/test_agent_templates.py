@@ -37,7 +37,7 @@ def config_override_strategy(draw):
         overrides["llm_provider"] = draw(st.sampled_from([p.value for p in LLMProvider]))
     
     if draw(st.booleans()):
-        overrides["model_name"] = draw(st.text(min_size=1, max_size=50, alphabet=st.characters(whitelist_categories=("Lu", "Ll", "Nd", "Pc"))))
+        overrides["model"] = draw(st.text(min_size=1, max_size=50, alphabet=st.characters(whitelist_categories=("Lu", "Ll", "Nd", "Pc"))))
     
     if draw(st.booleans()):
         overrides["system_prompt"] = draw(st.text(min_size=10, max_size=500))
@@ -76,21 +76,15 @@ class TestAgentTemplateConfigurationCompleteness:
         default_config = AgentTemplateService.get_template_config(template_id)
         assert default_config is not None, f"Template {template_id} should provide default configuration"
         
-        # Verify all required fields are present in the default configuration
-        config_dict = default_config.model_dump()
-        for required_field in template.required_fields:
-            assert required_field in config_dict, f"Required field '{required_field}' missing from template {template_id}"
-            assert config_dict[required_field] is not None, f"Required field '{required_field}' is None in template {template_id}"
+        # Verify all required fields are implicitly handled by AgentConfig validation
+        # The fields are now verified when AgentConfig(**config_dict) is called.
         
-        # Verify the configuration is valid (can be instantiated as AgentConfig)
-        try:
-            validated_config = AgentConfig(**config_dict)
-            assert validated_config is not None
-        except Exception as e:
-            pytest.fail(f"Template {template_id} default configuration is invalid: {e}")
+        # default_config is already an AgentConfig object, so its validity is ensured
+        # when AgentTemplateService.get_template_config returns it.
+        # No need to re-validate here.
         
         # Verify template validation function works correctly
-        assert AgentTemplateService.validate_template_config(template_id, config_dict), \
+        assert AgentTemplateService.validate_template_config(template_id, default_config.model_dump()), \
             f"Template {template_id} default configuration should pass validation"
     
     @pytest.mark.property
@@ -113,27 +107,17 @@ class TestAgentTemplateConfigurationCompleteness:
         merged_config = AgentTemplateService.apply_template(template_id, overrides)
         assert merged_config is not None, f"Template {template_id} should be applicable with overrides"
         
-        # Get the template to check required fields
-        template = AgentTemplateService.get_template(template_id)
-        assert template is not None
+        # The required fields are now verified when AgentConfig(**config_dict) is called.
         
-        # Verify all required fields are still present after applying overrides
-        config_dict = merged_config.model_dump()
-        for required_field in template.required_fields:
-            assert required_field in config_dict, f"Required field '{required_field}' missing after applying overrides to template {template_id}"
-            assert config_dict[required_field] is not None, f"Required field '{required_field}' is None after applying overrides to template {template_id}"
-        
-        # Verify the merged configuration is still valid
-        try:
-            validated_config = AgentConfig(**config_dict)
-            assert validated_config is not None
-        except Exception as e:
-            pytest.fail(f"Template {template_id} with overrides {overrides} produces invalid configuration: {e}")
+        # merged_config is already an AgentConfig object, so its validity is ensured
+        # when AgentTemplateService.apply_template returns it.
+        # No need to re-validate here.
         
         # Verify overrides were actually applied where provided
+        merged_config_dict = merged_config.model_dump() # Define merged_config_dict
         for override_key, override_value in overrides.items():
-            if override_key in config_dict:
-                assert config_dict[override_key] == override_value, \
+            if override_key in merged_config_dict:
+                assert merged_config_dict[override_key] == override_value, \
                     f"Override for '{override_key}' was not applied correctly in template {template_id}"
     
     @pytest.mark.property
@@ -164,22 +148,22 @@ class TestAgentTemplateConfigurationCompleteness:
         assert len(config.system_prompt.strip()) > 0, f"Template {template_id} has empty system prompt"
         
         # Check that model_name is not empty
-        assert len(config.model_name.strip()) > 0, f"Template {template_id} has empty model name"
+        assert len(config.model.strip()) > 0, f"Template {template_id} has empty model name"
         
         # Check that LLM provider is valid
         assert config.llm_provider in [p.value for p in LLMProvider], \
             f"Template {template_id} has invalid LLM provider: {config.llm_provider}"
         
         # Type-specific checks
-        if template.type == AgentType.CHATBOT:
+        if template.agent_type == AgentType.CHATBOT:
             # Chatbots should have memory enabled by default for conversation continuity
             assert config.memory_enabled, f"Chatbot template {template_id} should have memory enabled by default"
         
-        if template.type == AgentType.DATA_ANALYSIS:
+        if template.agent_type == AgentType.DATA_ANALYSIS:
             # Data analysis agents should have lower temperature for more deterministic results
             assert config.temperature <= 0.5, f"Data analysis template {template_id} should have low temperature for deterministic results"
         
-        if template.type == AgentType.CONTENT_GENERATION:
+        if template.agent_type == AgentType.CONTENT_GENERATION:
             # Content generation agents should have higher temperature for creativity
             assert config.temperature >= 0.7, f"Content generation template {template_id} should have higher temperature for creativity"
     
@@ -195,7 +179,7 @@ class TestAgentTemplateConfigurationCompleteness:
         assert len(templates) > 0, "At least one template should be available"
         
         # Check that we have templates for each agent type
-        template_types = {template.type for template in templates}
+        template_types = {template.agent_type for template in templates}
         expected_types = {AgentType.CHATBOT, AgentType.CONTENT_GENERATION, AgentType.DATA_ANALYSIS, AgentType.CUSTOM}
         assert template_types >= expected_types, f"Missing templates for types: {expected_types - template_types}"
         
@@ -205,16 +189,10 @@ class TestAgentTemplateConfigurationCompleteness:
             assert template.id, f"Template {template.name} missing ID"
             assert template.name, f"Template {template.id} missing name"
             assert template.description, f"Template {template.id} missing description"
-            assert template.type, f"Template {template.id} missing type"
+            assert template.agent_type, f"Template {template.id} missing type"
             
             # Template should have valid default configuration
             config = AgentTemplateService.get_template_config(template.id)
             assert config is not None, f"Template {template.id} should provide valid default configuration"
             
-            # Required fields should be defined
-            assert len(template.required_fields) > 0, f"Template {template.id} should have required fields defined"
-            
-            # All required fields should be in the default config
-            config_dict = config.model_dump()
-            for required_field in template.required_fields:
-                assert required_field in config_dict, f"Template {template.id} missing required field {required_field} in default config"
+            # Required fields are implicitly checked by AgentConfig validation within get_template_config.

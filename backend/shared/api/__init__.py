@@ -15,7 +15,7 @@ from .agent import router as agent_router
 # from .agent_versioning import router as agent_versioning_router
 from .agent_executor import router as agent_executor_router
 from .workflow_orchestrator import router as workflow_orchestrator_router
-# from .tool_registry import router as tool_registry_router
+from .tool_registry import router as tool_registry_router
 # from .mcp_gateway import router as mcp_gateway_router
 # Temporarily commented out to fix import issues
 # from .llm_providers import router as llm_providers_router
@@ -28,8 +28,8 @@ from .audit import router as audit_router
 api_router = APIRouter()
 
 # Include all sub-routers
-# api_router.include_router(auth_router)
-# api_router.include_router(api_keys_router)
+api_router.include_router(auth_router)
+api_router.include_router(api_keys_router)
 # Temporarily commented out - complex multi-tenant features (low priority per user)
 # api_router.include_router(tenant_admin_router)
 # api_router.include_router(compliance_router)
@@ -38,7 +38,7 @@ api_router.include_router(agent_router)
 # api_router.include_router(agent_versioning_router)
 api_router.include_router(agent_executor_router)
 api_router.include_router(workflow_orchestrator_router)
-# api_router.include_router(tool_registry_router)
+api_router.include_router(tool_registry_router)
 # api_router.include_router(mcp_gateway_router)
 # Temporarily commented out to fix import issues
 # api_router.include_router(llm_providers_router)

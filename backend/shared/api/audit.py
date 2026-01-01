@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from ..database import get_database_session
+from ..database import get_async_db
 from ..middleware.security import get_current_user, require_permissions
 from ..models.audit import (
     AuditLogRequest, AuditLogResponse,
@@ -85,7 +85,7 @@ async def get_audit_logs(
     sort_by: str = Query("timestamp", description="Sort field"),
     sort_order: str = Query("desc", description="Sort order: asc or desc"),
     current_user: User = Depends(get_current_user),
-    session = Depends(get_database_session),
+    session = Depends(get_async_db),
     _: None = Depends(require_permissions([StandardPermissions.AUDIT_READ]))
 ):
     """
@@ -155,7 +155,7 @@ async def get_audit_logs(
 async def get_audit_log(
     event_id: str,
     current_user: User = Depends(get_current_user),
-    session = Depends(get_database_session),
+    session = Depends(get_async_db),
     _: None = Depends(require_permissions([StandardPermissions.AUDIT_READ]))
 ):
     """
@@ -210,7 +210,7 @@ async def get_audit_statistics(
     start_date: Optional[datetime] = Query(None, description="Start date for statistics"),
     end_date: Optional[datetime] = Query(None, description="End date for statistics"),
     current_user: User = Depends(get_current_user),
-    session = Depends(get_database_session),
+    session = Depends(get_async_db),
     _: None = Depends(require_permissions([StandardPermissions.AUDIT_READ]))
 ):
     """
@@ -251,7 +251,7 @@ async def generate_compliance_report(
     end_date: datetime,
     report_type: str = "general",
     current_user: User = Depends(get_current_user),
-    session = Depends(get_database_session),
+    session = Depends(get_async_db),
     _: None = Depends(require_permissions([StandardPermissions.AUDIT_EXPORT]))
 ):
     """
@@ -315,7 +315,7 @@ async def export_audit_logs(
     sort_by: str = Query("timestamp", description="Sort field"),
     sort_order: str = Query("desc", description="Sort order: asc or desc"),
     current_user: User = Depends(get_current_user),
-    session = Depends(get_database_session),
+    session = Depends(get_async_db),
     _: None = Depends(require_permissions([StandardPermissions.AUDIT_EXPORT]))
 ):
     """
@@ -400,7 +400,7 @@ async def verify_audit_integrity(
     start_date: Optional[datetime] = Query(None, description="Start date for verification"),
     end_date: Optional[datetime] = Query(None, description="End date for verification"),
     current_user: User = Depends(get_current_user),
-    session = Depends(get_database_session),
+    session = Depends(get_async_db),
     _: None = Depends(require_permissions([StandardPermissions.AUDIT_MANAGE]))
 ):
     """
@@ -426,7 +426,7 @@ async def create_audit_log(
     user_agent: Optional[str] = None,
     session_id: Optional[str] = None,
     current_user: User = Depends(get_current_user),
-    session = Depends(get_database_session),
+    session = Depends(get_async_db),
     _: None = Depends(require_permissions([StandardPermissions.AUDIT_MANAGE]))
 ):
     """

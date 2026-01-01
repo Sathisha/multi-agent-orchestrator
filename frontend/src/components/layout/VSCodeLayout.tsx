@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Box } from '@mui/material'
+import { Outlet } from 'react-router-dom'
 import { Allotment } from 'allotment'
 import 'allotment/dist/style.css'
 import '../../styles/allotment-theme.css'
@@ -9,11 +10,7 @@ import MainEditor from './MainEditor'
 import TerminalPanel from './TerminalPanel'
 import StatusBar from './StatusBar'
 
-interface VSCodeLayoutProps {
-  children: React.ReactNode
-}
-
-const VSCodeLayout: React.FC<VSCodeLayoutProps> = ({ children }) => {
+const VSCodeLayout: React.FC = () => {
   const [activeView, setActiveView] = useState('agents')
   const [sidePanelOpen, setSidePanelOpen] = useState(true)
   const [terminalOpen, setTerminalOpen] = useState(false)
@@ -57,7 +54,7 @@ const VSCodeLayout: React.FC<VSCodeLayoutProps> = ({ children }) => {
                   {/* Main Editor Area */}
                   <Allotment.Pane>
                     <MainEditor>
-                      {children}
+                      <Outlet />
                     </MainEditor>
                   </Allotment.Pane>
                 </Allotment>

@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select, and_, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..database import get_database_session
+from ..database import get_async_db
 from ..services.auth import get_current_user
 from ..models.user import User
 from ..models.workflow import (
@@ -57,7 +57,7 @@ async def shutdown_event():
 @router.post("/", response_model=WorkflowResponse, status_code=status.HTTP_201_CREATED)
 async def create_workflow(
     workflow_request: WorkflowRequest,
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user)
 ):
     workflow_orchestrator = get_workflow_orchestrator_service()
@@ -105,7 +105,7 @@ async def list_workflows(
     category: Optional[str] = Query(None),
     limit: int = 50,
     offset: int = 0,
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user)
 ):
     try:
@@ -135,7 +135,7 @@ async def list_executions(
     status_filter: Optional[ExecutionStatus] = Query(None),
     limit: int = 50,
     offset: int = 0,
-    session: AsyncSession = Depends(get_database_session),
+    session: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user)
 ):
     try:

@@ -16,6 +16,10 @@ class AgentType(str, Enum):
     TASK = "task"
     ROUTER = "router"
     COORDINATOR = "coordinator"
+    CHATBOT = "chatbot"
+    CONTENT_GENERATION = "content_generation"
+    DATA_ANALYSIS = "data_analysis"
+    CUSTOM = "custom"
 
 class AgentStatus(str, Enum):
     DRAFT = "draft"
@@ -40,6 +44,10 @@ class AgentConfig(BaseModel):
     max_tokens: int = 1000
     system_prompt: Optional[str] = None
     tools: List[str] = []
+    llm_provider: Optional[LLMProvider] = None
+    mcp_servers: Optional[List[str]] = []
+    memory_enabled: bool = False
+    guardrails_enabled: bool = False
 
 class Agent(TenantEntity):
     __tablename__ = "agents"

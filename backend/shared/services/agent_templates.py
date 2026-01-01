@@ -14,96 +14,91 @@ class AgentTemplateService:
             id="chatbot-basic",
             name="Basic Chatbot",
             description="A simple conversational chatbot for general Q&A",
-            type=AgentType.CHATBOT,
-            default_config={
-                "llm_provider": LLMProvider.OLLAMA.value,
-                "model_name": "llama2",
-                "system_prompt": "You are a helpful assistant. Answer questions clearly and concisely.",
-                "temperature": 0.7,
-                "max_tokens": 1000,
-                "tools": [],
-                "mcp_servers": [],
-                "memory_enabled": True,
-                "guardrails_enabled": True
-            },
-            required_fields=["llm_provider", "model_name", "system_prompt"],
-            optional_fields=["temperature", "max_tokens", "tools", "mcp_servers", "memory_enabled", "guardrails_enabled"]
+            agent_type=AgentType.CHATBOT,
+            default_config=AgentConfig(
+                name="Basic Chatbot",
+                model="llama2",
+                system_prompt="You are a helpful assistant. Answer questions clearly and concisely.",
+                temperature=0.7,
+                max_tokens=1000,
+                tools=[],
+                llm_provider=LLMProvider.OLLAMA,
+                mcp_servers=[],
+                memory_enabled=True,
+                guardrails_enabled=True
+            ),
         ),
         "chatbot-advanced": AgentTemplate(
             id="chatbot-advanced",
             name="Advanced Chatbot",
             description="Advanced chatbot with query analysis, knowledge expert, and response preparation",
-            type=AgentType.CHATBOT,
-            default_config={
-                "llm_provider": LLMProvider.OPENAI.value,
-                "model_name": "gpt-4",
-                "system_prompt": "You are an advanced AI assistant with specialized capabilities for query analysis and knowledge synthesis.",
-                "temperature": 0.8,
-                "max_tokens": 2000,
-                "tools": ["query_analyzer", "knowledge_expert", "response_preparer"],
-                "mcp_servers": ["knowledge_base", "guardrails"],
-                "memory_enabled": True,
-                "guardrails_enabled": True
-            },
-            required_fields=["llm_provider", "model_name", "system_prompt"],
-            optional_fields=["temperature", "max_tokens", "tools", "mcp_servers", "memory_enabled", "guardrails_enabled"]
+            agent_type=AgentType.CHATBOT,
+            default_config=AgentConfig(
+                name="Advanced Chatbot",
+                model="gpt-4",
+                system_prompt="You are an advanced AI assistant with specialized capabilities for query analysis and knowledge synthesis.",
+                temperature=0.8,
+                max_tokens=2000,
+                tools=["query_analyzer", "knowledge_expert", "response_preparer"],
+                llm_provider=LLMProvider.OPENAI,
+                mcp_servers=["knowledge_base", "guardrails"],
+                memory_enabled=True,
+                guardrails_enabled=True
+            ),
         ),
         "content-generator": AgentTemplate(
             id="content-generator",
             name="Content Generator",
             description="Agent specialized in generating various types of content",
-            type=AgentType.CONTENT_GENERATION,
-            default_config={
-                "llm_provider": LLMProvider.ANTHROPIC.value,
-                "model_name": "claude-3-opus",
-                "system_prompt": "You are a creative content generator. Create engaging, well-structured content based on user requirements.",
-                "temperature": 0.9,
-                "max_tokens": 4000,
-                "tools": ["content_formatter", "style_analyzer"],
-                "mcp_servers": ["content_library"],
-                "memory_enabled": True,
-                "guardrails_enabled": True
-            },
-            required_fields=["llm_provider", "model_name", "system_prompt"],
-            optional_fields=["temperature", "max_tokens", "tools", "mcp_servers", "memory_enabled", "guardrails_enabled"]
+            agent_type=AgentType.CONTENT_GENERATION,
+            default_config=AgentConfig(
+                name="Content Generator",
+                model="claude-3-opus",
+                system_prompt="You are a creative content generator. Create engaging, well-structured content based on user requirements.",
+                temperature=0.9,
+                max_tokens=4000,
+                tools=["content_formatter", "style_analyzer"],
+                llm_provider=LLMProvider.ANTHROPIC,
+                mcp_servers=["content_library"],
+                memory_enabled=True,
+                guardrails_enabled=True
+            ),
         ),
         "data-analyst": AgentTemplate(
             id="data-analyst",
             name="Data Analyst",
             description="Agent for analyzing data and generating insights",
-            type=AgentType.DATA_ANALYSIS,
-            default_config={
-                "llm_provider": LLMProvider.OLLAMA.value,
-                "model_name": "codellama",
-                "system_prompt": "You are a data analyst. Analyze data, identify patterns, and provide actionable insights.",
-                "temperature": 0.3,
-                "max_tokens": 3000,
-                "tools": ["data_processor", "chart_generator", "statistics_calculator"],
-                "mcp_servers": ["data_warehouse"],
-                "memory_enabled": True,
-                "guardrails_enabled": True
-            },
-            required_fields=["llm_provider", "model_name", "system_prompt"],
-            optional_fields=["temperature", "max_tokens", "tools", "mcp_servers", "memory_enabled", "guardrails_enabled"]
+            agent_type=AgentType.DATA_ANALYSIS,
+            default_config=AgentConfig(
+                name="Data Analyst",
+                model="codellama",
+                system_prompt="You are a data analyst. Analyze data, identify patterns, and provide actionable insights.",
+                temperature=0.3,
+                max_tokens=3000,
+                tools=["data_processor", "chart_generator", "statistics_calculator"],
+                llm_provider=LLMProvider.OLLAMA,
+                mcp_servers=["data_warehouse"],
+                memory_enabled=True,
+                guardrails_enabled=True
+            ),
         ),
         "custom-agent": AgentTemplate(
             id="custom-agent",
             name="Custom Agent",
             description="Blank template for creating custom agents from scratch",
-            type=AgentType.CUSTOM,
-            default_config={
-                "llm_provider": LLMProvider.OLLAMA.value,
-                "model_name": "llama2",
-                "system_prompt": "You are an AI assistant.",
-                "temperature": 0.7,
-                "max_tokens": 1000,
-                "tools": [],
-                "mcp_servers": [],
-                "memory_enabled": False,
-                "guardrails_enabled": True
-            },
-            required_fields=["llm_provider", "model_name", "system_prompt"],
-            optional_fields=["temperature", "max_tokens", "tools", "mcp_servers", "memory_enabled", "guardrails_enabled"]
+            agent_type=AgentType.CUSTOM,
+            default_config=AgentConfig(
+                name="Custom Agent",
+                model="llama2",
+                system_prompt="You are an AI assistant.",
+                temperature=0.7,
+                max_tokens=1000,
+                tools=[],
+                llm_provider=LLMProvider.OLLAMA,
+                mcp_servers=[],
+                memory_enabled=False,
+                guardrails_enabled=True
+            ),
         )
     }
     
@@ -125,7 +120,7 @@ class AgentTemplateService:
             return None
         
         # Create AgentConfig from template defaults
-        return AgentConfig(**template.default_config)
+        return template.default_config
     
     @classmethod
     def apply_template(cls, template_id: str, overrides: Optional[Dict] = None) -> Optional[AgentConfig]:
@@ -144,7 +139,7 @@ class AgentTemplateService:
             return None
         
         # Start with template defaults
-        config_dict = template.default_config.copy()
+        config_dict = template.default_config.model_dump()
         
         # Apply overrides if provided
         if overrides:
@@ -169,10 +164,7 @@ class AgentTemplateService:
         if not template:
             return False
         
-        # Check all required fields are present
-        for field in template.required_fields:
-            if field not in config:
-                return False
+        # The Pydantic model AgentConfig will handle validation of required fields.
         
         # Try to create AgentConfig to validate types and constraints
         try:

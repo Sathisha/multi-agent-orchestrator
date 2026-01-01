@@ -20,17 +20,19 @@ from fastapi.security import HTTPBearer
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.user import User, UserStatus
+from ..models.rbac import UserRole
 from ..config.settings import get_settings
 from ..database.connection import get_async_db
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-# Password hashing context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Password hashing context - using argon2 to avoid bcrypt version issues
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 # JWT settings
 SECRET_KEY = settings.security.secret_key if hasattr(settings, 'security') else "your-secret-key-change-in-production"
@@ -47,7 +49,7 @@ class AuthService:
     
     @staticmethod
     def hash_password(password: str) -> str:
-        """Hash a password using bcrypt."""
+        """Hash a password using argon2."""
         return pwd_context.hash(password)
     
     @staticmethod
@@ -97,15 +99,19 @@ class AuthService:
         # I'll Assume is_deleted exists or omit it to be safe if I'm not sure.
         # SystemEntity usually implies soft delete.
         # But if it crashes, I'll remove it. I'll keep it for now.
-        query = select(User).where(User.email == email)
+        query = select(User).options(
+            selectinload(User.roles).selectinload(UserRole.role)
+        ).where(User.email == email)
         result = await self.session.execute(query)
-        return result.scalar_one_or_none()
+        return result.unique().scalar_one_or_none()
     
     async def get_user_by_id(self, user_id: UUID) -> Optional[User]:
         """Get user by ID."""
-        query = select(User).where(User.id == user_id)
+        query = select(User).options(
+            selectinload(User.roles).selectinload(UserRole.role)
+        ).where(User.id == user_id)
         result = await self.session.execute(query)
-        return result.scalar_one_or_none()
+        return result.unique().scalar_one_or_none()
     
     async def register_user(
         self,

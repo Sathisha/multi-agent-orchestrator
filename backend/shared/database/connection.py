@@ -103,9 +103,19 @@ def get_db():
         db.close()
 
 
+
 @asynccontextmanager
+async def get_async_db_context() -> AsyncGenerator[AsyncSession, None]:
+    """Context manager for asynchronous database sessions."""
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
+
+
 async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
-    """Dependency for asynchronous database sessions."""
+    """Dependency for asynchronous database sessions (for FastAPI)."""
     async with AsyncSessionLocal() as session:
         try:
             yield session
@@ -114,7 +124,8 @@ async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 # Alias for compatibility
-get_database_session = get_async_db
+get_database_session = get_async_db_context
+
 
 
 async def create_tables():
