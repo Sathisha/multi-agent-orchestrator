@@ -5,13 +5,14 @@ import {
     IconButton, Chip, Select, MenuItem, FormControl, InputLabel, Snackbar,
     Alert, CircularProgress, Paper, Divider, List, ListItem, Tooltip,
     Avatar, Fade, Zoom, Breadcrumbs, Link, Switch, FormControlLabel,
-    InputAdornment, Grid
+    InputAdornment, Grid, Dialog, DialogTitle, DialogContent, DialogActions,
+    Checkbox, ListItemText, ListItemIcon
 } from '@mui/material'
 import {
     ArrowBack, Save, PlayArrow, Stop, Send, Settings as SettingsIcon,
     AutoGraph, Code, Description, Psychology, History, Extension,
     ContentCopy, Delete, Share, OpenInNew, MoreVert, InfoOutlined,
-    Done, Refresh, Bolt
+    Done, Refresh, Bolt, Build, Close, CheckBox, CheckBoxOutlineBlank
 } from '@mui/icons-material'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
 import {
@@ -23,6 +24,7 @@ import {
     Agent
 } from '../api/agents'
 import { getModels, discoverOllamaModels, LLMModel, OllamaModel } from '../api/llmModels'
+import { getTools, Tool } from '../api/tools'
 import Editor from '@monaco-editor/react'
 
 interface TabPanelProps {
@@ -60,6 +62,8 @@ const AgentDetailWorkspace: React.FC = () => {
         internet_search_access: false,
         code_interpreter: true,
     })
+    const [selectedTools, setSelectedTools] = useState<string[]>([])
+    const [isToolDialogOpen, setIsToolDialogOpen] = useState(false)
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' })
 
@@ -75,6 +79,7 @@ const AgentDetailWorkspace: React.FC = () => {
         refetchOnWindowFocus: false,
         staleTime: 1000 * 60 * 5 // 5 minutes
     })
+    const { data: allTools } = useQuery<Tool[]>('tools', getTools)
 
     const { data: agent, isLoading, isError } = useQuery(
         ['agent', agentId],
@@ -96,6 +101,7 @@ const AgentDetailWorkspace: React.FC = () => {
                     internet_search_access: false,
                     code_interpreter: true,
                 })
+                setSelectedTools(data.available_tools || [])
             }
         }
     )
@@ -184,7 +190,9 @@ const AgentDetailWorkspace: React.FC = () => {
                 temperature,
                 max_tokens: maxTokens,
                 capabilities,
-            }
+                available_tools: selectedTools
+            },
+            available_tools: selectedTools
         })
     }
 
@@ -789,10 +797,104 @@ const AgentDetailWorkspace: React.FC = () => {
 
                             <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600, mb: 3, mt: 5 }}>Connected Tools</Typography>
 
-                            <Box sx={{ p: 2, borderRadius: '8px', border: '1px dashed rgba(255, 255, 255, 0.1)', textAlign: 'center' }}>
-                                <Typography variant="body2" sx={{ color: '#666', mb: 1.5 }}>No custom tools connected to this agent.</Typography>
-                                <Button variant="text" size="small" startIcon={<Bolt />} sx={{ textTransform: 'none', color: '#007acc' }}>Add Tool</Button>
-                            </Box>
+                            <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600, mb: 3, mt: 5 }}>Connected Tools</Typography>
+
+                            {selectedTools.length === 0 ? (
+                                <Box sx={{ p: 2, borderRadius: '8px', border: '1px dashed rgba(255, 255, 255, 0.1)', textAlign: 'center' }}>
+                                    <Typography variant="body2" sx={{ color: '#666', mb: 1.5 }}>No custom tools connected to this agent.</Typography>
+                                    <Button variant="text" size="small" startIcon={<Bolt />} sx={{ textTransform: 'none', color: '#007acc' }} onClick={() => setIsToolDialogOpen(true)}>Add Tool</Button>
+                                </Box>
+                            ) : (
+                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                    {selectedTools.map(toolId => {
+                                        const tool = allTools?.find(t => t.id === toolId);
+                                        return (
+                                            <Paper key={toolId} sx={{ p: 2, bgcolor: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.05)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                                    <Avatar sx={{ bgcolor: 'rgba(0, 122, 204, 0.1)', color: '#007acc' }}><Build sx={{ fontSize: 20 }} /></Avatar>
+                                                    <Box>
+                                                        <Typography variant="subtitle2">{tool?.name || toolId}</Typography>
+                                                        <Typography variant="caption" sx={{ color: '#888' }}>{tool?.description || 'No description available'}</Typography>
+                                                    </Box>
+                                                </Box>
+                                                <IconButton size="small" onClick={() => {
+                                                    setSelectedTools(prev => prev.filter(id => id !== toolId));
+                                                    setHasUnsavedChanges(true);
+                                                }}>
+                                                    <Close fontSize="small" />
+                                                </IconButton>
+                                            </Paper>
+                                        );
+                                    })}
+                                    <Button variant="outlined" startIcon={<Bolt />} onClick={() => setIsToolDialogOpen(true)} sx={{ mt: 1, textTransform: 'none', borderStyle: 'dashed' }}>
+                                        Manage Tools
+                                    </Button>
+                                </Box>
+                            )}
+
+                            {/* Tool Selection Dialog */}
+                            <Dialog open={isToolDialogOpen} onClose={() => setIsToolDialogOpen(false)} maxWidth="sm" fullWidth PaperProps={{ sx: { bgcolor: '#1e1e1e', backgroundImage: 'none', border: '1px solid rgba(255,255,255,0.1)' } }}>
+                                <DialogTitle sx={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                    Select Tools
+                                </DialogTitle>
+                                <DialogContent sx={{ p: 0, height: '400px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                                    <List sx={{ flex: 1, overflow: 'auto', p: 0 }}>
+                                        {allTools && allTools.length > 0 ? (
+                                            allTools.map((tool) => {
+                                                const isSelected = selectedTools.includes(tool.id);
+                                                return (
+                                                    <ListItem
+                                                        key={tool.id}
+                                                        button
+                                                        onClick={() => {
+                                                            if (isSelected) {
+                                                                setSelectedTools(prev => prev.filter(id => id !== tool.id));
+                                                            } else {
+                                                                setSelectedTools(prev => [...prev, tool.id]);
+                                                            }
+                                                            setHasUnsavedChanges(true);
+                                                        }}
+                                                        sx={{
+                                                            borderBottom: '1px solid rgba(255,255,255,0.05)',
+                                                            bgcolor: isSelected ? 'rgba(0, 122, 204, 0.08)' : 'transparent',
+                                                            '&:hover': { bgcolor: isSelected ? 'rgba(0, 122, 204, 0.12)' : 'rgba(255,255,255,0.02)' }
+                                                        }}
+                                                    >
+                                                        <ListItemIcon>
+                                                            <Checkbox
+                                                                edge="start"
+                                                                checked={isSelected}
+                                                                tabIndex={-1}
+                                                                disableRipple
+                                                                sx={{
+                                                                    color: '#666',
+                                                                    '&.Mui-checked': { color: '#007acc' }
+                                                                }}
+                                                            />
+                                                        </ListItemIcon>
+                                                        <ListItemText
+                                                            primary={tool.name}
+                                                            secondary={tool.description}
+                                                            primaryTypographyProps={{ variant: 'body2', fontWeight: 500 }}
+                                                            secondaryTypographyProps={{ variant: 'caption', color: '#888' }}
+                                                        />
+                                                        <Chip label={tool.tool_type} size="small" sx={{ height: 20, fontSize: '0.65rem', opacity: 0.7 }} />
+                                                    </ListItem>
+                                                );
+                                            })
+                                        ) : (
+                                            <Box sx={{ p: 4, textAlign: 'center' }}>
+                                                <Typography variant="body2" color="text.secondary">No tools available.</Typography>
+                                                <Button size="small" sx={{ mt: 2 }} onClick={() => navigate('/tools')}>Create Tool</Button>
+                                            </Box>
+                                        )}
+                                    </List>
+                                </DialogContent>
+                                <DialogActions sx={{ p: 2, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                                    <Button onClick={() => setIsToolDialogOpen(false)} sx={{ color: '#888' }}>Close</Button>
+                                    <Button variant="contained" onClick={() => setIsToolDialogOpen(false)}>Done</Button>
+                                </DialogActions>
+                            </Dialog>
                         </Grid>
                     </Grid>
                 </TabPanel>

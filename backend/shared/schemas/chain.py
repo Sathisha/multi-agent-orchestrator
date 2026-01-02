@@ -212,5 +212,6 @@ class ChainExecutionStatusResponse(BaseModel):
     status: ChainExecutionStatus
     current_node_id: Optional[str]
     completed_nodes: List[str]
+    node_states: Optional[Dict[str, str]] = Field(None, description="Status of each node (pending, running, completed, failed, skipped)")
     progress_percentage: float = Field(0.0, ge=0.0, le=100.0)
     error_message: Optional[str]

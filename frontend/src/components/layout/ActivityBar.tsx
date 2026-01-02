@@ -26,7 +26,7 @@ const ActivityBar: React.FC<ActivityBarProps> = ({
 
   const menuItems = [
     { id: 'agents', icon: AgentIcon, label: 'Agents', path: '/agents' },
-    { id: 'chains', icon: ChainIcon, label: 'Chains', path: '/chains' },
+    { id: 'chains', icon: WorkflowIcon, label: 'Workflows', path: '/chains' },
     { id: 'tools', icon: ToolsIcon, label: 'Tools', path: '/tools' },
     { id: 'models', icon: LLMIcon, label: 'LLM Models', path: '/models' },
     { id: 'monitoring', icon: MonitoringIcon, label: 'Monitoring', path: '/monitoring' },

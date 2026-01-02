@@ -210,6 +210,34 @@ class AgentExecutorService(BaseService):
         logger.info(f"Started agent execution {execution_id}")
         return execution_id
     
+    async def execute_agent(self, agent_id: str, input_data: Dict[str, Any], config: Optional[Dict[str, Any]] = None) -> AgentExecutionResult:
+        """Execute agent synchronously/inline and return result."""
+        execution_id = str(uuid.uuid4())
+        context = AgentExecutionContext(
+            execution_id=execution_id,
+            agent_id=agent_id,
+            input_data=input_data,
+            config=config or {},
+            started_at=datetime.utcnow()
+        )
+        
+        # Track it
+        self.lifecycle.active_executions[execution_id] = context
+        
+        try:
+            # Create memory service if needed
+            if self.memory_service is None:
+                try:
+                    from ..services.memory_manager import create_memory_manager_service
+                    self.memory_service = await create_memory_manager_service(self.session, "default")
+                except ImportError:
+                    logger.warning("Could not import memory manager service")
+                    
+            # Execute logic inline
+            return await self._execute_agent_logic(context)
+        finally:
+            self._cleanup_execution(execution_id)
+
     async def stop_agent_execution(self, execution_id: str) -> bool:
         if execution_id not in self.lifecycle.active_executions:
             return False

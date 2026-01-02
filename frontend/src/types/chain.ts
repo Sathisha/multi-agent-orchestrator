@@ -215,6 +215,7 @@ export interface ChainExecutionStatusResponse {
     status: ChainExecutionStatus
     current_node_id?: string
     completed_nodes: string[]
+    node_states?: Record<string, string>
     progress_percentage: number
     error_message?: string
 }

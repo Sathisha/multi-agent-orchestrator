@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any, Set, Tuple
 from uuid import UUID
 from collections import defaultdict, deque
@@ -300,7 +300,8 @@ class ChainOrchestratorService(BaseService):
         input_data: Dict[str, Any],
         execution_name: Optional[str] = None,
         variables: Optional[Dict[str, Any]] = None,
-        correlation_id: Optional[str] = None
+        correlation_id: Optional[str] = None,
+        timeout_seconds: int = 300  # Global timeout: 5 minutes default
     ) -> ChainExecution:
         """
         Execute a chain.
@@ -348,7 +349,7 @@ class ChainOrchestratorService(BaseService):
             input_data=input_data,
             variables=variables or {},
             node_results={},
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(timezone.utc),
             completed_nodes=[],
             correlation_id=correlation_id
         )
@@ -363,17 +364,25 @@ class ChainOrchestratorService(BaseService):
             )
             chain = chain_result.scalar_one()
             chain.execution_count += 1
-            chain.last_executed_at = datetime.utcnow()
+            chain.last_executed_at = datetime.now(timezone.utc)
             await session.commit()
             
-            # Execute the chain
-            await self._execute_chain_internal(
-                session, execution, nodes, edges, input_data
-            )
+            # Execute the chain with timeout
+            logger.info(f"Starting chain execution {execution.id} with timeout {timeout_seconds}s")
+            try:
+                await asyncio.wait_for(
+                    self._execute_chain_internal(
+                        session, execution, nodes, edges, input_data
+                    ),
+                    timeout=timeout_seconds
+                )
+            except asyncio.TimeoutError:
+                logger.error(f"Chain execution {execution.id} timed out after {timeout_seconds}s")
+                raise ChainExecutionError(f"Chain execution timeout after {timeout_seconds} seconds")
             
             # Mark as completed
             execution.status = ChainExecutionStatus.COMPLETED
-            execution.completed_at = datetime.utcnow()
+            execution.completed_at = datetime.now(timezone.utc)
             if execution.started_at:
                 execution.duration_seconds = int(
                     (execution.completed_at - execution.started_at).total_seconds()
@@ -392,7 +401,7 @@ class ChainOrchestratorService(BaseService):
             execution.status = ChainExecutionStatus.FAILED
             execution.error_message = str(e)
             execution.error_details = {'exception_type': type(e).__name__}
-            execution.completed_at = datetime.utcnow()
+            execution.completed_at = datetime.now(timezone.utc)
             if execution.started_at:
                 execution.duration_seconds = int(
                     (execution.completed_at - execution.started_at).total_seconds()
@@ -411,127 +420,338 @@ class ChainOrchestratorService(BaseService):
         edges: List[ChainEdge],
         initial_input: Dict[str, Any]
     ):
-        """Internal method to execute chain logic."""
-        # Build node and edge maps
+        """Internal method to execute chain logic with support for parallel paths and conditions."""
+        # 1. Build Graphs
         node_map = {node.node_id: node for node in nodes}
+        adj_list = defaultdict(list)          # source -> [dest]
+        reverse_adj_list = defaultdict(list)  # dest -> [source]
         
-        # Build adjacency list for the graph
-        graph = defaultdict(list)
+        # Edge management
+        edge_map = {} # (source, target) -> edge
+        incoming_edges_map = defaultdict(list) # dest -> [edge]
+        
         for edge in edges:
-            graph[edge.source_node_id].append({
-                'target': edge.target_node_id,
-                'edge': edge
-            })
+            adj_list[edge.source_node_id].append(edge.target_node_id)
+            reverse_adj_list[edge.target_node_id].append(edge.source_node_id)
+            edge_map[(edge.source_node_id, edge.target_node_id)] = edge
+            incoming_edges_map[edge.target_node_id].append(edge)
+            
+        # 2. Initialize State
+        # Node Status: PENDING, RUNNING, COMPLETED, FAILED, SKIPPED
+        node_states = {node.node_id: "PENDING" for node in nodes}
         
-        # Determine execution order
-        execution_order = self._topological_sort(nodes, edges)
+        # Active Edges: set of edge_ids that are traversed/active
+        active_edges = set()
         
-        # Execution context
+        # Inactive Edges: set of edge_ids that were NOT taken (condition false)
+        # We need this to determine if a node should be SKIPPED (all incoming edges inactive)
+        inactive_edges = set()
+        
         context = {
             'input': initial_input,
             'variables': execution.variables.copy() if execution.variables else {},
             'node_outputs': {}
         }
         
-        # Execute nodes in order
-        for node_id in execution_order:
+        # 3. Identify Initial Ready Nodes
+        # Start nodes or nodes with 0 in-degree
+        ready_queue = deque([
+            n.node_id for n in nodes 
+            if not incoming_edges_map[n.node_id] 
+            or n.node_type == ChainNodeType.START
+        ])
+        
+        # Also include nodes where all incoming edges are from NON-EXISTENT nodes? (Orphans?)
+        # Validation checks this, so assume graph is valid.
+        
+        running_tasks = set()
+        
+        async def process_node_task(node_id: str):
+            """Execute a single node."""
             node = node_map[node_id]
+            node_states[node_id] = "RUNNING"
             
-            # Update current node
-            execution.current_node_id = node_id
-            await session.commit()
-            
-            # Log event
+            # Log Start
             await self._log_execution_event(
-                session,
-                execution.id,
-                node_id,
-                "node_started",
-                f"Starting execution of node {node.label}",
-                "INFO"
+                session, execution.id, node_id, "node_started",
+                f"Starting execution of node {node.label}", "INFO"
             )
             
             try:
-                # Prepare input for this node
-                node_input = self._prepare_node_input(node, context, graph)
+                # Prepare Input
+                # Note: We pass active_edges to ensure we only aggregate from active paths
+                node_input = self._prepare_node_input(node, context, incoming_edges_map, active_edges)
                 
-                # Execute based on node type
+                # Execute Logic
                 node_output = await self._execute_node(session, node, node_input, context)
                 
-                # Store result
+                # Store Output
                 context['node_outputs'][node_id] = node_output
                 execution.node_results[node_id] = node_output
                 execution.completed_nodes.append(node_id)
+                # await session.commit() # Batch commit in main loop? Or here? 
+                # Commit here to update progress safely
                 
-                await session.commit()
-                
-                # Log success
+                # Log Success
                 await self._log_execution_event(
-                    session,
-                    execution.id,
-                    node_id,
-                    "node_completed",
-                    f"Node {node.label} completed successfully",
-                    "INFO",
-                    output_data=node_output
+                    session, execution.id, node_id, "node_completed",
+                    f"Node {node.label} completed", "INFO", output_data=node_output
                 )
+                
+                return node_id, "COMPLETED", node_output
                 
             except Exception as e:
                 logger.error(f"Error executing node {node_id}: {e}", exc_info=True)
-                
-                # Log error
                 await self._log_execution_event(
-                    session,
-                    execution.id,
-                    node_id,
-                    "node_failed",
-                    f"Node {node.label} failed: {str(e)}",
-                    "ERROR",
-                    error_message=str(e)
+                    session, execution.id, node_id, "node_failed",
+                    f"Node {node.label} failed: {str(e)}", "ERROR", error_message=str(e)
                 )
-                
-                raise
+                return node_id, "FAILED", None
         
+        # 4. Execution Loop
+        while ready_queue or running_tasks:
+            
+            # Launch new tasks
+            while ready_queue:
+                node_id = ready_queue.popleft()
+                if node_states[node_id] != "PENDING":
+                    continue
+                
+                # Update DB to show Running
+                execution.current_node_id = node_id
+                # await session.commit() 
+                
+                task = asyncio.create_task(process_node_task(node_id))
+                task.set_name(node_id)
+                running_tasks.add(task)
+            
+            if not running_tasks:
+                break
+                
+            # Wait for ONE task to complete
+            done, pending = await asyncio.wait(
+                running_tasks, 
+                return_when=asyncio.FIRST_COMPLETED
+            )
+            running_tasks = pending
+            
+            for task in done:
+                node_id = task.get_name()
+                try:
+                    nid, status, output = await task
+                    node_states[node_id] = status
+                    
+                    if status == "FAILED":
+                        raise ChainExecutionError(f"Node {node_id} failed")
+                    
+                    # If Completed, evaluate successors
+                    if status == "COMPLETED":
+                        # Check outgoing edges
+                        successors = adj_list[node_id]
+                        for succ_id in successors:
+                            edge = edge_map.get((node_id, succ_id))
+                            if not edge: continue
+                            
+                            is_met = True
+                            if edge.condition:
+                                is_met = self._evaluate_condition(edge.condition, output)
+                            
+                            if is_met:
+                                active_edges.add(edge.edge_id)
+                            else:
+                                inactive_edges.add(edge.edge_id)
+                        
+                        # Check readiness of all successors
+                        # For each successor, check if ALL incoming edges are resolved
+                        for succ_id in successors:
+                            succ_incoming = incoming_edges_map[succ_id]
+                            
+                            all_resolved = True
+                            any_active = False
+                            
+                            for in_edge in succ_incoming:
+                                if in_edge.edge_id in active_edges:
+                                    any_active = True
+                                elif in_edge.edge_id in inactive_edges:
+                                    pass # Resolved as inactive
+                                else:
+                                    # Not resolved yet (source node not done?)
+                                    # Check source node status
+                                    # Actually simpler: just check if edge_id is in active or inactive sets
+                                    all_resolved = False
+                                    break
+                            
+                            if all_resolved:
+                                if any_active:
+                                    # Ready to run
+                                    if node_states[succ_id] == "PENDING":
+                                        ready_queue.append(succ_id)
+                                else:
+                                    # All incoming edges inactive -> SKIP
+                                    if node_states[succ_id] == "PENDING":
+                                        node_states[succ_id] = "SKIPPED"
+                                        # Propagate SKIP to its successors?
+                                        # To propagate, we treat it as "Done" but with no output/active edges
+                                        # So outgoing edges are ALL inactive?
+                                        # Yes.
+                                        
+                                        # Queue it for "Skip Processing" - simply iterate recursively or add to queue?
+                                        # Let's handle it immediately here
+                                        queue_to_skip = deque([succ_id])
+                                        while queue_to_skip:
+                                            skip_nid = queue_to_skip.popleft()
+                                            
+                                            # Log log?
+                                            # await self._log_execution_event(session, execution.id, skip_nid, "node_skipped", "Node skipped due to conditions", "INFO")
+                                            
+                                            # Mark outgoing edges inactive
+                                            for out_succ in adj_list[skip_nid]:
+                                                out_edge = edge_map.get((skip_nid, out_succ))
+                                                if out_edge:
+                                                    inactive_edges.add(out_edge.edge_id)
+                                                
+                                                # Check if successor is now fully inactive-resolved
+                                                succ_inc = incoming_edges_map[out_succ]
+                                                succ_all_resolved = True
+                                                succ_any_active = False
+                                                for sie in succ_inc:
+                                                    if sie.edge_id in active_edges:
+                                                        succ_any_active = True
+                                                    elif sie.edge_id not in inactive_edges:
+                                                        succ_all_resolved = False
+                                                        break
+                                                
+                                                if succ_all_resolved and not succ_any_active:
+                                                    if node_states[out_succ] == "PENDING":
+                                                        node_states[out_succ] = "SKIPPED"
+                                                        queue_to_skip.append(out_succ)
+
+                except ChainExecutionError:
+                    raise
+                except Exception as e:
+                    logger.error(f"Unexpected error in execution loop: {e}", exc_info=True)
+                    raise ChainExecutionError(f"Trapped error: {e}")
+
         # Set final output
-        # If there's an END node, use its output; otherwise use last node's output
-        end_nodes = [n for n in nodes if n.node_type == ChainNodeType.END]
+        # Find END nodes that were COMPLETED
+        end_nodes = [n for n in nodes if n.node_type == ChainNodeType.END and node_states[n.node_id] == "COMPLETED"]
         if end_nodes and end_nodes[0].node_id in context['node_outputs']:
-            execution.output_data = context['node_outputs'][end_nodes[0].node_id]
-        elif execution_order:
-            execution.output_data = context['node_outputs'].get(execution_order[-1], {})
+             execution.output_data = context['node_outputs'][end_nodes[0].node_id]
         else:
-            execution.output_data = {}
-    
+            # Fallback: get last completed node
+            # Or just empty
+             execution.output_data = {}  # Could improve heuristics here
+        
+        # Save node states in metadata or some field? 
+        # (For later UI feature)
+        execution.node_results['__states__'] = node_states
+        
+        await session.commit()
+    def _evaluate_condition(self, condition: Dict[str, Any], source_output: Any) -> bool:
+        """
+        Evaluate if a condition is met based on the source node's output.
+        
+        Condition format:
+        {
+            "rules": [
+                {
+                    "field": "key_in_output",
+                    "operator": "eq|neq|contains|gt|lt",
+                    "value": "expected_value"
+                }
+            ],
+            "logic": "AND"  # or "OR" (default AND)
+        }
+        
+        If source_output is not a dict, 'field' access works if field is empty or special val?
+        Assume source_output is typically a dict (JSON).
+        """
+        if not condition or not condition.get("rules"):
+            return True
+            
+        rules = condition.get("rules", [])
+        logic = condition.get("logic", "AND").upper()
+        
+        results = []
+        for rule in rules:
+            field = rule.get("field")
+            operator = rule.get("operator", "eq")
+            expected_value = rule.get("value")
+            
+            # Get actual value
+            actual_value = source_output
+            if isinstance(source_output, dict) and field:
+                # Support dot notation? For now simple key access
+                actual_value = source_output.get(field)
+            elif field:
+                # Field specified but output is not dict
+                actual_value = None
+                
+            # Compare
+            match = False
+            try:
+                if operator == "eq":
+                    match = str(actual_value) == str(expected_value)
+                elif operator == "neq":
+                    match = str(actual_value) != str(expected_value)
+                elif operator == "contains":
+                    match = str(expected_value) in str(actual_value)
+                elif operator == "gt":
+                    match = float(actual_value) > float(expected_value)
+                elif operator == "lt":
+                    match = float(actual_value) < float(expected_value)
+                elif operator == "exists":
+                    match = actual_value is not None
+            except Exception:
+                match = False
+                
+            results.append(match)
+            
+        if not results:
+            return True
+            
+        if logic == "OR":
+            return any(results)
+        else:
+            return all(results)
+
     def _prepare_node_input(
         self,
         node: ChainNode,
         context: Dict[str, Any],
-        graph: Dict[str, List[Dict]]
+        incoming_edges_map: Dict[str, List],  # Changed from graph
+        active_edges: Optional[Set[str]] = None
     ) -> Dict[str, Any]:
-        """Prepare input data for a node based on its predecessors."""
-        # For START nodes or nodes with no predecessors, use initial input
-        # For other nodes, use outputs from predecessor nodes
+        """
+        Prepare input data for a node based on its predecessors.
+        Only considers ACTIVE edges if active_edges is provided.
         
-        # Find predecessor nodes
+        Edges without conditions simply pass data through from predecessor to successor.
+        """
+        # Find active predecessor nodes via incoming edges
         predecessors = []
-        for source_id, targets in graph.items():
-            for target_info in targets:
-                if target_info['target'] == node.node_id:
-                    predecessors.append(source_id)
+        incoming_edges = incoming_edges_map.get(node.node_id, [])
+        
+        for edge in incoming_edges:
+            # If active_edges is None, consider all (no condition filtering)
+            # If active_edges is set, edge must be in it
+            if active_edges is None or edge.edge_id in active_edges:
+                predecessors.append(edge.source_node_id)
         
         if not predecessors:
-            # Use initial input
+            # No active predecessors - use initial input
             return context['input']
+            
         elif len(predecessors) == 1:
-            # Use output from single predecessor
-            pred_output = context['node_outputs'].get(predecessors[0], {})
-            return pred_output
+            # Single predecessor - pass through its output
+            return context['node_outputs'].get(predecessors[0], {})
         else:
-            # Multiple predecessors - aggregate outputs
+            # Multiple active predecessors - aggregate outputs
             aggregated = {
                 'inputs': [context['node_outputs'].get(pred_id, {}) for pred_id in predecessors]
             }
             return aggregated
+
     
     async def _execute_node(
         self,
@@ -570,8 +790,8 @@ class ChainOrchestratorService(BaseService):
         """Execute an agent node."""
         if not self.agent_executor:
             # Import here to avoid circular dependency
-            from shared.services.agent_executor import lifecycle_manager
-            self.agent_executor = lifecycle_manager.get_executor(session)
+            from shared.services.agent_executor import AgentExecutorService
+            self.agent_executor = AgentExecutorService(session)
         
         if not node.agent_id:
             raise ChainExecutionError(f"Agent node {node.node_id} has no agent_id")
@@ -657,7 +877,7 @@ class ChainOrchestratorService(BaseService):
             event_type=event_type,
             message=message,
             level=level,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             log_metadata=kwargs
         )
         session.add(log_entry)
@@ -681,7 +901,7 @@ class ChainOrchestratorService(BaseService):
             raise ValueError(f"Execution {execution_id} is not running")
         
         execution.status = ChainExecutionStatus.CANCELLED
-        execution.completed_at = datetime.utcnow()
+        execution.completed_at = datetime.now(timezone.utc)
         if execution.started_at:
             execution.duration_seconds = int(
                 (execution.completed_at - execution.started_at).total_seconds()

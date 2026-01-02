@@ -6,6 +6,7 @@ import { ThemeProvider, createTheme } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
 import App from './App'
 import { AuthProvider } from './context/AuthContext'
+import { NotificationProvider } from './contexts/NotificationContext'
 
 // Create a dark theme similar to VS Code
 const darkTheme = createTheme({
@@ -77,10 +78,12 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <BrowserRouter>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <ThemeProvider theme={darkTheme}>
-            <CssBaseline />
-            <App />
-          </ThemeProvider>
+          <NotificationProvider>
+            <ThemeProvider theme={darkTheme}>
+              <CssBaseline />
+              <App />
+            </ThemeProvider>
+          </NotificationProvider>
         </AuthProvider>
       </QueryClientProvider>
     </BrowserRouter>

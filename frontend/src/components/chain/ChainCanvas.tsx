@@ -12,6 +12,7 @@ import ReactFlow, {
     Connection,
     ConnectionMode,
     Panel,
+    MarkerType,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { Box, Button, IconButton, Tooltip } from '@mui/material'
@@ -25,6 +26,8 @@ interface ChainCanvasProps {
     onEdgesChange?: (edges: Edge[]) => void
     onSave?: (nodes: Node[], edges: Edge[]) => void
     onAddNode?: () => void
+    onEdgeClick?: (edge: Edge) => void
+    onNodeClick?: (node: Node) => void
     readonly?: boolean
 }
 
@@ -35,6 +38,8 @@ const ChainCanvas: React.FC<ChainCanvasProps> = ({
     onEdgesChange,
     onSave,
     onAddNode,
+    onEdgeClick,
+    onNodeClick,
     readonly = false,
 }) => {
     // Use controlled state from parent
@@ -117,10 +122,19 @@ const ChainCanvas: React.FC<ChainCanvasProps> = ({
                 defaultEdgeOptions={{
                     animated: true,
                     style: { stroke: '#007acc', strokeWidth: 2 },
+                    type: 'smoothstep',
+                    markerEnd: {
+                        type: MarkerType.ArrowClosed,
+                        color: '#007acc',
+                        width: 20,
+                        height: 20,
+                    },
                 }}
                 nodesDraggable={!readonly}
                 nodesConnectable={!readonly}
                 elementsSelectable={!readonly}
+                onEdgeClick={readonly ? undefined : (_, edge) => onEdgeClick && onEdgeClick(edge)}
+                onNodeClick={readonly ? undefined : (_, node) => onNodeClick && onNodeClick(node)}
             >
                 <Background variant={BackgroundVariant.Dots} gap={15} size={1} />
                 <Controls showInteractive={!readonly} />

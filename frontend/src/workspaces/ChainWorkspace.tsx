@@ -113,10 +113,10 @@ const ChainWorkspace: React.FC = () => {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Box>
                     <Typography variant="h4" gutterBottom>
-                        Agent Chains
+                        Agent Workflows
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                        Create and manage agent orchestration chains
+                        Create and manage agent orchestration workflows
                     </Typography>
                 </Box>
                 <Button
@@ -124,13 +124,13 @@ const ChainWorkspace: React.FC = () => {
                     startIcon={<AddIcon />}
                     onClick={() => setCreateDialogOpen(true)}
                 >
-                    Create Chain
+                    Create Workflow
                 </Button>
             </Box>
 
             {/* Search */}
             <TextField
-                placeholder="Search chains..."
+                placeholder="Search workflows..."
                 variant="outlined"
                 size="small"
                 value={searchQuery}
@@ -163,7 +163,7 @@ const ChainWorkspace: React.FC = () => {
                         {isLoading ? (
                             <TableRow>
                                 <TableCell colSpan={7} align="center">
-                                    Loading chains...
+                                    Loading workflows...
                                 </TableCell>
                             </TableRow>
                         ) : filteredChains.length === 0 ? (
@@ -171,12 +171,12 @@ const ChainWorkspace: React.FC = () => {
                                 <TableCell colSpan={7} align="center">
                                     <Box sx={{ py: 4 }}>
                                         <Typography variant="body1" color="text.secondary" gutterBottom>
-                                            No chains found
+                                            No workflows found
                                         </Typography>
                                         <Typography variant="body2" color="text.secondary">
                                             {searchQuery
                                                 ? 'Try adjusting your search'
-                                                : 'Create your first chain to get started'}
+                                                : 'Create your first workflow to get started'}
                                         </Typography>
                                     </Box>
                                 </TableCell>
@@ -239,12 +239,12 @@ const ChainWorkspace: React.FC = () => {
 
             {/* Create Chain Dialog */}
             <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>Create New Chain</DialogTitle>
+                <DialogTitle>Create New Workflow</DialogTitle>
                 <DialogContent>
                     <TextField
                         autoFocus
                         margin="dense"
-                        label="Chain Name"
+                        label="Workflow Name"
                         fullWidth
                         variant="outlined"
                         value={newChainName}

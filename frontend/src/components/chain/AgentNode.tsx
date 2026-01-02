@@ -8,21 +8,40 @@ interface AgentNodeData {
     agentId?: string
     agentName?: string
     nodeType: string
+    status?: 'pending' | 'running' | 'completed' | 'failed' | 'skipped'
+}
+
+const getStatusColor = (status?: string) => {
+    switch (status) {
+        case 'running': return '#2196f3'
+        case 'completed': return '#4caf50'
+        case 'failed': return '#f44336'
+        case 'skipped': return '#9e9e9e'
+        default: return '#007acc'
+    }
 }
 
 const AgentNode: React.FC<NodeProps<AgentNodeData>> = ({ data, selected }) => {
+    const statusColor = getStatusColor(data.status)
+    const isRunning = data.status === 'running'
+
     return (
         <Box
             sx={{
                 padding: 2,
                 borderRadius: 2,
-                border: selected ? '2px solid #007acc' : '1px solid #ddd',
+                border: selected ? `2px solid ${statusColor}` : `1px solid ${data.status ? statusColor : '#ddd'}`,
                 backgroundColor: '#ffffff',
                 minWidth: 180,
-                boxShadow: selected ? '0 4px 12px rgba(0,122,204,0.3)' : '0 2px 8px rgba(0,0,0,0.1)',
+                boxShadow: selected || isRunning
+                    ? `0 4px 12px ${statusColor}40`
+                    : '0 2px 8px rgba(0,0,0,0.1)',
                 transition: 'all 0.2s',
-                '&:hover': {
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                animation: isRunning ? 'pulse 1.5s infinite' : 'none',
+                '@keyframes pulse': {
+                    '0%': { boxShadow: `0 0 0 0 ${statusColor}40` },
+                    '70%': { boxShadow: `0 0 0 10px ${statusColor}00` },
+                    '100%': { boxShadow: `0 0 0 0 ${statusColor}00` },
                 },
             }}
         >
@@ -31,7 +50,7 @@ const AgentNode: React.FC<NodeProps<AgentNodeData>> = ({ data, selected }) => {
                 type="target"
                 position={Position.Top}
                 style={{
-                    background: '#007acc',
+                    background: statusColor,
                     width: 10,
                     height: 10,
                     border: '2px solid #fff',
@@ -40,10 +59,23 @@ const AgentNode: React.FC<NodeProps<AgentNodeData>> = ({ data, selected }) => {
 
             {/* Node Content */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <AgentIcon sx={{ color: '#007acc', fontSize: 20 }} />
+                <AgentIcon sx={{ color: statusColor, fontSize: 20 }} />
                 <Typography variant="body2" fontWeight="bold">
                     {data.label}
                 </Typography>
+                {data.status && (
+                    <Chip
+                        label={data.status}
+                        size="small"
+                        sx={{
+                            ml: 'auto',
+                            height: 16,
+                            fontSize: '0.6rem',
+                            bgcolor: `${statusColor}20`,
+                            color: statusColor
+                        }}
+                    />
+                )}
             </Box>
 
             {data.agentName && (
@@ -68,7 +100,7 @@ const AgentNode: React.FC<NodeProps<AgentNodeData>> = ({ data, selected }) => {
                 type="source"
                 position={Position.Bottom}
                 style={{
-                    background: '#007acc',
+                    background: statusColor,
                     width: 10,
                     height: 10,
                     border: '2px solid #fff',

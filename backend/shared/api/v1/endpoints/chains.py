@@ -589,11 +589,17 @@ async def get_execution_status(
         completed_count = len(execution.completed_nodes) if execution.completed_nodes else 0
         progress = (completed_count / total_nodes * 100.0) if total_nodes > 0 else 0.0
         
+        # Extract node states if available
+        node_states = None
+        if execution.node_results and isinstance(execution.node_results, dict) and '__states__' in execution.node_results:
+            node_states = execution.node_results['__states__']
+        
         return ChainExecutionStatusResponse(
             execution_id=execution.id,
             status=ChainExecutionStatus(execution.status),
             current_node_id=execution.current_node_id,
             completed_nodes=execution.completed_nodes or [],
+            node_states=node_states,
             progress_percentage=progress,
             error_message=execution.error_message
         )

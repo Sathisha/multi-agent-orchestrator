@@ -27,20 +27,20 @@ import {
     Save as SaveIcon,
     PlayArrow as PlayArrowIcon,
 } from '@mui/icons-material'
-import { getChain, updateChain, executeChain, validateChain } from '../api/chains'
-import { Chain, ChainExecuteRequest, ChainNodeRequest, ChainEdgeRequest } from '../types/chain'
+import { getChain, updateChain, executeChain, validateChain, getChainExecutions, getExecutionStatus } from '../api/chains'
+import { Agent } from '../api/agents'
+import { Chain, ChainExecuteRequest, ChainNodeRequest, ChainEdgeRequest, ChainExecutionListItem, ChainExecutionStatusResponse } from '../types/chain'
 import ChainCanvas from '../components/chain/ChainCanvas'
-
-interface Agent {
-    id: string
-    name: string
-    description?: string
-}
+import EdgeConditionDialog from '../components/chain/EdgeConditionDialog'
+import ExecutionHistory from '../components/chain/ExecutionHistory'
+import NodeConfigPanel from '../components/chain/NodeConfigPanel'
+import { useNotification } from '../contexts/NotificationContext'
 
 const ChainDetailWorkspace: React.FC = () => {
     const { chainId } = useParams<{ chainId: string }>()
     const navigate = useNavigate()
     const queryClient = useQueryClient()
+    const { showError, showSuccess } = useNotification()
 
     const [editMode, setEditMode] = useState(false)
     const [editedName, setEditedName] = useState('')
@@ -48,6 +48,18 @@ const ChainDetailWorkspace: React.FC = () => {
     const [executionInput, setExecutionInput] = useState('{}')
     const [validationResult, setValidationResult] = useState<any>(null)
     const [addNodeDialogOpen, setAddNodeDialogOpen] = useState(false)
+
+    // Edge configuration state
+    const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null)
+    const [edgeConfigDialogOpen, setEdgeConfigDialogOpen] = useState(false)
+
+    // Node configuration state
+    const [selectedNode, setSelectedNode] = useState<Node | null>(null)
+    const [nodeConfigPanelOpen, setNodeConfigPanelOpen] = useState(false)
+
+    // Execution state
+    const [showExecutionPanel, setShowExecutionPanel] = useState(true)
+    const [selectedExecutionId, setSelectedExecutionId] = useState<string | null>(null)
 
     // Canvas state
     const [nodes, setNodes] = useState<Node[]>([])
@@ -83,6 +95,9 @@ const ChainDetailWorkspace: React.FC = () => {
                     target: edge.target_node_id,
                     label: edge.label,
                     animated: true,
+                    style: edge.condition && Object.keys(edge.condition || {}).length > 0
+                        ? { stroke: '#ff9800', strokeDasharray: '5,5', strokeWidth: 2 }
+                        : { stroke: '#007acc', strokeWidth: 2 },
                 }))
                 setEdges(flowEdges)
             },
@@ -95,6 +110,59 @@ const ChainDetailWorkspace: React.FC = () => {
         if (!response.ok) throw new Error('Failed to fetch agents')
         return response.json()
     })
+
+    // Fetch executions
+    const { data: executions = [], refetch: refetchExecutions, isLoading: isLoadingExecutions } = useQuery<ChainExecutionListItem[]>(
+        ['chainExecutions', chainId],
+        () => getChainExecutions(chainId!),
+        { enabled: !!chainId }
+    )
+
+    // Poll execution status if selected and running
+    const { data: executionStatus } = useQuery<ChainExecutionStatusResponse>(
+        ['executionStatus', selectedExecutionId],
+        () => getExecutionStatus(selectedExecutionId!),
+        {
+            enabled: !!selectedExecutionId,
+            refetchInterval: (data) => (data?.status === 'running' || data?.status === 'pending' ? 1000 : false),
+            onSuccess: (data) => {
+                // Update node statuses based on execution progress
+                if (nodes.length > 0) {
+                    setNodes(currentNodes => currentNodes.map(node => {
+                        let status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped' | undefined = undefined;
+
+                        if (data.node_states && data.node_states[node.id]) {
+                            const backendStatus = data.node_states[node.id].toLowerCase();
+                            if (['pending', 'running', 'completed', 'failed', 'skipped'].includes(backendStatus)) {
+                                status = backendStatus as any;
+                            }
+                        }
+
+                        if (!status) {
+                            if (data.current_node_id === node.id) {
+                                status = 'running'
+                            } else if (data.completed_nodes?.includes(node.id)) {
+                                status = 'completed'
+                            } else if (data.status === 'failed' && data.current_node_id === node.id) {
+                                status = 'failed'
+                            }
+                        }
+
+                        if (status && status !== node.data.status) {
+                            return {
+                                ...node,
+                                data: {
+                                    ...node.data,
+                                    status
+                                }
+                            }
+                        }
+                        return node
+                    }))
+                }
+            }
+        }
+    )
 
     // Update chain mutation
     const updateMutation = useMutation(
@@ -127,9 +195,15 @@ const ChainDetailWorkspace: React.FC = () => {
         (request: ChainExecuteRequest) => executeChain(chainId!, request),
         {
             onSuccess: (execution) => {
-                alert(`Chain execution started! Execution ID: ${execution.id}`)
-                queryClient.invalidateQueries(['chain', chainId])
+                // alert(`Chain execution started! Execution ID: ${execution.id}`)
+                queryClient.invalidateQueries(['chainExecutions', chainId])
+                setSelectedExecutionId(execution.id)
+                setShowExecutionPanel(true)
             },
+            onError: (error: any) => {
+                const message = error.response?.data?.detail || error.message || 'Execution failed'
+                showError(`Error executing chain: ${message}`)
+            }
         }
     )
 
@@ -163,7 +237,7 @@ const ChainDetailWorkspace: React.FC = () => {
             label: node.data.label,
             position_x: node.position.x,
             position_y: node.position.y,
-            config: {},
+            config: node.data.config || {},
             order_index: index,
         }))
 
@@ -173,10 +247,64 @@ const ChainDetailWorkspace: React.FC = () => {
             source_node_id: edge.source,
             target_node_id: edge.target,
             label: typeof edge.label === 'string' ? edge.label : undefined,
+            condition: edge.data?.condition || {},
         }))
 
         saveChainMutation.mutate({ nodes: chainNodes, edges: chainEdges })
     }, [saveChainMutation])
+
+    // Handle edge click
+    const handleEdgeClick = useCallback((edge: Edge) => {
+        setSelectedEdge(edge)
+        setEdgeConfigDialogOpen(true)
+    }, [])
+
+    // Handle edge config save
+    const handleEdgeConfigSave = (label: string, conditions: any[]) => {
+        if (!selectedEdge) return
+
+        setEdges((eds) =>
+            eds.map((e) => {
+                if (e.id === selectedEdge.id) {
+                    return {
+                        ...e,
+                        label: label,
+                        data: {
+                            ...e.data,
+                            condition: { rules: conditions },
+                        },
+                        // Update style if condition added/removed
+                        style: conditions && conditions.length > 0
+                            ? { stroke: '#ff9800', strokeDasharray: '5,5', strokeWidth: 2 }
+                            : { stroke: '#007acc', strokeWidth: 2 }
+                    }
+                }
+                return e
+            })
+        )
+        setEdgeConfigDialogOpen(false)
+        setSelectedEdge(null)
+    }
+
+    // Handle node click
+    const handleNodeClick = useCallback((node: Node) => {
+        setSelectedNode(node)
+        setNodeConfigPanelOpen(true)
+    }, [])
+
+    // Handle node config save
+    const handleNodeConfigSave = (nodeId: string, updates: Partial<Node>) => {
+        setNodes((nds) =>
+            nds.map((n) => {
+                if (n.id === nodeId) {
+                    return { ...n, ...updates }
+                }
+                return n
+            })
+        )
+        setNodeConfigPanelOpen(false)
+        setSelectedNode(null)
+    }
 
     // Add new node
     const handleAddNode = (agentId: string, agentName: string) => {
@@ -285,17 +413,76 @@ const ChainDetailWorkspace: React.FC = () => {
                 </Box>
             </Box>
 
-            {/* Chain Canvas */}
-            <Box sx={{ flex: 1, position: 'relative' }}>
-                <ChainCanvas
-                    nodes={nodes}
-                    edges={edges}
-                    onNodesChange={setNodes}
-                    onEdgesChange={setEdges}
-                    onSave={handleSaveCanvas}
-                    onAddNode={() => setAddNodeDialogOpen(true)}
-                />
+            <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+                {/* Chain Canvas */}
+                <Box sx={{ flex: 1, position: 'relative' }}>
+                    <ChainCanvas
+                        nodes={nodes}
+                        edges={edges}
+                        onNodesChange={setNodes}
+                        onEdgesChange={setEdges}
+                        onSave={handleSaveCanvas}
+                        onAddNode={() => setAddNodeDialogOpen(true)}
+                        onEdgeClick={handleEdgeClick}
+                        onNodeClick={handleNodeClick}
+                    />
+                </Box>
+
+                {/* Execution Panel */}
+                {showExecutionPanel && (
+                    <Paper
+                        elevation={3}
+                        sx={{
+                            width: 320,
+                            borderLeft: '1px solid #ddd',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            zIndex: 10
+                        }}
+                    >
+                        <Box sx={{ p: 2, borderBottom: '1px solid #eee' }}>
+                            <Typography variant="subtitle2" gutterBottom>Execute Chain</Typography>
+                            <TextField
+                                multiline
+                                rows={3}
+                                fullWidth
+                                placeholder='{"input": "value"}'
+                                value={executionInput}
+                                onChange={(e) => setExecutionInput(e.target.value)}
+                                size="small"
+                                sx={{ mb: 1, fontFamily: 'monospace' }}
+                            />
+                            <Button
+                                fullWidth
+                                variant="contained"
+                                color="success"
+                                startIcon={executeMutation.isLoading ? <CircularProgress size={20} color="inherit" /> : <PlayArrowIcon />}
+                                onClick={handleExecute}
+                                disabled={executeMutation.isLoading}
+                            >
+                                {executeMutation.isLoading ? 'Starting...' : 'Run Chain'}
+                            </Button>
+                        </Box>
+
+                        <ExecutionHistory
+                            executions={executions}
+                            selectedExecutionId={selectedExecutionId || undefined}
+                            onSelectExecution={setSelectedExecutionId}
+                            isLoading={isLoadingExecutions}
+                            onRefresh={refetchExecutions}
+                        />
+                    </Paper>
+                )}
             </Box>
+
+            {/* Edge Condition Dialog */}
+            <EdgeConditionDialog
+                open={edgeConfigDialogOpen}
+                onClose={() => setEdgeConfigDialogOpen(false)}
+                onSave={handleEdgeConfigSave}
+                initialLabel={selectedEdge?.label as string}
+                initialConditions={selectedEdge?.data?.condition?.rules}
+            />
 
             {/* Validation Results */}
             {validationResult && (
@@ -337,6 +524,43 @@ const ChainDetailWorkspace: React.FC = () => {
                     <Button onClick={() => setAddNodeDialogOpen(false)}>Cancel</Button>
                 </DialogActions>
             </Dialog>
+
+            {/* Node Configuration Panel */}
+            {nodeConfigPanelOpen && selectedNode && (
+                <Box
+                    sx={{
+                        position: 'fixed',
+                        top: 48,
+                        right: 0,
+                        height: 'calc(100vh - 48px)',
+                        zIndex: 1300,
+                        backgroundColor: '#fafafa',
+                        boxShadow: '-2px 0 8px rgba(0,0,0,0.1)'
+                    }}
+                >
+                    <NodeConfigPanel
+                        node={selectedNode}
+                        agents={agents}
+                        onClose={() => {
+                            setNodeConfigPanelOpen(false)
+                            setSelectedNode(null)
+                        }}
+                        onSave={handleNodeConfigSave}
+                    />
+                </Box>
+            )}
+
+            {/* Edge Configuration Dialog */}
+            <EdgeConditionDialog
+                open={edgeConfigDialogOpen}
+                initialLabel={selectedEdge?.label as string || ''}
+                initialConditions={selectedEdge?.data?.condition?.rules || []}
+                onClose={() => {
+                    setEdgeConfigDialogOpen(false)
+                    setSelectedEdge(null)
+                }}
+                onSave={handleEdgeConfigSave}
+            />
         </Box>
     )
 }
