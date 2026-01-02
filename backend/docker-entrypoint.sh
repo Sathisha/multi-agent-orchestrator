@@ -120,6 +120,13 @@ main() {
         echo "⚠️  Skipping seeding - tables not verified"
     fi
     
+    echo "🛡️  Running pre-flight check..."
+    if ! python3 -c "import main"; then
+        echo "❌ Pre-flight check failed! Application code has errors."
+        exit 1
+    fi
+    echo "✅ Pre-flight check passed"
+
     echo "🎯 Starting application with command: $@"
     
     # Execute the main command

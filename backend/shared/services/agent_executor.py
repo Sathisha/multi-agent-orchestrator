@@ -250,10 +250,11 @@ class AgentExecutorService(BaseService):
         is_active = execution_id in self.lifecycle.active_executions
         context = self.lifecycle.active_executions.get(execution_id)
         
-        return {
+        result = {
             "execution_id": execution_id,
             "agent_id": execution.agent_id,
             "status": execution.status,
+            "output_data": execution.output_data,
             "started_at": execution.started_at.isoformat() if execution.started_at else None,
             "completed_at": execution.completed_at.isoformat() if execution.completed_at else None,
             "execution_time_ms": execution.execution_time_ms,
@@ -263,6 +264,8 @@ class AgentExecutorService(BaseService):
             "is_active": is_active,
             "progress": self._get_execution_progress(context) if context else None
         }
+        logger.debug(f"Returning execution status for {execution_id}: status={result['status']}, has_output={result['output_data'] is not None}")
+        return result
 
     async def list_active_executions(self) -> List[Dict[str, Any]]:
         active_list = []

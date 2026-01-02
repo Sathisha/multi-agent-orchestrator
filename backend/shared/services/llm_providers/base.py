@@ -17,6 +17,7 @@ class LLMProviderType(str, Enum):
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     AZURE_OPENAI = "azure-openai"
+    GOOGLE = "google"
 
 
 class LLMMessage(BaseModel):

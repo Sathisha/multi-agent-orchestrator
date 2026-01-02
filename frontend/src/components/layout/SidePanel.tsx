@@ -18,6 +18,8 @@ const SidePanel: React.FC<SidePanelProps> = ({ activeView, onClose }) => {
         return 'AGENTS'
       case 'workflows':
         return 'WORKFLOWS'
+      case 'chains':
+        return 'CHAINS'
       case 'tools':
         return 'TOOLS'
       case 'monitoring':
@@ -32,6 +34,9 @@ const SidePanel: React.FC<SidePanelProps> = ({ activeView, onClose }) => {
       case 'agents':
         return <AgentExplorer />
       case 'workflows':
+        return <WorkflowExplorer />
+      case 'chains':
+        // For now, use a simple explorer - can create ChainExplorer later
         return <WorkflowExplorer />
       case 'tools':
         return <ToolsExplorer />

@@ -183,11 +183,11 @@ def test_tool_execution_models():
                 "b": 5,
                 "operation": "multiply"
             },
-            "context": {
+            context={
                 "user_id": "test_user_123",
                 "session_id": "session_456"
             },
-            "timeout_override": 20
+            timeout_override=20
         )
         
         print(f"✓ ToolExecutionRequest created for tool: {exec_request.tool_id}")

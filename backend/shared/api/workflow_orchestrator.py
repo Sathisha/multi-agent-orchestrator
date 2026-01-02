@@ -157,6 +157,103 @@ async def list_executions(
         logger.error(f"Failed to list executions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.get("/{workflow_id}", response_model=WorkflowResponse)
+async def get_workflow(
+    workflow_id: UUID,
+    session: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        stmt = select(Workflow).where(Workflow.id == workflow_id)
+        result = await session.execute(stmt)
+        workflow = result.scalar_one_or_none()
+        
+        if not workflow:
+            raise HTTPException(status_code=404, detail="Workflow not found")
+            
+        wf_dict = workflow.__dict__.copy()
+        stmt_count = select(func.count(WorkflowExecution.id)).where(WorkflowExecution.workflow_id == workflow.id)
+        wf_dict['execution_count'] = (await session.execute(stmt_count)).scalar() or 0
+        
+        return WorkflowResponse.model_validate(wf_dict)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get workflow: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/{workflow_id}", response_model=WorkflowResponse)
+async def update_workflow(
+    workflow_id: UUID,
+    workflow_update: WorkflowRequest,
+    session: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(get_current_user)
+):
+    workflow_orchestrator = get_workflow_orchestrator_service()
+    try:
+        stmt = select(Workflow).where(Workflow.id == workflow_id)
+        result = await session.execute(stmt)
+        workflow = result.scalar_one_or_none()
+        
+        if not workflow:
+            raise HTTPException(status_code=404, detail="Workflow not found")
+        
+        # Validate BPMN if changed
+        if workflow_update.bpmn_xml != workflow.bpmn_xml:
+            validation_result = await workflow_orchestrator.validate_bpmn(workflow_update.bpmn_xml)
+            if not validation_result['valid']:
+                raise HTTPException(status_code=400, detail={"message": "BPMN validation failed", "errors": validation_result['errors']})
+        
+        workflow.name = workflow_update.name
+        workflow.description = workflow_update.description
+        workflow.version = workflow_update.version
+        workflow.bpmn_xml = workflow_update.bpmn_xml
+        workflow.category = workflow_update.category
+        workflow.tags = workflow_update.tags
+        if workflow_update.input_schema: workflow.input_schema = workflow_update.input_schema
+        if workflow_update.output_schema: workflow.output_schema = workflow_update.output_schema
+        if workflow_update.timeout_minutes: workflow.timeout_minutes = workflow_update.timeout_minutes
+        if workflow_update.max_concurrent_executions: workflow.max_concurrent_executions = workflow_update.max_concurrent_executions
+        
+        await session.commit()
+        await session.refresh(workflow)
+        
+        wf_dict = workflow.__dict__.copy()
+        stmt_count = select(func.count(WorkflowExecution.id)).where(WorkflowExecution.workflow_id == workflow.id)
+        wf_dict['execution_count'] = (await session.execute(stmt_count)).scalar() or 0
+        
+        return WorkflowResponse.model_validate(wf_dict)
+    except HTTPException:
+        raise
+    except BPMNValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to update workflow: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/{workflow_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_workflow(
+    workflow_id: UUID,
+    session: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        stmt = select(Workflow).where(Workflow.id == workflow_id)
+        result = await session.execute(stmt)
+        workflow = result.scalar_one_or_none()
+        
+        if not workflow:
+            raise HTTPException(status_code=404, detail="Workflow not found")
+            
+        await session.delete(workflow)
+        await session.commit()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete workflow: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/{workflow_id}/execute", response_model=WorkflowExecutionResponse)
 async def start_workflow_execution(
     workflow_id: UUID,
@@ -178,3 +275,5 @@ async def start_workflow_execution(
     except Exception as e:
         logger.error(f"Failed execution start: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+

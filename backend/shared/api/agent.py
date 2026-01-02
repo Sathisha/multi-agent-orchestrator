@@ -27,6 +27,7 @@ class AgentCreateRequest(BaseModel):
 class AgentUpdateRequest(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
+    status: Optional[AgentStatus] = None
     config: Optional[Dict[str, Any]] = None
     system_prompt: Optional[str] = None
     llm_config: Optional[Dict[str, Any]] = None
@@ -223,6 +224,7 @@ async def update_agent(
         agent_id=str(agent_id),
         name=request.name,
         description=request.description,
+        status=request.status,
         config=request.config,
         system_prompt=request.system_prompt,
         llm_config=request.llm_config,

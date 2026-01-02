@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Any, Set, Tuple
 from uuid import UUID, uuid4
 
 from lxml import etree
-from pyzeebe import ZeebeClient, ZeebeWorker, Job
+from pyzeebe import ZeebeClient, ZeebeWorker, Job, create_insecure_channel
 from pyzeebe.errors import ZeebeBackPressureError, ZeebeGatewayUnavailableError
 from sqlalchemy import select, update, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,16 +17,17 @@ from sqlalchemy.orm import selectinload
 
 from ..database import get_database_session
 from ..models.workflow import (
-    Workflow, WorkflowExecution, ExecutionLog, WorkflowStatus, 
+    Workflow, WorkflowExecution, ExecutionLog, WorkflowStatus,
     ExecutionStatus, ExecutionPriority, NodeType
 )
-from ..models.agent import Agent
+from ..models.agent import Agent, AgentExecution
 from ..services.agent_executor import AgentExecutorService, lifecycle_manager
 from ..services.memory_manager import MemoryManagerService
 from ..services.guardrails import GuardrailsService
 from ..services.bpmn_utils import BPMNValidator, DependencyAnalyzer, BPMNParser
 from .base import BaseService
 from ..database.connection import AsyncSessionLocal
+from ..config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -46,12 +47,12 @@ class WorkflowOrchestratorService(BaseService):
     
     def __init__(
         self,
-        zeebe_gateway_address: str = "localhost:26500",
+        zeebe_gateway_address: str = None,
         agent_executor: Optional[AgentExecutorService] = None,
         memory_manager: Optional[MemoryManagerService] = None,
         guardrails_service: Optional[GuardrailsService] = None
     ):
-        self.zeebe_gateway_address = zeebe_gateway_address
+        self.zeebe_gateway_address = zeebe_gateway_address or f"{settings.zeebe_gateway_host}:{settings.zeebe_gateway_port}"
         self.zeebe_client: Optional[ZeebeClient] = None
         self.zeebe_worker: Optional[ZeebeWorker] = None
         # Use lifecycle_manager.get_executor() with a fresh session when needed, or pass session.
@@ -80,16 +81,18 @@ class WorkflowOrchestratorService(BaseService):
     
     async def initialize(self):
         try:
-            self.zeebe_client = ZeebeClient(grpc_channel_options=[
-                ('grpc.keepalive_time_ms', 30000)
-            ])
+            channel = create_insecure_channel(
+                 hostname=settings.zeebe_gateway_host,
+                 port=settings.zeebe_gateway_port
+            )
+            self.zeebe_client = ZeebeClient(channel)
             topology = await self.zeebe_client.topology()
             logger.info(f"Connected to Zeebe with {len(topology.brokers)} brokers")
             
-            self.zeebe_worker = ZeebeWorker(grpc_channel_options=[
-                ('grpc.keepalive_time_ms', 30000)
-            ])
+            self.zeebe_worker = ZeebeWorker(channel)
             await self._register_task_handlers()
+            self.work_task = asyncio.create_task(self.zeebe_worker.work())
+            logger.info("Zeebe worker started in background")
             logger.info("Workflow orchestrator initialized")
         except Exception as e:
             logger.error(f"Failed to initialize workflow orchestrator: {e}")
@@ -226,6 +229,7 @@ class WorkflowOrchestratorService(BaseService):
                 await session.commit()
                 raise WorkflowExecutionError(f"Failed to start execution: {e}")
 
+
     async def _register_task_handlers(self):
         @self.zeebe_worker.task(task_type="agent_task")
         async def handle_agent_task(job: Job) -> Dict[str, Any]:
@@ -235,56 +239,56 @@ class WorkflowOrchestratorService(BaseService):
                 agent_id = vars.get('agentId')
                 task_input = vars.get('taskInput', {})
                 
-                await self._log_execution_event(UUID(execution_id), job.element_id, 'AGENT_TASK_STARTED', f"Started agent task {agent_id}")
-                
-                # Create fresh executor and session
+                # Check if we have valid input
+                if not agent_id:
+                     logger.error("No agentId provided in job variables")
+                     return {"error": "No agentId provided"}
+
+                if not execution_id:
+                     execution_id = str(uuid4())
+
                 async with AsyncSessionLocal() as session:
-                    # Instantiate AgentExecutorService with fresh session
                     executor = AgentExecutorService(session)
                     
-                    # We can't directly call internal method _execute_agent_logic since it assumes context etc.
-                    # We should use start_agent_execution and WAIT for it?
-                    # Or expose a synchronous-like execute method?
-                    # AgentExecutorService is designed for async long-running tasks.
-                    # Zeebe task handler is async, so we CAN await.
-                    # But we want to wait for COMPLETION.
-                    
                     # Start execution
+                    logger.info(f"Starting agent execution for agent {agent_id} in workflow task {job.element_id}")
                     exec_id = await executor.start_agent_execution(
                         agent_id=agent_id,
-                        input_data=task_input,
+                        input_data=task_input if isinstance(task_input, dict) else {"input": str(task_input)},
                         timeout_seconds=300
                     )
                     
-                    # Poll for completion (Hack for now, ideally use callback or event)
-                    result = None
-                    for _ in range(60): # Wait up to 60s
-                        status = await executor.get_execution_status(exec_id)
-                        if status['status'] in [ExecutionStatus.COMPLETED, ExecutionStatus.FAILED, ExecutionStatus.TIMEOUT]:
-                             # Fetch result? AgentExecution result is in DB.
-                             stmt = select(WorkflowExecution).where(WorkflowExecution.id == UUID(execution_id)) # Wait, wrong table.
-                             # We need AgentExecution table.
-                             # But executor.get_execution_status returns dict.
-                             # Does it return output data? No, just status info.
-                             # We need to query DB or update get_execution_status
-                             # Refactored AgentExecutorService.get_execution_status DOES return info but maybe not output data?
-                             # I'll assumme it's done. 
-                             # I need the output.
-                             pass
+                    # Poll for completion
+                    completed_result = None
+                    for _ in range(300): # Wait up to 300s (5 min) matching default timeout
+                        stmt_status = select(AgentExecution).where(AgentExecution.id == exec_id)
+                        res = await session.execute(stmt_status)
+                        execution_record = res.scalar_one_or_none()
+                        
+                        if execution_record and execution_record.status in [ExecutionStatus.COMPLETED, ExecutionStatus.FAILED, ExecutionStatus.TIMEOUT]:
+                             completed_result = execution_record
                              break
                         await asyncio.sleep(1)
                     
-                    return {'status': 'completed'} # simplify
+                    if not completed_result:
+                         raise WorkflowExecutionError("Agent execution timed out or failed to start")
+                    
+                    if completed_result.status == ExecutionStatus.COMPLETED:
+                        return {
+                            'status': 'completed', 
+                            'output': completed_result.output_data,
+                            'agentExecutionId': exec_id
+                        }
+                    else:
+                        raise WorkflowExecutionError(f"Agent execution failed: {completed_result.error_message}")
                     
             except Exception as e:
                 logger.error(f"Agent task failed: {e}")
-                raise
+                raise e
 
         @self.zeebe_worker.task(task_type="tool_task")
         async def handle_tool_task(job: Job) -> Dict[str, Any]:
              return {'output': 'Tool executed'} # Placeholder
-
-        await self.zeebe_worker.work()
 
     async def _log_execution_event(self, execution_id: UUID, node_id: str, event_type: str, message: str, **kwargs):
         async with AsyncSessionLocal() as session:

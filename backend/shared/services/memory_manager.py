@@ -18,11 +18,11 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass
 from enum import Enum
-import json
+
 
 import chromadb
 from chromadb.config import Settings
-import numpy as np
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func, desc
 from sqlalchemy.orm import selectinload
@@ -178,20 +178,12 @@ class MemoryManager:
         
         return self._collections[collection_name]
     
-    def _generate_embedding(self, text: str) -> List[float]:
+    async def _generate_embedding(self, text: str) -> List[float]:
         """Generate embedding for text using configured provider."""
         if not self._embedding_provider:
             raise RuntimeError("Embedding provider not initialized")
         
-        # Run async function in sync context (called from async functions anyway)
-        import asyncio
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        
-        return loop.run_until_complete(self._embedding_provider.generate_embedding(text))
+        return await self._embedding_provider.generate_embedding(text)
     
     def _calculate_importance_score(
         self,
@@ -269,14 +261,14 @@ class MemoryManager:
             importance_score = self._calculate_importance_score(content, memory_type, metadata)
         
         # Generate embedding
-        embedding = self._generate_embedding(content)
+        embedding = await self._generate_embedding(content)
         
         # Create memory record in database
         memory_id = IDGeneratorService.generate_memory_id()
         
         memory = AgentMemory(
             id=memory_id,
-            tenant_id=tenant_id,
+            # tenant_id removed
             agent_id=agent_id,
             session_id=session_id,
             memory_type=memory_type.value,
@@ -284,9 +276,14 @@ class MemoryManager:
             memory_metadata=metadata,
             importance_score=importance_score,
             access_count=0,
-            expires_at=expires_at,
-            created_by=created_by
+            # expires_at removed
+            # created_by=created_by # handled by BaseEntity if properly passed, but careful with types
         )
+        if created_by:
+             try:
+                 memory.created_by = uuid.UUID(created_by)
+             except:
+                 pass
         
         session.add(memory)
         await session.commit()
@@ -335,7 +332,7 @@ class MemoryManager:
         similarity_threshold = similarity_threshold or self.config.similarity_threshold
         
         # Generate query embedding
-        query_embedding = self._generate_embedding(query)
+        query_embedding = await self._generate_embedding(query)
         
         # Search in vector database
         collection = await self._get_or_create_collection(tenant_id, agent_id)
@@ -363,12 +360,12 @@ class MemoryManager:
             
             stmt = select(AgentMemory).where(
                 and_(
-                    AgentMemory.tenant_id == tenant_id,
+                    # AgentMemory.tenant_id == tenant_id, # Removed
                     AgentMemory.id.in_(memory_ids),
-                    or_(
-                        AgentMemory.expires_at.is_(None),
-                        AgentMemory.expires_at > datetime.utcnow()
-                    )
+                    # or_(
+                    #     AgentMemory.expires_at.is_(None),
+                    #     AgentMemory.expires_at > datetime.utcnow()
+                    # ) # Removed expires_at
                 )
             )
             
@@ -398,7 +395,7 @@ class MemoryManager:
                     memory_type=memory.memory_type,
                     metadata=memory.memory_metadata or {},
                     created_at=memory.created_at,
-                    last_accessed=memory.last_accessed or memory.created_at,
+                    last_accessed=memory.last_accessed_at or memory.created_at,
                     access_count=memory.access_count
                 ))
         
@@ -427,14 +424,14 @@ class MemoryManager:
         
         stmt = select(AgentMemory).where(
             and_(
-                AgentMemory.tenant_id == tenant_id,
+                # AgentMemory.tenant_id == tenant_id,
                 AgentMemory.agent_id == agent_id,
                 AgentMemory.session_id == session_id,
                 AgentMemory.memory_type == MemoryType.CONVERSATION.value,
-                or_(
-                    AgentMemory.expires_at.is_(None),
-                    AgentMemory.expires_at > datetime.utcnow()
-                )
+                # or_(
+                #     AgentMemory.expires_at.is_(None),
+                #     AgentMemory.expires_at > datetime.utcnow()
+                # )
             )
         ).order_by(AgentMemory.created_at.desc()).limit(limit)
         
@@ -453,7 +450,7 @@ class MemoryManager:
                 memory_type=memory.memory_type,
                 metadata=memory.memory_metadata or {},
                 created_at=memory.created_at,
-                last_accessed=memory.last_accessed or memory.created_at,
+                last_accessed=memory.last_accessed_at or memory.created_at,
                 access_count=memory.access_count
             ))
         
@@ -471,16 +468,16 @@ class MemoryManager:
         """
         stmt = select(AgentMemory).where(
             and_(
-                AgentMemory.tenant_id == tenant_id,
+                # AgentMemory.tenant_id == tenant_id,
                 AgentMemory.agent_id == agent_id,
                 AgentMemory.memory_type.in_([
                     MemoryType.PREFERENCE.value,
                     MemoryType.FACT.value
                 ]),
-                or_(
-                    AgentMemory.expires_at.is_(None),
-                    AgentMemory.expires_at > datetime.utcnow()
-                )
+                # or_(
+                #     AgentMemory.expires_at.is_(None),
+                #     AgentMemory.expires_at > datetime.utcnow()
+                # )
             )
         ).order_by(desc(AgentMemory.importance_score))
         
@@ -501,7 +498,7 @@ class MemoryManager:
                 memory_type=memory.memory_type,
                 metadata=memory.memory_metadata or {},
                 created_at=memory.created_at,
-                last_accessed=memory.last_accessed or memory.created_at,
+                last_accessed=memory.last_accessed_at or memory.created_at,
                 access_count=memory.access_count
             ))
         
@@ -518,7 +515,7 @@ class MemoryManager:
         """
         stmt = select(AgentMemory).where(
             and_(
-                AgentMemory.tenant_id == tenant_id,
+                # AgentMemory.tenant_id == tenant_id,
                 AgentMemory.id == memory_id
             )
         )
@@ -528,7 +525,7 @@ class MemoryManager:
         
         if memory:
             memory.access_count += 1
-            memory.last_accessed = datetime.utcnow()
+            memory.last_accessed_at = datetime.utcnow()
             await session.commit()
         
         return memory
@@ -547,12 +544,12 @@ class MemoryManager:
         # Count current memories
         count_stmt = select(func.count(AgentMemory.id)).where(
             and_(
-                AgentMemory.tenant_id == tenant_id,
+                # AgentMemory.tenant_id == tenant_id,
                 AgentMemory.agent_id == agent_id,
-                or_(
-                    AgentMemory.expires_at.is_(None),
-                    AgentMemory.expires_at > datetime.utcnow()
-                )
+                # or_(
+                #     AgentMemory.expires_at.is_(None),
+                #     AgentMemory.expires_at > datetime.utcnow()
+                # )
             )
         )
         
@@ -568,12 +565,12 @@ class MemoryManager:
         # Get least important memories
         stmt = select(AgentMemory).where(
             and_(
-                AgentMemory.tenant_id == tenant_id,
+                # AgentMemory.tenant_id == tenant_id,
                 AgentMemory.agent_id == agent_id,
-                or_(
-                    AgentMemory.expires_at.is_(None),
-                    AgentMemory.expires_at > datetime.utcnow()
-                )
+                # or_(
+                #     AgentMemory.expires_at.is_(None),
+                #     AgentMemory.expires_at > datetime.utcnow()
+                # )
             )
         ).order_by(
             AgentMemory.importance_score.asc(),
@@ -613,12 +610,9 @@ class MemoryManager:
         Returns the number of memories cleaned up.
         """
         # Get expired memories
-        stmt = select(AgentMemory).where(
-            and_(
-                AgentMemory.tenant_id == tenant_id,
-                AgentMemory.expires_at <= datetime.utcnow()
-            )
-        )
+        # Get expired memories - NO OP since no expires_at
+        return 0
+        # stmt = select(AgentMemory).where(...)
         
         result = await session.execute(stmt)
         expired_memories = list(result.scalars().all())
@@ -659,7 +653,7 @@ class MemoryManager:
         """
         Get memory usage statistics.
         """
-        base_query = select(AgentMemory).where(AgentMemory.tenant_id == tenant_id)
+        base_query = select(AgentMemory) # .where(AgentMemory.tenant_id == tenant_id)
         
         if agent_id:
             base_query = base_query.where(AgentMemory.agent_id == agent_id)
@@ -673,7 +667,7 @@ class MemoryManager:
         type_stmt = select(
             AgentMemory.memory_type,
             func.count(AgentMemory.id)
-        ).where(AgentMemory.tenant_id == tenant_id)
+        ) # .where(AgentMemory.tenant_id == tenant_id)
         
         if agent_id:
             type_stmt = type_stmt.where(AgentMemory.agent_id == agent_id)
@@ -825,10 +819,10 @@ async def get_memory_manager() -> MemoryManager:
             ollama_base_url=settings.memory.ollama_base_url,
             vector_db_path=settings.memory.vector_db_path
         )
-        
+
         _memory_manager = MemoryManager(config)
         await _memory_manager.initialize()
-    
+
     return _memory_manager
 
 

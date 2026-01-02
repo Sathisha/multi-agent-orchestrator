@@ -13,6 +13,7 @@ from .workflow_orchestrator import router as workflow_orchestrator_router
 from .tool_registry import router as tool_registry_router
 from .audit import router as audit_router
 from .llm_models import router as llm_models_router
+from .v1.endpoints.chains import router as chains_router
 
 # Create main API router
 api_router = APIRouter()
@@ -25,6 +26,7 @@ api_router.include_router(agent_executor_router)
 api_router.include_router(workflow_orchestrator_router)
 api_router.include_router(tool_registry_router)
 api_router.include_router(llm_models_router)
+api_router.include_router(chains_router)
 api_router.include_router(audit_router)
 
 __all__ = ["api_router"]

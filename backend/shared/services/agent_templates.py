@@ -18,7 +18,7 @@ class AgentTemplateService:
             agent_type=AgentType.CHATBOT,
             default_config=AgentConfig(
                 name="Basic Chatbot",
-                model="llama2",
+                model="tinyllama",
                 system_prompt="You are a helpful assistant. Answer questions clearly and concisely.",
                 temperature=0.7,
                 max_tokens=1000,
@@ -72,7 +72,7 @@ class AgentTemplateService:
             agent_type=AgentType.DATA_ANALYSIS,
             default_config=AgentConfig(
                 name="Data Analyst",
-                model="codellama",
+                model="phi",
                 system_prompt="You are a data analyst. Analyze data, identify patterns, and provide actionable insights.",
                 temperature=0.3,
                 max_tokens=3000,
@@ -90,7 +90,7 @@ class AgentTemplateService:
             agent_type=AgentType.CUSTOM,
             default_config=AgentConfig(
                 name="Custom Agent",
-                model="llama2",
+                model="tinyllama",
                 system_prompt="You are an AI assistant.",
                 temperature=0.7,
                 max_tokens=1000,

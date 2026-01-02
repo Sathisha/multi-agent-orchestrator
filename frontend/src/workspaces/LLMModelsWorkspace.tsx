@@ -257,6 +257,7 @@ const ModelDialog: React.FC<ModelDialogProps> = ({ open, onClose, onSubmit, mode
                 <Select name="provider" value={formData.provider || 'OpenAI'} onChange={handleSelectChange} fullWidth>
                     <MenuItem value="openai">OpenAI</MenuItem>
                     <MenuItem value="anthropic">Anthropic</MenuItem>
+                    <MenuItem value="google">Google Gemini</MenuItem>
                     <MenuItem value="vertex_ai">Vertex AI</MenuItem>
                     <MenuItem value="ollama">Ollama</MenuItem>
                     <MenuItem value="huggingface">HuggingFace</MenuItem>

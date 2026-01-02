@@ -47,6 +47,7 @@ const AgentDetailWorkspace: React.FC = () => {
     const chatEndRef = useRef<HTMLDivElement>(null)
 
     const [activeTab, setActiveTab] = useState(0)
+    const [status, setStatus] = useState('draft')
     const [name, setName] = useState('')
     const [description, setDescription] = useState('')
     const [systemPrompt, setSystemPrompt] = useState('')
@@ -84,6 +85,7 @@ const AgentDetailWorkspace: React.FC = () => {
                 setName(data.name)
                 setDescription(data.description || '')
                 setSystemPrompt(data.system_prompt || '')
+                setStatus(data.status || 'draft')
                 // Use model from config or fallback
                 setModel(data.config?.model || data.config?.model_name || 'gpt-4')
                 setTemperature(data.config?.temperature || 0.7)
@@ -172,6 +174,7 @@ const AgentDetailWorkspace: React.FC = () => {
         updateMutation.mutate({
             name,
             description,
+            status,
             system_prompt: systemPrompt,
             config: {
                 ...agent?.config,
@@ -188,6 +191,15 @@ const AgentDetailWorkspace: React.FC = () => {
     const scrollToBottom = () => {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
+
+    // Reset chat when switching agents
+    useEffect(() => {
+        setChatMessages([])
+        setChatInput('')
+        setIsExecuting(false)
+        setCurrentExecutionId(null)
+    }, [agentId])
+
 
 
     useEffect(() => {
@@ -437,6 +449,34 @@ const AgentDetailWorkspace: React.FC = () => {
                                 </Box>
                                 <Box>
                                     <Typography component="span" sx={{ fontSize: '0.75rem', color: '#888', fontWeight: 600, textTransform: 'uppercase', mb: 1, display: 'block' }}>
+                                        Status
+                                    </Typography>
+                                    <Select
+                                        fullWidth
+                                        value={status}
+                                        onChange={(e) => { setStatus(e.target.value); setHasUnsavedChanges(true) }}
+                                        sx={{
+                                            bgcolor: 'rgba(255, 255, 255, 0.02)',
+                                            '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.05)' },
+                                            '.MuiSelect-select': { display: 'flex', gap: 1, alignItems: 'center' }
+                                        }}
+                                    >
+                                        <MenuItem value="draft">
+                                            <Chip label="DRAFT" size="small" sx={{ bgcolor: 'rgba(150, 150, 150, 0.2)', color: '#bbb' }} />
+                                            <Typography variant="body2" sx={{ ml: 1 }}>Draft - Not ready for general use</Typography>
+                                        </MenuItem>
+                                        <MenuItem value="active">
+                                            <Chip label="ACTIVE" size="small" sx={{ bgcolor: 'rgba(76, 175, 80, 0.2)', color: '#66bb6a' }} />
+                                            <Typography variant="body2" sx={{ ml: 1 }}>Active - Available for execution</Typography>
+                                        </MenuItem>
+                                        <MenuItem value="inactive">
+                                            <Chip label="INACTIVE" size="small" sx={{ bgcolor: 'rgba(244, 67, 54, 0.2)', color: '#ef5350' }} />
+                                            <Typography variant="body2" sx={{ ml: 1 }}>Inactive - Temporarily disabled</Typography>
+                                        </MenuItem>
+                                    </Select>
+                                </Box>
+                                <Box>
+                                    <Typography component="span" sx={{ fontSize: '0.75rem', color: '#888', fontWeight: 600, textTransform: 'uppercase', mb: 1, display: 'block' }}>
                                         Description & Purpose
                                     </Typography>
                                     <TextField
@@ -456,7 +496,6 @@ const AgentDetailWorkspace: React.FC = () => {
                                 </Box>
 
                                 <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
-                                    <Chip label={`Status: ${agent.status}`} size="small" variant="outlined" sx={{ borderColor: agent.status === 'active' ? '#4caf50' : '#888', color: agent.status === 'active' ? '#4caf50' : '#888' }} />
                                     <Chip label={`Type: ${agent.type}`} size="small" variant="outlined" sx={{ color: '#888' }} />
                                     <Chip label={`Version: ${agent.version || '1.0'}`} size="small" variant="outlined" sx={{ color: '#888' }} />
                                 </Box>

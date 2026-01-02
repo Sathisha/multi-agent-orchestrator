@@ -6,6 +6,8 @@ import ToolsWorkspace from './workspaces/ToolsWorkspace'
 import MonitoringWorkspace from './workspaces/MonitoringWorkspace'
 import AgentDetailWorkspace from './workspaces/AgentDetailWorkspace'
 import WorkflowDetailWorkspace from './workspaces/WorkflowDetailWorkspace'
+import ChainWorkspace from './workspaces/ChainWorkspace'
+import ChainDetailWorkspace from './workspaces/ChainDetailWorkspace'
 import LLMModelsWorkspace from './workspaces/LLMModelsWorkspace'
 import LoginPage from './components/auth/LoginPage'
 import ProtectedRoute from './routes/ProtectedRoute'
@@ -24,6 +26,8 @@ function App() {
           <Route path="/agents/:agentId" element={<AgentDetailWorkspace />} />
           <Route path="/workflows" element={<WorkflowWorkspace />} />
           <Route path="/workflows/:workflowId" element={<WorkflowDetailWorkspace />} />
+          <Route path="/chains" element={<ChainWorkspace />} />
+          <Route path="/chains/:chainId" element={<ChainDetailWorkspace />} />
           <Route path="/tools" element={<ToolsWorkspace />} />
           <Route path="/monitoring" element={<MonitoringWorkspace />} />
           <Route path="/models" element={<LLMModelsWorkspace />} />

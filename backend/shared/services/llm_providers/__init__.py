@@ -16,6 +16,7 @@ from .ollama_provider import OllamaProvider
 from .openai_provider import OpenAIProvider
 from .anthropic_provider import AnthropicProvider
 from .azure_openai_provider import AzureOpenAIProvider
+from .google_provider import GoogleProvider
 from .provider_factory import LLMProviderFactory
 from .credential_manager import CredentialManager
 
@@ -34,6 +35,7 @@ __all__ = [
     "OpenAIProvider", 
     "AnthropicProvider",
     "AzureOpenAIProvider",
+    "GoogleProvider",
     "LLMProviderFactory",
     "CredentialManager"
 ]

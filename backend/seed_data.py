@@ -69,6 +69,7 @@ async def create_sample_agents(user_id: uuid.UUID):
                     "temperature": 0.7,
                     "max_tokens": 2000
                 },
+                available_tools=["Weather Checker", "Wikipedia Search"],
                 created_by=user_id,
                 updated_by=user_id
             ),
@@ -85,7 +86,7 @@ async def create_sample_agents(user_id: uuid.UUID):
                     "temperature": 0.3,
                     "max_tokens": 3000
                 },
-                available_tools=["code_analyzer", "linter"],
+                available_tools=["Code Reviewer", "Linter"],
                 capabilities=["code_review", "bug_detection", "refactoring"],
                 tags=["development", "code-quality"],
                 created_by=user_id,
@@ -104,6 +105,7 @@ async def create_sample_agents(user_id: uuid.UUID):
                     "temperature": 0.9,
                     "max_tokens": 2500
                 },
+                available_tools=["Wikipedia Search"],
                 capabilities=["writing", "seo", "marketing"],
                 tags=["content", "marketing"],
                 created_by=user_id,
@@ -122,7 +124,7 @@ async def create_sample_agents(user_id: uuid.UUID):
                     "temperature": 0.2,
                     "max_tokens": 2000
                 },
-                available_tools=["data_processor", "chart_generator"],
+                available_tools=["Internet Search", "Weather Checker"],
                 capabilities=["data_analysis", "visualization", "reporting"],
                 tags=["analytics", "data"],
                 created_by=user_id,
@@ -209,117 +211,173 @@ async def create_sample_tools(user_id: uuid.UUID):
         tools = [
             Tool(
                 id=uuid.uuid4(),
-                name="Email Sender",
-                description="Send emails via SMTP with template support",
+                name="Weather Checker",
+                description="Get real-time weather information for any location worldwide using the Open-Meteo API.",
                 version="1.0.0",
                 tool_type=ToolType.CUSTOM,
                 status=ToolStatus.ACTIVE,
-                code='''def execute(inputs, context=None):
-    """Send an email using SMTP"""
-    recipient = inputs.get('recipient')
-    subject = inputs.get('subject')
-    body = inputs.get('body')
-    
-    # Mock email sending
-    return {
-        'status': 'sent',
-        'recipient': recipient,
-        'subject': subject,
-        'message_id': 'mock-' + str(hash(recipient))
-    }''',
+                code="""def execute(inputs, context=None):
+    import httpx
+    location = inputs.get('location', 'London')
+    # Get coordinates
+    geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={location}&count=1&language=en&format=json"
+    with httpx.Client(timeout=10.0) as client:
+        geo_res = client.get(geo_url)
+        if geo_res.status_code != 200 or not geo_res.json().get('results'):
+            return {"error": f"Could not find location: {location}"}
+        
+        res = geo_res.json()['results'][0]
+        lat, lon = res['latitude'], res['longitude']
+        
+        # Get weather
+        w_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
+        w_res = client.get(w_url)
+        if w_res.status_code != 200:
+            return {"error": "Weather service unavailable"}
+        
+        w_data = w_res.json()['current_weather']
+        return {
+            "location": f"{res['name']}, {res.get('country', '')}",
+            "temperature": w_data['temperature'],
+            "windspeed": w_data['windspeed'],
+            "condition_code": w_data['weathercode']
+        }""",
                 entry_point="execute",
                 input_schema={
                     "type": "object",
                     "properties": {
-                        "recipient": {"type": "string"},
-                        "subject": {"type": "string"},
-                        "body": {"type": "string"}
+                        "location": {"type": "string", "description": "The city and country to check weather for"}
                     },
-                    "required": ["recipient", "subject", "body"]
+                    "required": ["location"]
                 },
                 output_schema={
                     "type": "object",
                     "properties": {
-                        "status": {"type": "string"},
-                        "message_id": {"type": "string"}
+                        "location": {"type": "string"},
+                        "temperature": {"type": "number"},
+                        "windspeed": {"type": "number"},
+                        "condition_code": {"type": "integer"}
                     }
                 },
-                category="communication",
-                tags=["email", "smtp"],
-                capabilities=["send_email", "templating"],
-                usage_count=45,
+                category="information",
+                tags=["weather", "api", "real-time"],
+                capabilities=["weather_lookup"],
                 created_by=user_id,
                 updated_by=user_id
             ),
             Tool(
                 id=uuid.uuid4(),
-                name="Data Transformer",
-                description="Transform and process JSON data",
+                name="Wikipedia Search",
+                description="Search for and retrieve summaries of articles from Wikipedia.",
                 version="1.0.0",
                 tool_type=ToolType.CUSTOM,
                 status=ToolStatus.ACTIVE,
-                code='''def execute(inputs, context=None):
-    """Transform data based on operation"""
-    data = inputs.get('data', [])
-    operation = inputs.get('operation', 'count')
+                code="""def execute(inputs, context=None):
+    import httpx
+    query = inputs.get('query')
+    if not query: return {"error": "No query provided"}
     
-    if operation == 'count':
-        result = len(data)
-    elif operation == 'sum':
-        result = sum(data) if all(isinstance(x, (int, float)) for x in data) else 0
-    elif operation == 'filter':
-        filter_value = inputs.get('filter_value')
-        result = [item for item in data if item != filter_value]
-    else:
-        result = data
-    
-    return {
-        'result': result,
-        'operation': operation,
-        'input_count': len(data)
-    }''',
+    url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{query.replace(' ', '_')}"
+    with httpx.Client(timeout=10.0) as client:
+        res = client.get(url)
+        if res.status_code == 404:
+            return {"error": "Wikipedia page not found"}
+        if res.status_code != 200:
+            return {"error": "Wikipedia service error"}
+        
+        data = res.json()
+        return {
+            "title": data.get('title'),
+            "summary": data.get('extract'),
+            "url": data.get('content_urls', {}).get('desktop', {}).get('page')
+        }""",
                 entry_point="execute",
                 input_schema={
                     "type": "object",
                     "properties": {
-                        "data": {"type": "array"},
-                        "operation": {"type": "string", "enum": ["count", "sum", "filter"]}
+                        "query": {"type": "string", "description": "The topic to search for on Wikipedia"}
                     },
-                    "required": ["data", "operation"]
+                    "required": ["query"]
                 },
-                category="data_processing",
-                tags=["data", "transform"],
-                capabilities=["transform", "filter", "aggregate"],
-                usage_count=23,
+                category="research",
+                tags=["wiki", "knowledge", "encyclopedia"],
+                capabilities=["information_retrieval"],
                 created_by=user_id,
                 updated_by=user_id
             ),
             Tool(
                 id=uuid.uuid4(),
-                name="Web Scraper",
-                description="Extract data from web pages",
+                name="Internet Search",
+                description="Perform a web search using DuckDuckGo to find information, news, and answers.",
                 version="1.0.0",
                 tool_type=ToolType.CUSTOM,
-                status=ToolStatus.DRAFT,
-                code='''def execute(inputs, context=None):
-    """Mock web scraper"""
-    url = inputs.get('url')
-    selector = inputs.get('selector', 'body')
+                status=ToolStatus.ACTIVE,
+                code="""def execute(inputs, context=None):
+    import httpx
+    query = inputs.get('query')
+    if not query: return {"error": "No query provided"}
     
-    return {
-        'url': url,
-        'selector': selector,
-        'content': 'Mock scraped content from ' + url,
-        'timestamp': '2026-01-01T10:00:00Z'
-    }''',
+    url = f"https://api.duckduckgo.com/?q={query}&format=json"
+    with httpx.Client(timeout=10.0) as client:
+        res = client.get(url)
+        if res.status_code != 200:
+            return {"error": "Search service error"}
+        
+        data = res.json()
+        return {
+            "abstract": data.get('AbstractText'),
+            "source": data.get('AbstractSource'),
+            "related": [t.get('Text') for t in data.get('RelatedTopics', []) if 'Text' in t][:3]
+        }""",
                 entry_point="execute",
-                category="web",
-                tags=["scraping", "web"],
-                capabilities=["scrape", "extract"],
-                usage_count=12,
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "The search query"}
+                    },
+                    "required": ["query"]
+                },
+                category="search",
+                tags=["web", "search", "duckduckgo"],
+                capabilities=["web_search"],
                 created_by=user_id,
                 updated_by=user_id
             ),
+            Tool(
+                id=uuid.uuid4(),
+                name="Code Reviewer",
+                description="Mock tool for code analysis",
+                version="1.0.0",
+                tool_type=ToolType.CUSTOM,
+                status=ToolStatus.ACTIVE,
+                code="""def execute(inputs, context=None):
+    code = inputs.get('code', '')
+    return {
+        "score": 85,
+        "issues": ["Unused import at line 5", "Function too long at line 20"],
+        "suggestions": ["Refactor execute into smaller functions"]
+    }""",
+                entry_point="execute",
+                input_schema={"type": "object", "properties": {"code": {"type": "string"}}, "required": ["code"]},
+                category="development",
+                created_by=user_id,
+                updated_by=user_id
+            ),
+            Tool(
+                id=uuid.uuid4(),
+                name="Linter",
+                description="Mock linter tool",
+                version="1.0.0",
+                tool_type=ToolType.CUSTOM,
+                status=ToolStatus.ACTIVE,
+                code="""def execute(inputs, context=None):
+    return {"errors": [], "warnings": ["Line too long"]}""",
+                entry_point="execute",
+                input_schema={"type": "object", "properties": {"code": {"type": "string"}}, "required": ["code"]},
+                category="development",
+                created_by=user_id,
+                updated_by=user_id
+            )
         ]
         
         for tool in tools:

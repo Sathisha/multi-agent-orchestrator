@@ -139,6 +139,10 @@ class Settings(BaseSettings):
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     api: APISettings = Field(default_factory=APISettings)
     memory: MemorySettings = Field(default_factory=MemorySettings)
+
+    # Zeebe settings
+    zeebe_gateway_host: str = Field(default="zeebe", description="Zeebe gateway host")
+    zeebe_gateway_port: int = Field(default=26500, description="Zeebe gateway port")
     
     model_config = SettingsConfigDict(
         env_file=".env",

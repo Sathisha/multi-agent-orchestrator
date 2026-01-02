@@ -9,6 +9,7 @@ import {
   Settings as SettingsIcon,
   Menu as MenuIcon,
   Dns as LLMIcon,
+  Link as ChainIcon,
 } from '@mui/icons-material'
 
 interface ActivityBarProps {
@@ -16,16 +17,16 @@ interface ActivityBarProps {
   onToggleSidePanel: () => void
 }
 
-const ActivityBar: React.FC<ActivityBarProps> = ({ 
-  onViewChange, 
-  onToggleSidePanel 
+const ActivityBar: React.FC<ActivityBarProps> = ({
+  onViewChange,
+  onToggleSidePanel
 }) => {
   const navigate = useNavigate()
   const location = useLocation()
 
   const menuItems = [
     { id: 'agents', icon: AgentIcon, label: 'Agents', path: '/agents' },
-    { id: 'workflows', icon: WorkflowIcon, label: 'Workflows', path: '/workflows' },
+    { id: 'chains', icon: ChainIcon, label: 'Chains', path: '/chains' },
     { id: 'tools', icon: ToolsIcon, label: 'Tools', path: '/tools' },
     { id: 'models', icon: LLMIcon, label: 'LLM Models', path: '/models' },
     { id: 'monitoring', icon: MonitoringIcon, label: 'Monitoring', path: '/monitoring' },
@@ -72,7 +73,7 @@ const ActivityBar: React.FC<ActivityBarProps> = ({
       {menuItems.map((item) => {
         const Icon = item.icon
         const active = isActive(item.path)
-        
+
         return (
           <Tooltip key={item.id} title={item.label} placement="right">
             <IconButton

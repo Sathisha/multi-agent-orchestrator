@@ -19,16 +19,29 @@ const WorkflowWorkspace: React.FC = () => {
   const recentExecutions = executions?.slice(0, 6) || []
 
   const createMutation = useMutation(createWorkflow, {
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries('workflows')
       setCreateDialogOpen(false)
       setNewItemName('')
+      navigate(`/workflows/${data.id}`)
     }
   })
 
   const handleCreate = () => {
-    // Simple XML placeholder
-    const placeholderXML = `<?xml version="1.0" encoding="UTF-8"?><bpmn:definitions ...>`
+    // Valid empty BPMN XML
+    const placeholderXML = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="5.0.0">
+  <bpmn:process id="Process_1" isExecutable="false">
+    <bpmn:startEvent id="StartEvent_1" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_1">
+      <bpmndi:BPMNShape id="_BPMNShape_StartEvent_2" bpmnElement="StartEvent_1">
+        <dc:Bounds x="173" y="102" width="36" height="36" />
+      </bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>`;
     createMutation.mutate({
       name: newItemName,
       bpmn_xml: placeholderXML,
@@ -71,7 +84,7 @@ const WorkflowWorkspace: React.FC = () => {
               <WorkflowIcon sx={{ fontSize: 48, color: '#569cd6', mb: 2 }} />
               <Typography variant="h6" color="#cccccc">BPMN Designer</Typography>
               <Typography variant="body2" color="#969696" align="center" sx={{ mb: 2 }}>Launch the visual workflow editor</Typography>
-              <Button variant="outlined" onClick={() => alert("Designer integration coming soon")}>Open</Button>
+              <Button variant="outlined" onClick={() => setCreateDialogOpen(true)}>Open</Button>
             </Card>
           </Grid>
           {/* Stats Card */}

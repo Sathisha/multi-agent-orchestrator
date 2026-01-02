@@ -239,6 +239,9 @@ class CredentialManager:
             },
             LLMProviderType.OLLAMA: {
                 "base_url": "OLLAMA_BASE_URL"
+            },
+            LLMProviderType.GOOGLE: {
+                "api_key": "GOOGLE_API_KEY"
             }
         }
         

@@ -1,6 +1,6 @@
 # AI Agent Framework Development Makefile
 
-.PHONY: help setup start stop api test test-v test-unit test-property test-integration test-quick test-file test-coverage test-mark test-keyword test-llm test-memory test-audit test-guardrails test-tools test-debug test-help format lint clean migration migrate build logs shell dev ci
+.PHONY: help setup start stop api test test-v test-unit test-property test-integration test-quick test-file test-coverage test-mark test-keyword test-llm test-memory test-audit test-guardrails test-tools test-debug test-help format lint clean migration migrate build logs shell dev ci rebuild
 
 # Default target
 help:
@@ -10,6 +10,7 @@ help:
 	@echo "Setup & Infrastructure:"
 	@echo "  setup            - Set up development environment with auto DB recreation"
 	@echo "  build            - Build Docker images"
+	@echo "  rebuild          - Stop, build, and start all services (shortcut)"
 	@echo "  build-backend    - Build backend Docker image"
 	@echo "  build-frontend   - Build frontend Docker image"
 	@echo "  start            - Start all services (equivalent to 'docker-compose up -d')"
@@ -67,6 +68,7 @@ setup: build start-dev
 build:
 	@echo "🔨 Building Docker images..."
 	@docker-compose build
+
 
 # Build backend image
 build-backend:
@@ -127,16 +129,26 @@ api:
 api-prod:
 	@docker-compose up backend
 
+rebuild:
+	@echo "🔨 Rebuilding all services..."
+	@docker-compose build
+	@echo "✅ Rebuild complete!"
+	@echo "🔄 Stopping all services..."
+	@docker-compose down
+	@echo "⏳ Waiting for database to be ready..."
+	@timeout 10
+	@echo "🚀 Starting all services..."
+	@docker-compose up -d
+	@echo "🚀 All services restarted!"
+
 # ============================================================================
 # TEST TARGETS - Run tests in existing development containers
 # ============================================================================
 
 # Run all tests with coverage and JUnit reports using existing containers
 test:
-	@mkdir -p reports htmlcov
 	@echo "🧪 Running all tests in development containers..."
-	@./scripts/ensure-dev-containers.sh
-	@docker-compose exec -T backend pytest tests/ -v --cov=shared --cov-report=html --cov-report=term-missing --junit-xml=reports/junit.xml
+	@docker-compose exec -T backend bash -c "export PYTHONPATH=/app:/app/backend && mkdir -p reports htmlcov && pytest tests/ -v --cov=shared --cov-report=html --cov-report=term-missing --junit-xml=reports/junit.xml"
 	@echo ""
 	@echo "✅ Test execution completed!"
 	@echo "📊 Coverage Report: htmlcov/index.html"

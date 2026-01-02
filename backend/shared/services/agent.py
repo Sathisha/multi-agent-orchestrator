@@ -109,6 +109,7 @@ class AgentService(BaseService):
         agent_id: str,
         name: Optional[str] = None,
         description: Optional[str] = None,
+        status: Optional[AgentStatus] = None,
         config: Optional[Dict[str, Any]] = None,
         system_prompt: Optional[str] = None,
         llm_config: Optional[Dict[str, Any]] = None,
@@ -131,6 +132,8 @@ class AgentService(BaseService):
 
         if description is not None:
             agent.description = description
+        if status is not None:
+            agent.status = status
         if config is not None:
             agent.config = config
         if system_prompt is not None:

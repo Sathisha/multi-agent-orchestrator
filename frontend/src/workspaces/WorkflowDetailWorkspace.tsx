@@ -3,16 +3,29 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Box, Typography, IconButton, CircularProgress } from '@mui/material'
 import { ArrowBack } from '@mui/icons-material'
 import { useQuery } from 'react-query'
-import { getWorkflow } from '../api/workflows'
+import { getWorkflow, updateWorkflow } from '../api/workflows'
+import WorkflowModeler from '../components/workflow/WorkflowModeler'
+import { useMutation, useQueryClient } from 'react-query'
 
 const WorkflowDetailWorkspace: React.FC = () => {
     const { workflowId } = useParams<{ workflowId: string }>()
     const navigate = useNavigate()
 
+    const queryClient = useQueryClient()
+
     const { data: workflow, isLoading } = useQuery(
         ['workflow', workflowId],
         () => getWorkflow(workflowId!),
         { enabled: !!workflowId }
+    )
+
+    const updateMutation = useMutation(
+        (updatedWorkflow: any) => updateWorkflow(workflowId!, updatedWorkflow),
+        {
+            onSuccess: () => {
+                queryClient.invalidateQueries(['workflow', workflowId])
+            }
+        }
     )
 
     if (isLoading) {
@@ -32,7 +45,7 @@ const WorkflowDetailWorkspace: React.FC = () => {
     }
 
     return (
-        <Box sx={{ p: 3 }}>
+        <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
                 <IconButton onClick={() => navigate('/workflows')} size="small">
                     <ArrowBack />
@@ -48,11 +61,11 @@ const WorkflowDetailWorkspace: React.FC = () => {
                 Status: {workflow.status} | Version: {workflow.version} | Executions: {workflow.execution_count}
             </Typography>
 
-            <Box sx={{ mt: 4 }}>
-                <Typography variant="h6" gutterBottom>BPMN Diagram</Typography>
-                <Typography color="text.secondary">
-                    BPMN designer integration coming soon...
-                </Typography>
+            <Box sx={{ mt: 4, flex: 1, border: '1px solid #444', borderRadius: 1, overflow: 'hidden' }}>
+                <WorkflowModeler
+                    xml={workflow.bpmn_xml}
+                    onSave={(xml) => updateMutation.mutate({ ...workflow, bpmn_xml: xml })}
+                />
             </Box>
         </Box>
     )

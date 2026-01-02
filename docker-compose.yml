@@ -144,48 +144,26 @@ services:
     container_name: ai-agent-framework-ollama
     ports:
       - "11434:11434"
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_KEEP_ALIVE=24h
     volumes:
       - ollama_data:/root/.ollama
-      - ./infrastructure/docker/ollama/until_ready.sh:/usr/bin/until_ready.sh
     networks:
       - ai-agent-network
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 4G
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:11434/api/tags" ]
+      test: [ "CMD", "ollama", "list" ]
       interval: 10s
       timeout: 10s
       retries: 5
       start_period: 30s
-    entrypoint: >
-      /bin/bash -c "
-        ollama serve &
-        /usr/bin/until_ready.sh 11434;
-        
-        # Pull llama2 if not available
-        if ! ollama list | grep -q 'llama2'; then
-          echo 'Pulling llama2 model...'
-          ollama pull llama2
-        fi;
-        
-        # Pull deepseek-coder if not available
-        if ! ollama list | grep -q 'deepseek-coder'; then
-          echo 'Pulling deepseek-coder model...'
-          ollama pull deepseek-coder
-        fi;
-        
-        # Pull gemma if not available
-        if ! ollama list | grep -q 'gemma'; then
-          echo 'Pulling gemma model...'
-          ollama pull gemma
-        fi;
-
-        # Pull nomic-embed-text if not available
-        if ! ollama list | grep -q 'nomic-embed-text'; then
-          echo 'Pulling nomic-embed-text model...'
-          ollama pull nomic-embed-text
-        fi;
-        
-        wait
-      "
+    restart: unless-stopped
 
   # Camunda Platform 8 Community Edition
   zeebe:

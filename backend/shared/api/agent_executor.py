@@ -39,6 +39,7 @@ class ExecutionStatusResponse(BaseModel):
     execution_id: UUID = Field(..., description="Execution identifier")
     agent_id: UUID = Field(..., description="Agent identifier")
     status: str = Field(..., description="Current status")
+    output_data: Optional[Dict[str, Any]] = Field(None, description="Execution output data")
     started_at: Optional[datetime] = Field(None, description="Start timestamp")
     completed_at: Optional[datetime] = Field(None, description="Completion timestamp")
     execution_time_ms: Optional[int] = Field(None, description="Execution time in milliseconds")

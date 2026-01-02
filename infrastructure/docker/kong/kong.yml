@@ -38,4 +38,4 @@ routes:
   - name: api-route
     service: ai-agent-framework-api
     paths:
-      - /api
+      - /

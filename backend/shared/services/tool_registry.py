@@ -309,16 +309,29 @@ class ToolRegistryService(BaseService):
     
     async def get_tool_templates(self) -> List[Dict[str, Any]]:
         """Get available tool templates for development."""
-        # Returns static templates
         return [
-             {
-                "name": "simple_function",
-                "display_name": "Simple Function Tool",
-                "description": "A basic function-based tool template",
-                "code": "def execute(inputs, context=None):\\n    return { 'result': 'Hello ' + inputs.get('name', 'World') }",
-                "input_schema": {"type": "object", "properties": {"name": {"type": "string"}}},
-                "output_schema": {"type": "object", "properties": {"result": {"type": "string"}}}
-             }
+            {
+                "name": "weather_template",
+                "display_name": "Weather Checker Template",
+                "description": "API-based weather lookup template using Open-Meteo",
+                "code": "def execute(inputs, context=None):\n    import httpx\n    location = inputs.get('location', 'London')\n    geo_url = f\"https://geocoding-api.open-meteo.com/v1/search?name={location}&count=1&language=en&format=json\"\n    with httpx.Client(timeout=10.0) as client:\n        geo_res = client.get(geo_url)\n        if geo_res.status_code != 200 or not geo_res.json().get('results'):\n            return {\"error\": f\"Could not find location: {location}\"}\n        res = geo_res.json()['results'][0]\n        lat, lon = res['latitude'], res['longitude']\n        w_url = f\"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true\"\n        w_res = client.get(w_url)\n        if w_res.status_code != 200: return {\"error\": \"Weather service unavailable\"}\n        w_data = w_res.json()['current_weather']\n        return {\n            \"location\": res['name'],\n            \"temperature\": w_data['temperature'],\n            \"condition_code\": w_data['weathercode']\n        }",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"location": {"type": "string"}},
+                    "required": ["location"]
+                }
+            },
+            {
+                "name": "wikipedia_template",
+                "display_name": "Wikipedia Search Template",
+                "description": "API-based Wikipedia lookup template",
+                "code": "def execute(inputs, context=None):\n    import httpx\n    query = inputs.get('query')\n    url = f\"https://en.wikipedia.org/api/rest_v1/page/summary/{query.replace(' ', '_')}\"\n    with httpx.Client(timeout=10.0) as client:\n        res = client.get(url)\n        if res.status_code != 200: return {\"error\": \"Wikipedia service error\"}\n        data = res.json()\n        return {\n            \"title\": data.get('title'),\n            \"summary\": data.get('extract')\n        }",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"query": {"type": "string"}},
+                    "required": ["query"]
+                }
+            }
         ]
     
     async def discover_tools(

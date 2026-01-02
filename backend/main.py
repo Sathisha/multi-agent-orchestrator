@@ -77,7 +77,7 @@ app = FastAPI(
 security_config = SecurityConfig()
 security_config.enable_rate_limiting = True
 security_config.enable_input_validation = False
-security_config.enable_security_headers = True
+security_config.enable_security_headers = False  # Disabled to allow Swagger UI assets
 security_config.enable_request_logging = True
 
 # Apply security middleware stack

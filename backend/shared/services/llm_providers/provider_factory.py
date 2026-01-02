@@ -8,6 +8,7 @@ from .ollama_provider import OllamaProvider, OllamaConfig
 from .openai_provider import OpenAIProvider, OpenAIConfig
 from .anthropic_provider import AnthropicProvider, AnthropicConfig
 from .azure_openai_provider import AzureOpenAIProvider, AzureOpenAIConfig
+from .google_provider import GoogleProvider, GoogleConfig
 from .credential_manager import CredentialManager
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,8 @@ class LLMProviderFactory:
             LLMProviderType.OLLAMA: (OllamaProvider, OllamaConfig),
             LLMProviderType.OPENAI: (OpenAIProvider, OpenAIConfig),
             LLMProviderType.ANTHROPIC: (AnthropicProvider, AnthropicConfig),
-            LLMProviderType.AZURE_OPENAI: (AzureOpenAIProvider, AzureOpenAIConfig)
+            LLMProviderType.AZURE_OPENAI: (AzureOpenAIProvider, AzureOpenAIConfig),
+            LLMProviderType.GOOGLE: (GoogleProvider, GoogleConfig)
         }
     
     async def create_provider(

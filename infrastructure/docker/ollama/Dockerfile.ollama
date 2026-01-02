@@ -1,5 +1,8 @@
-# infrastructure/docker/ollama/Dockerfile.ollama
 FROM ollama/ollama:latest
 
-# Install netcat-openbsd for the health check script
-RUN apt-get update && apt-get install -y netcat-openbsd
+# Copy the entrypoint script
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Use the entrypoint script to start Ollama and pull models
+ENTRYPOINT ["/entrypoint.sh"]
