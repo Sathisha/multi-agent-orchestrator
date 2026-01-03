@@ -50,7 +50,7 @@ interface LogEntry {
 
 const TestWorkflowModal: React.FC<TestWorkflowModalProps> = ({ open, onClose, chain }) => {
     const queryClient = useQueryClient();
-    const [inputData, setInputData] = useState('{}');
+    const [inputData, setInputData] = useState('');
     const [executionId, setExecutionId] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState(0);
 
@@ -140,8 +140,8 @@ const TestWorkflowModal: React.FC<TestWorkflowModalProps> = ({ open, onClose, ch
         {
             enabled: !!executionId,
             refetchInterval: (data) => {
-                if (!data) return 1000;
-                return ['running', 'pending'].includes(data.status.toLowerCase()) ? 500 : false;
+                if (!data) return 2000;
+                return ['running', 'pending'].includes(data.status.toLowerCase()) ? 2000 : false;
             },
             onSuccess: (data) => {
                 updateVisuals(data);
@@ -156,10 +156,8 @@ const TestWorkflowModal: React.FC<TestWorkflowModalProps> = ({ open, onClose, ch
         {
             enabled: !!executionId,
             refetchInterval: (data) => {
-                // Stop polling logs when status is final, but need to check status independently?
-                // Rely on status poll to stop this query implicitly via enabled? No, status doesn't disable this.
-                // We can check status from the status query result.
-                return status && ['running', 'pending'].includes(status.status.toLowerCase()) ? 1000 : false;
+                // Poll logs less frequently than status
+                return status && ['running', 'pending'].includes(status.status.toLowerCase()) ? 3000 : false;
             }
         }
     );
@@ -314,7 +312,7 @@ const TestWorkflowModal: React.FC<TestWorkflowModalProps> = ({ open, onClose, ch
                         <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                             {activeTab === 0 && (
                                 <Box sx={{ p: 2, overflowY: 'auto' }}>
-                                    <Typography variant="subtitle2" gutterBottom>Execution Input (JSON)</Typography>
+                                    <Typography variant="subtitle2" gutterBottom>Execution Input</Typography>
                                     <TextField
                                         fullWidth
                                         multiline
@@ -322,7 +320,8 @@ const TestWorkflowModal: React.FC<TestWorkflowModalProps> = ({ open, onClose, ch
                                         value={inputData}
                                         onChange={(e) => setInputData(e.target.value)}
                                         disabled={!!executionId}
-                                        helperText="Provide JSON input for the workflow start node."
+                                        placeholder="Enter plain text or JSON..."
+                                        helperText="Enter any text (will be wrapped as {input: 'text'}) or valid JSON object."
                                         sx={{ fontFamily: 'monospace' }}
                                     />
                                 </Box>

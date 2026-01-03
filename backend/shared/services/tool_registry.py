@@ -44,8 +44,7 @@ class ToolRegistryService(BaseService):
     """Service for managing custom tools and tool registry."""
     
     def __init__(self, session: Optional[AsyncSession] = None):
-        super().__init__()
-        self.session = session
+        super().__init__(session, Tool)
         self.validation_service = ValidationService()
         self._execution_cache = {}
         self._validation_cache = {}

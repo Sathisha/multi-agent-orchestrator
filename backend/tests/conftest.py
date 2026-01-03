@@ -27,9 +27,19 @@ import asyncio
 import os
 import sys
 from typing import AsyncGenerator, Generator
+from unittest.mock import MagicMock, AsyncMock, patch
 
 # Set testing environment variable
 os.environ['TESTING'] = 'true'
+
+# Mock pyzeebe if not installed, to allow imports of modules that depend on it
+try:
+    import pyzeebe
+except ImportError:
+    mock_pyzeebe = MagicMock()
+    sys.modules["pyzeebe"] = mock_pyzeebe
+    sys.modules["pyzeebe.aio"] = MagicMock()
+    sys.modules["pyzeebe.aio.client"] = MagicMock()
 
 # Add the parent directory to Python path to allow imports of 'shared' and 'main'
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -192,8 +202,6 @@ async def async_client(async_engine, async_session):
     app.dependency_overrides.clear()
 
 
-from unittest.mock import AsyncMock, patch, MagicMock
-
 @pytest.fixture(scope="function", autouse=True)
 async def mock_db_init(async_engine):
     """Mock database initialization, background services, and session factory."""
@@ -211,11 +219,6 @@ async def mock_db_init(async_engine):
          patch("shared.database.connection.AsyncSessionLocal", side_effect=session_factory), \
          patch("shared.services.agent_executor.AsyncSessionLocal", side_effect=session_factory):
         yield mock_db
-
-
-
-
-
 
 
 @pytest.fixture
@@ -248,7 +251,7 @@ def client(test_client):
 @pytest.fixture
 def test_settings() -> Settings:
     """
-    Create test settings with sensible defaults.
+    Create test settings with sensible defaults. 
     
     Use this fixture to override settings in tests:
     
@@ -289,21 +292,28 @@ def test_settings() -> Settings:
 @pytest.fixture
 def mock_zeebe_client():
     """Mock Zeebe client to prevent actual network calls."""
-    with patch("pyzeebe.aio.client.ZeebeClient", autospec=True) as mock_cls:
-        mock_instance = mock_cls.return_value
-        mock_instance.create_process_instance = AsyncMock(return_value={"processInstanceKey": 12345})
-        mock_instance.deploy_resource = AsyncMock(return_value={"key": 1})
-        mock_instance.publish_message = AsyncMock(return_value={})
-        mock_instance.cancel_process_instance = AsyncMock(return_value={})
-        mock_instance.topology = AsyncMock(return_value={"brokers": []})
+    mock_client = MagicMock()
+    mock_client.create_process_instance = AsyncMock(return_value={"processInstanceKey": 12345})
+    mock_client.deploy_resource = AsyncMock(return_value={"key": 1})
+    mock_client.publish_message = AsyncMock(return_value={})
+    mock_client.cancel_process_instance = AsyncMock(return_value={})
+    mock_client.topology = AsyncMock(return_value={"brokers": []})
+
+    # Also patch the global service instance if it exists
+    # We patch shared.core.workflow.zeebe_service which the API uses.
+    # Note: shared.core.workflow.zeebe_service is an INSTANCE of ZeebeService.
+    # We need to mock its methods (run_workflow, deploy_workflow) AND its client attribute.
+    with patch("shared.core.workflow.zeebe_service", new_callable=MagicMock) as mock_service:
+        mock_service.run_workflow = AsyncMock(return_value=12345)
+        mock_service.deploy_workflow = AsyncMock(return_value="deployed")
+        mock_service.zeebe_client = mock_client # Assume service has this attribute exposed or used internally
         
-        # Also attempt to patch where it might be instantiated or imported
-        # We also patch the shared zeebe_service which the API uses
-        with patch("shared.core.workflow.zeebe_service", new_callable=MagicMock) as mock_service:
-            mock_service.run_workflow = AsyncMock(return_value=12345)
-            mock_service.deploy_workflow = AsyncMock(return_value="deployed")
-            
-            yield mock_instance
+        # If the code accesses zeebe_service.client (not zeebe_client)
+        mock_service.client = mock_client
+        
+        # Patch where it is imported in the service we are testing
+        with patch("shared.services.workflow_orchestrator.zeebe_service", mock_service):
+            yield mock_client
 
 @pytest.fixture(autouse=True)
 async def reset_workflow_service():

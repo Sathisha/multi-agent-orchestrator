@@ -79,6 +79,9 @@ security_config.enable_rate_limiting = True
 security_config.enable_input_validation = False
 security_config.enable_security_headers = False  # Disabled to allow Swagger UI assets
 security_config.enable_request_logging = True
+security_config.rate_limit_per_minute = 600
+security_config.rate_limit_per_hour = 10000
+security_config.burst_limit = 100
 
 # Apply security middleware stack
 app = create_security_middleware_stack(app, security_config)

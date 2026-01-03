@@ -511,9 +511,9 @@ class SecurityConfig:
     
     def __init__(self):
         # Rate limiting settings
-        self.rate_limit_per_minute = 60
-        self.rate_limit_per_hour = 1000
-        self.burst_limit = 10
+        self.rate_limit_per_minute = 600
+        self.rate_limit_per_hour = 10000
+        self.burst_limit = 100
         
         # IP filtering settings
         self.allowed_ips: List[str] = []

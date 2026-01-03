@@ -320,6 +320,10 @@ const ModelTestDialog: React.FC<ModelTestDialogProps> = ({ open, onClose, model 
                     }
                 } catch (error) {
                     console.error("Polling error", error);
+                    setTestResponse("Error: Failed to get test status. The test might have timed out or the server restarted.");
+                    setTestingLoading(false);
+                    setJobId(null);
+                    if (pollInterval) clearInterval(pollInterval);
                 }
             }, 2000);
         }

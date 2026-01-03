@@ -901,7 +901,7 @@ class ChainOrchestratorService(BaseService):
         logger.info(f"Executing agent {agent.name} (node {node.node_id})")
         
         execution_result = await self.agent_executor.execute_agent(
-            agent_id=agent.id,
+            agent_id=str(agent.id),
             input_data=input_data,
             config=node.config or {}
         )
@@ -973,7 +973,8 @@ class ChainOrchestratorService(BaseService):
             log_metadata=kwargs
         )
         session.add(log_entry)
-        await session.commit()
+        # Don't commit here - logs will be committed with execution updates
+        # to avoid concurrent session operations
     
     async def cancel_execution(
         self,

@@ -112,7 +112,6 @@ class TestWorkflowScenarios:
 
         # 2.5 Manually activate workflow via SQL
         from sqlalchemy import update, select
-        from shared.models.workflow import Workflow, WorkflowStatus
 
         print(f"DEBUG: Updating workflow {workflow_id} to active")
         stmt = update(Workflow).where(Workflow.id == workflow_id).values(status=WorkflowStatus.ACTIVE.value)

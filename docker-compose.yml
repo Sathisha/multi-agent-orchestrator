@@ -121,6 +121,13 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
 
   # Frontend Application
   frontend:
@@ -157,6 +164,10 @@ services:
           memory: 8G
         reservations:
           memory: 4G
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
     healthcheck:
       test: [ "CMD", "ollama", "list" ]
       interval: 10s
