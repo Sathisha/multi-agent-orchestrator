@@ -16,7 +16,7 @@ import ReactFlow, {
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { Box, Button, IconButton, Tooltip } from '@mui/material'
-import { Add as AddIcon, Save as SaveIcon } from '@mui/icons-material'
+import { Add as AddIcon, Save as SaveIcon, Delete as DeleteIcon } from '@mui/icons-material'
 import AgentNode from './AgentNode'
 
 interface ChainCanvasProps {
@@ -99,6 +99,36 @@ const ChainCanvas: React.FC<ChainCanvasProps> = ({
         [setLocalEdges, readonly, onEdgesChange, localEdges]
     )
 
+    // Handle node deletion
+    const handleNodesDelete = useCallback(
+        (deleted: Node[]) => {
+            if (!readonly) {
+                setLocalNodes((nds) => nds.filter((n) => !deleted.find((d) => d.id === n.id)))
+                // Also remove edges connected to deleted nodes
+                setLocalEdges((eds) => eds.filter((e) =>
+                    !deleted.find((d) => d.id === e.source || d.id === e.target)
+                ))
+                if (onNodesChange) {
+                    setTimeout(() => onNodesChange(localNodes), 0)
+                }
+            }
+        },
+        [readonly, onNodesChange, localNodes, setLocalNodes, setLocalEdges]
+    )
+
+    // Handle edge deletion
+    const handleEdgesDelete = useCallback(
+        (deleted: Edge[]) => {
+            if (!readonly) {
+                setLocalEdges((eds) => eds.filter((e) => !deleted.find((d) => d.id === e.id)))
+                if (onEdgesChange) {
+                    setTimeout(() => onEdgesChange(localEdges), 0)
+                }
+            }
+        },
+        [readonly, onEdgesChange, localEdges, setLocalEdges]
+    )
+
     // Handle save
     const handleSave = useCallback(() => {
         if (onSave) {
@@ -133,10 +163,19 @@ const ChainCanvas: React.FC<ChainCanvasProps> = ({
                 nodesDraggable={!readonly}
                 nodesConnectable={!readonly}
                 elementsSelectable={!readonly}
+                deleteKeyCode={readonly ? null : ['Delete', 'Backspace']}
+                onNodesDelete={readonly ? undefined : handleNodesDelete}
+                onEdgesDelete={readonly ? undefined : handleEdgesDelete}
                 onEdgeClick={readonly ? undefined : (_, edge) => onEdgeClick && onEdgeClick(edge)}
                 onNodeClick={readonly ? undefined : (_, node) => onNodeClick && onNodeClick(node)}
             >
-                <Background variant={BackgroundVariant.Dots} gap={15} size={1} />
+                <Background
+                    variant={BackgroundVariant.Dots}
+                    gap={15}
+                    size={1}
+                    color="#3e3e42"
+                    style={{ backgroundColor: '#1e1e1e' }}
+                />
                 <Controls showInteractive={!readonly} />
                 <MiniMap
                     nodeColor={(node) => {
@@ -150,6 +189,8 @@ const ChainCanvas: React.FC<ChainCanvasProps> = ({
                     nodeStrokeWidth={3}
                     zoomable
                     pannable
+                    maskColor="#252526dd"
+                    style={{ backgroundColor: '#1e1e1e', border: '1px solid #3e3e42' }}
                 />
 
                 {/* Toolbar */}
@@ -178,6 +219,26 @@ const ChainCanvas: React.FC<ChainCanvasProps> = ({
                                     </IconButton>
                                 </Tooltip>
                             )}
+                            {localNodes.some(n => n.selected) || localEdges.some(e => e.selected) ? (
+                                <Tooltip title="Delete Selected (Delete key)">
+                                    <IconButton
+                                        size="small"
+                                        onClick={() => {
+                                            const selectedNodes = localNodes.filter(n => n.selected)
+                                            const selectedEdges = localEdges.filter(e => e.selected)
+                                            if (selectedNodes.length > 0) {
+                                                handleNodesDelete(selectedNodes)
+                                            }
+                                            if (selectedEdges.length > 0) {
+                                                handleEdgesDelete(selectedEdges)
+                                            }
+                                        }}
+                                        sx={{ color: '#f44336' }}
+                                    >
+                                        <DeleteIcon />
+                                    </IconButton>
+                                </Tooltip>
+                            ) : null}
                         </Box>
                     </Panel>
                 )}

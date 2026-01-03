@@ -15,7 +15,7 @@ from ..models.tool import (
     MCPServerRequest, MCPServerResponse, MCPServerStatus
 )
 from ..services.mcp_gateway import MCPGatewayService
-from ..services.auth import get_current_user
+from ..services.auth import get_current_user, get_current_user_with_tenant
 from ..models.user import User
 from ..logging.config import get_logger
 

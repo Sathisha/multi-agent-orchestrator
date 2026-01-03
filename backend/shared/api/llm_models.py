@@ -1,4 +1,5 @@
-# LLM Models API Endpoints
+import os
+from datetime import datetime
 from typing import List, Dict, Any
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -41,83 +42,140 @@ async def discover_ollama_models(
     models = await ollama_service.list_local_models()
     return models
 
-@router.post("/test", response_model=str) # Return type is str for now, can be a more complex schema
+# In-memory job store for test results (transient)
+TEST_JOBS: Dict[str, Dict[str, Any]] = {}
+
+import asyncio
+import uuid
+from fastapi import BackgroundTasks
+
+async def run_test_bg_task(job_id: str, test_request: LLMModelTestRequest, db_session_maker, ollama_service):
+    """Background task to run the LLM test."""
+    TEST_JOBS[job_id]["status"] = "running"
+    
+    # Create a new session for the background task
+    async with db_session_maker() as session:
+        try:
+            model_service = LLMModelService(session)
+            llm_model = await model_service.get_llm_model(test_request.model_id)
+
+            if not llm_model:
+                TEST_JOBS[job_id]["status"] = "failed"
+                TEST_JOBS[job_id]["error"] = "LLM model not found"
+                return
+
+            # Generic provider handling using LLMProviderFactory
+            from shared.services.llm_providers import (
+                LLMProviderFactory, 
+                CredentialManager, 
+                LLMProviderType, 
+                LLMRequest, 
+                LLMMessage
+            )
+
+            # Determine provider type
+            provider_type_str = llm_model.provider.lower()
+            try:
+                provider_enum = LLMProviderType(provider_type_str)
+            except ValueError:
+                TEST_JOBS[job_id]["status"] = "failed"
+                TEST_JOBS[job_id]["error"] = f"Unsupported LLM provider: {llm_model.provider}"
+                return
+
+            # Setup temporary Credential Manager
+            cred_manager = CredentialManager()
+            
+            creds = {}
+            if provider_enum == LLMProviderType.OPENAI:
+                 creds = {"api_key": llm_model.api_key}
+                 if llm_model.api_base:
+                     creds["base_url"] = llm_model.api_base
+            elif provider_enum == LLMProviderType.ANTHROPIC:
+                 creds = {"api_key": llm_model.api_key}
+            elif provider_enum == LLMProviderType.OLLAMA:
+                 # Handle Ollama connection - prioritize internal networking if available
+                 base_url = llm_model.api_base
+                 env_ollama_url = os.environ.get("OLLAMA_BASE_URL")
+                 
+                 # If we are in Docker and the DB says localhost, switch to the internal service
+                 if base_url and ("localhost" in base_url or "127.0.0.1" in base_url) and env_ollama_url:
+                     base_url = env_ollama_url
+                 
+                 # Fallback to env var or default if not in DB
+                 if not base_url:
+                     base_url = env_ollama_url or "http://ollama:11434"
+                     
+                 creds = {"base_url": base_url}
+            elif provider_enum == LLMProviderType.AZURE_OPENAI:
+                 creds = {
+                     "api_key": llm_model.api_key,
+                     "endpoint": llm_model.api_base,
+                     "api_version": "2023-05-15"
+                 }
+            
+            await cred_manager.store_credentials(provider_enum, creds)
+            
+            # Create Factory & Provider
+            factory = LLMProviderFactory(cred_manager)
+            provider = await factory.get_or_create_provider(provider_enum)
+            
+            # Create Request
+            messages = []
+            if test_request.system_prompt:
+                 messages.append(LLMMessage(role="system", content=test_request.system_prompt))
+            messages.append(LLMMessage(role="user", content=test_request.prompt))
+
+            request = LLMRequest(
+                messages=messages,
+                model=llm_model.name,
+                temperature=0.7,
+                max_tokens=1000
+            )
+            
+            # Generate Response
+            response = await provider.generate_response(request)
+            
+            TEST_JOBS[job_id]["status"] = "completed"
+            TEST_JOBS[job_id]["result"] = response.content
+            
+        except Exception as e:
+            TEST_JOBS[job_id]["status"] = "failed"
+            TEST_JOBS[job_id]["error"] = str(e)
+
+
+@router.post("/test", response_model=Dict[str, str])
 async def test_llm_model(
     test_request: LLMModelTestRequest,
-    db: AsyncSession = Depends(get_async_db),
-    ollama_service: OllamaService = Depends(get_ollama_service)
+    background_tasks: BackgroundTasks,
+    ollama_service: OllamaService = Depends(get_ollama_service),
 ):
-    """Test a specific LLM model with a sample prompt."""
-    model_service = LLMModelService(db)
-    llm_model = await model_service.get_llm_model(test_request.model_id)
-
-    if not llm_model:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="LLM model not found")
-
-    # Generic provider handling using LLMProviderFactory
-    from shared.services.llm_providers import (
-        LLMProviderFactory, 
-        CredentialManager, 
-        LLMProviderType, 
-        LLMRequest, 
-        LLMMessage
+    """Start a background test for a specific LLM model."""
+    job_id = str(uuid.uuid4())
+    TEST_JOBS[job_id] = {"status": "pending", "created_at": str(datetime.now())}
+    
+    # We need to pass the session maker to the background task, not the session itself
+    # because the session will be closed when this request finishes.
+    from shared.database.connection import AsyncSessionLocal
+    
+    background_tasks.add_task(
+        run_test_bg_task, 
+        job_id, 
+        test_request, 
+        AsyncSessionLocal, 
+        ollama_service
     )
+    
+    return {"job_id": job_id, "status": "pending"}
 
-    try:
-        # Determine provider type
-        provider_type_str = llm_model.provider.lower()
-        try:
-            provider_enum = LLMProviderType(provider_type_str)
-        except ValueError:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unsupported LLM provider: {llm_model.provider}")
 
-        # Setup temporary Credential Manager with this model's credentials
-        cred_manager = CredentialManager()
+@router.get("/test/{job_id}", response_model=Dict[str, Any])
+async def get_test_status(job_id: str):
+    """Get the status and result of a test job."""
+    if job_id not in TEST_JOBS:
+        raise HTTPException(status_code=404, detail="Test job not found")
         
-        creds = {}
-        if provider_enum == LLMProviderType.OPENAI:
-             creds = {"api_key": llm_model.api_key}
-             if llm_model.api_base:
-                 creds["base_url"] = llm_model.api_base
-        elif provider_enum == LLMProviderType.ANTHROPIC:
-             creds = {"api_key": llm_model.api_key}
-        elif provider_enum == LLMProviderType.OLLAMA:
-             creds = {"base_url": llm_model.api_base or "http://ollama:11434"}
-        elif provider_enum == LLMProviderType.AZURE_OPENAI:
-             creds = {
-                 "api_key": llm_model.api_key,
-                 "endpoint": llm_model.api_base, # Assuming api_base maps to endpoint
-                 "api_version": "2023-05-15" # Default or need a field for this
-             }
-        
-        await cred_manager.store_credentials(provider_enum, creds)
-        
-        # Create Factory & Provider
-        factory = LLMProviderFactory(cred_manager)
-        provider = await factory.get_or_create_provider(provider_enum)
-        
-        # Create Request
-        messages = []
-        if test_request.system_prompt:
-             messages.append(LLMMessage(role="system", content=test_request.system_prompt))
-        messages.append(LLMMessage(role="user", content=test_request.prompt))
+    return TEST_JOBS[job_id]
 
-        request = LLMRequest(
-            messages=messages,
-            model=llm_model.name,
-            temperature=0.7,
-            max_tokens=1000
-        )
-        
-        # Generate Response
-        response = await provider.generate_response(request)
-        return response.content
-
-    except Exception as e:
-        # If it's already an HTTPException, re-raise it
-        if isinstance(e, HTTPException):
-            raise e
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error testing model: {str(e)}")
 
 @router.get("/{model_id}", response_model=LLMModelResponse)
 async def get_llm_model(

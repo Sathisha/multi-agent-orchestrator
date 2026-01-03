@@ -113,6 +113,10 @@ class TestChainExecutionPatterns:
         assert execution.status == ChainExecutionStatus.COMPLETED
         assert execution.completed_at is not None
         assert execution.duration_seconds is not None
+        
+        # Verify active edges
+        assert len(execution.active_edges) == 1
+        assert "e1" in execution.active_edges
 
     async def test_parallel_split_join(self, async_session, orchestrator):
         """Test parallel execution with split and join nodes."""
@@ -194,6 +198,11 @@ class TestChainExecutionPatterns:
         
         # branch_b should be skipped because condition didn't match
         assert states.get('branch_b') == 'SKIPPED'
+        
+        # Check active edges
+        assert "e1" in execution.active_edges
+        assert "e3" in execution.active_edges
+        assert "e2" not in execution.active_edges  # branch_b path
 
     async def test_cycle_detection_validation(self, async_session, orchestrator):
         """Test that cycle detection prevents execution."""

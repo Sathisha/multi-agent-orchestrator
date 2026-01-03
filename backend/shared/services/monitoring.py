@@ -108,6 +108,12 @@ class PrometheusMetrics:
             'System disk usage percentage',
             registry=self.registry
         )
+
+        self.active_agents = Gauge(
+            'active_agents_gauge',
+            'Number of active agents',
+            registry=self.registry
+        )
         
         # Database metrics
         self.database_connections_active = Gauge(
@@ -517,8 +523,13 @@ class MonitoringService:
                 async with get_database_session() as session:
                     pool = session.get_bind().pool
                     self.metrics.database_connections_active.set(pool.checkedout())
+                    
+                    # Update active agents count
+                    result = await session.execute(text("SELECT count(*) FROM agents WHERE status = 'active'"))
+                    active_count = result.scalar() or 0
+                    self.metrics.active_agents.set(active_count)
             except Exception as e:
-                self.logger.warning(f"Could not collect database metrics: {e}")
+                self.logger.warning(f"Could not collect database/business metrics: {e}")
             
         except Exception as e:
             self.logger.error(f"Error collecting system metrics: {e}")
@@ -674,6 +685,62 @@ class MonitoringService:
         except Exception as e:
             self.logger.error(f"Error getting active alerts: {e}")
             return []
+
+    async def get_dashboard_statistics(self) -> Dict[str, Any]:
+        """Get aggregated statistics for dashboard"""
+        try:
+            from ..services.agent_service import agent_service
+            # Import tools and workflows services when available
+            # from ..services.tool_service import tool_service
+            
+            # Get agent stats
+            async with get_database_session() as session:
+                # This is a placeholder until we have direct service access or DB counts
+                # implementing basic counts via direct DB queries for now
+                
+                # Agents count
+                result = await session.execute(text("SELECT count(*), status FROM agents GROUP BY status"))
+                agent_rows = result.fetchall()
+                
+                total_agents = sum(row[0] for row in agent_rows)
+                active_agents = sum(row[0] for row in agent_rows if row[1] == 'active')
+                
+                # Tools count (placeholder until tool table/service is ready)
+                # result = await session.execute(text("SELECT count(*) FROM tools"))
+                # total_tools = result.scalar() or 0
+                total_tools = 0 
+                
+                # Workflows count (placeholder)
+                # result = await session.execute(text("SELECT count(*), status FROM workflows GROUP BY status"))
+                # workflow_rows = result.fetchall()
+                # total_workflows = sum(row[0] for row in workflow_rows)
+                total_workflows = 0
+                active_workflows = 0
+                
+            return {
+                "agents": {
+                    "total": total_agents,
+                    "active": active_agents,
+                    "inactive": total_agents - active_agents
+                },
+                "tools": {
+                    "total": total_tools,
+                    "available": total_tools # Assuming all are available for now
+                },
+                "workflows": {
+                    "total": total_workflows,
+                    "active": active_workflows,
+                    "completed": total_workflows - active_workflows
+                }
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error getting dashboard statistics: {e}")
+            return {
+                "agents": {"total": 0, "active": 0, "inactive": 0},
+                "tools": {"total": 0, "available": 0},
+                "workflows": {"total": 0, "active": 0, "completed": 0}
+            }
 
 
 # Global monitoring service instance

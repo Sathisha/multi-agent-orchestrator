@@ -1,14 +1,16 @@
 import React, { useState } from 'react'
-import { 
-  Box, 
-  Typography, 
-  IconButton, 
-  Collapse, 
-  List, 
-  ListItem, 
-  ListItemIcon, 
+import {
+  Box,
+  Typography,
+  IconButton,
+  Collapse,
+  List,
+  ListItem,
+  ListItemIcon,
   ListItemText,
   ListItemButton,
+  CircularProgress,
+  Tooltip,
 } from '@mui/material'
 import {
   ExpandMore as ExpandMoreIcon,
@@ -17,12 +19,17 @@ import {
   Add as AddIcon,
   Folder as FolderIcon,
   FolderOpen as FolderOpenIcon,
-  PlayArrow as PlayIcon,
-  Pause as PauseIcon,
 } from '@mui/icons-material'
+import { useQuery } from 'react-query'
+import { getWorkflows, WorkflowResponse } from '../../api/workflows'
+import { useNavigate, useParams } from 'react-router-dom'
 
 const WorkflowExplorer: React.FC = () => {
+  const navigate = useNavigate()
+  const { workflowId: currentWorkflowId } = useParams<{ workflowId: string }>()
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['workflows']))
+
+  const { data: workflows, isLoading } = useQuery('workflows', getWorkflows)
 
   const toggleFolder = (folderId: string) => {
     const newExpanded = new Set(expandedFolders)
@@ -34,25 +41,19 @@ const WorkflowExplorer: React.FC = () => {
     setExpandedFolders(newExpanded)
   }
 
-  const mockWorkflows = [
-    { id: '1', name: 'Customer Onboarding', status: 'running', agents: 3 },
-    { id: '2', name: 'Content Review Pipeline', status: 'paused', agents: 2 },
-    { id: '3', name: 'Data Processing Flow', status: 'stopped', agents: 4 },
-  ]
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'running':
-        return <PlayIcon sx={{ fontSize: 12, color: '#4ec9b0' }} />
-      case 'paused':
-        return <PauseIcon sx={{ fontSize: 12, color: '#ffcc02' }} />
+  const getStatusColor = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'active':
+        return '#4ec9b0'
+      case 'draft':
+        return '#969696'
       default:
-        return null
+        return '#969696'
     }
   }
 
   return (
-    <Box sx={{ p: 1 }}>
+    <Box sx={{ p: 1, userSelect: 'none' }}>
       {/* Workflows folder */}
       <ListItem
         disablePadding
@@ -89,147 +90,80 @@ const WorkflowExplorer: React.FC = () => {
             primaryTypographyProps={{
               fontSize: '13px',
               color: '#cccccc',
+              fontWeight: 600
             }}
           />
-          <IconButton
-            size="small"
-            sx={{
-              color: '#cccccc',
-              opacity: 0.7,
-              '&:hover': {
-                opacity: 1,
-                backgroundColor: '#2a2d2e',
-              },
-            }}
-          >
-            <AddIcon sx={{ fontSize: 14 }} />
-          </IconButton>
+          <Tooltip title="Create New Workflow">
+            <IconButton
+              size="small"
+              onClick={(e) => { e.stopPropagation(); navigate('/chains') }}
+              sx={{
+                color: '#cccccc',
+                opacity: 0.7,
+                '&:hover': {
+                  opacity: 1,
+                  backgroundColor: '#37373d',
+                },
+              }}
+            >
+              <AddIcon sx={{ fontSize: 14 }} />
+            </IconButton>
+          </Tooltip>
         </ListItemButton>
       </ListItem>
 
       {/* Workflow list */}
       <Collapse in={expandedFolders.has('workflows')}>
-        <List sx={{ pl: 2 }}>
-          {mockWorkflows.map((workflow) => (
-            <ListItem
-              key={workflow.id}
-              disablePadding
-              sx={{
-                '&:hover': {
-                  backgroundColor: '#2a2d2e',
-                },
-              }}
-            >
-              <ListItemButton
+        <List sx={{ pl: 0 }} disablePadding>
+          {isLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
+              <CircularProgress size={16} sx={{ color: '#444' }} />
+            </Box>
+          ) : workflows && workflows.length > 0 ? (
+            workflows.map((workflow) => (
+              <ListItem
+                key={workflow.id}
+                disablePadding
                 sx={{
-                  py: 0.5,
-                  px: 1,
-                  minHeight: 'auto',
+                  backgroundColor: currentWorkflowId === workflow.id ? '#37373d' : 'transparent',
+                  '&:hover': {
+                    backgroundColor: currentWorkflowId === workflow.id ? '#37373d' : '#2a2d2e',
+                  },
                 }}
               >
-                <ListItemIcon sx={{ minWidth: 20, mr: 1 }}>
-                  <WorkflowIcon 
-                    sx={{ 
-                      fontSize: 16, 
-                      color: workflow.status === 'running' ? '#4ec9b0' : '#969696' 
-                    }} 
+                <ListItemButton
+                  onClick={() => navigate(`/chains/${workflow.id}`)}
+                  sx={{
+                    py: 0.5,
+                    pl: 4,
+                    minHeight: 'auto',
+                    borderLeft: currentWorkflowId === workflow.id ? '2px solid #007acc' : '2px solid transparent'
+                  }}
+                >
+                  <ListItemIcon sx={{ minWidth: 20, mr: 1 }}>
+                    <WorkflowIcon
+                      sx={{
+                        fontSize: 16,
+                        color: getStatusColor(workflow.status)
+                      }}
+                    />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={workflow.name}
+                    primaryTypographyProps={{
+                      fontSize: '13px',
+                      color: currentWorkflowId === workflow.id ? '#ffffff' : '#cccccc',
+                      noWrap: true
+                    }}
                   />
-                </ListItemIcon>
-                <ListItemText
-                  primary={
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      <Typography sx={{ fontSize: '13px', color: '#cccccc' }}>
-                        {workflow.name}
-                      </Typography>
-                      {getStatusIcon(workflow.status)}
-                    </Box>
-                  }
-                  secondary={`${workflow.agents} agents`}
-                  secondaryTypographyProps={{
-                    fontSize: '11px',
-                    color: '#969696',
-                  }}
-                />
-              </ListItemButton>
-            </ListItem>
-          ))}
-        </List>
-      </Collapse>
-
-      {/* BPMN Diagrams folder */}
-      <ListItem
-        disablePadding
-        sx={{
-          '&:hover': {
-            backgroundColor: '#2a2d2e',
-          },
-        }}
-      >
-        <ListItemButton
-          onClick={() => toggleFolder('bpmn')}
-          sx={{
-            py: 0.5,
-            px: 1,
-            minHeight: 'auto',
-          }}
-        >
-          <ListItemIcon sx={{ minWidth: 20, mr: 1 }}>
-            {expandedFolders.has('bpmn') ? (
-              <ExpandMoreIcon sx={{ fontSize: 16, color: '#cccccc' }} />
-            ) : (
-              <ChevronRightIcon sx={{ fontSize: 16, color: '#cccccc' }} />
-            )}
-          </ListItemIcon>
-          <ListItemIcon sx={{ minWidth: 20, mr: 1 }}>
-            {expandedFolders.has('bpmn') ? (
-              <FolderOpenIcon sx={{ fontSize: 16, color: '#dcb67a' }} />
-            ) : (
-              <FolderIcon sx={{ fontSize: 16, color: '#dcb67a' }} />
-            )}
-          </ListItemIcon>
-          <ListItemText
-            primary="BPMN Diagrams"
-            primaryTypographyProps={{
-              fontSize: '13px',
-              color: '#cccccc',
-            }}
-          />
-        </ListItemButton>
-      </ListItem>
-
-      {/* BPMN list */}
-      <Collapse in={expandedFolders.has('bpmn')}>
-        <List sx={{ pl: 2 }}>
-          {['onboarding.bpmn', 'review-pipeline.bpmn', 'data-flow.bpmn'].map((file) => (
-            <ListItem
-              key={file}
-              disablePadding
-              sx={{
-                '&:hover': {
-                  backgroundColor: '#2a2d2e',
-                },
-              }}
-            >
-              <ListItemButton
-                sx={{
-                  py: 0.5,
-                  px: 1,
-                  minHeight: 'auto',
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: 20, mr: 1 }}>
-                  <WorkflowIcon sx={{ fontSize: 16, color: '#569cd6' }} />
-                </ListItemIcon>
-                <ListItemText
-                  primary={file}
-                  primaryTypographyProps={{
-                    fontSize: '13px',
-                    color: '#cccccc',
-                  }}
-                />
-              </ListItemButton>
-            </ListItem>
-          ))}
+                </ListItemButton>
+              </ListItem>
+            ))
+          ) : (
+            <Typography variant="caption" sx={{ pl: 6, py: 1, color: '#666', fontStyle: 'italic', display: 'block' }}>
+              No workflows yet
+            </Typography>
+          )}
         </List>
       </Collapse>
     </Box>

@@ -5,6 +5,7 @@ import AgentExplorer from '../explorers/AgentExplorer'
 import WorkflowExplorer from '../explorers/WorkflowExplorer'
 import ToolsExplorer from '../explorers/ToolsExplorer'
 import MonitoringExplorer from '../explorers/MonitoringExplorer'
+import ModelsExplorer from '../explorers/ModelsExplorer'
 
 interface SidePanelProps {
   activeView: string
@@ -18,10 +19,10 @@ const SidePanel: React.FC<SidePanelProps> = ({ activeView, onClose }) => {
         return 'AGENTS'
       case 'workflows':
         return 'WORKFLOWS'
-      case 'chains':
-        return 'CHAINS'
       case 'tools':
         return 'TOOLS'
+      case 'models':
+        return 'LLM MODELS'
       case 'monitoring':
         return 'MONITORING'
       default:
@@ -35,11 +36,10 @@ const SidePanel: React.FC<SidePanelProps> = ({ activeView, onClose }) => {
         return <AgentExplorer />
       case 'workflows':
         return <WorkflowExplorer />
-      case 'chains':
-        // For now, use a simple explorer - can create ChainExplorer later
-        return <WorkflowExplorer />
       case 'tools':
         return <ToolsExplorer />
+      case 'models':
+        return <ModelsExplorer />
       case 'monitoring':
         return <MonitoringExplorer />
       default:

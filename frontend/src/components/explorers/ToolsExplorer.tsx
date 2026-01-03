@@ -1,14 +1,15 @@
-import React, { useState } from 'react'
-import { 
-  Box, 
-  Typography, 
-  IconButton, 
-  Collapse, 
-  List, 
-  ListItem, 
-  ListItemIcon, 
+import React, { useState, useEffect } from 'react'
+import {
+  Box,
+  Typography,
+  IconButton,
+  Collapse,
+  List,
+  ListItem,
+  ListItemIcon,
   ListItemText,
   ListItemButton,
+  CircularProgress,
 } from '@mui/material'
 import {
   ExpandMore as ExpandMoreIcon,
@@ -19,10 +20,41 @@ import {
   FolderOpen as FolderOpenIcon,
   Extension as ExtensionIcon,
   Code as CodeIcon,
+  Refresh as RefreshIcon,
 } from '@mui/icons-material'
+import { getTools, getMCPServers, Tool, MCPServer } from '../../api/tools'
 
 const ToolsExplorer: React.FC = () => {
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['custom-tools']))
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['custom-tools', 'mcp-servers']))
+  const [tools, setTools] = useState<Tool[]>([])
+  const [mcpServers, setMCPServers] = useState<MCPServer[]>([])
+  const [loading, setLoading] = useState<boolean>(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchData = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const [toolsData, mcpData] = await Promise.all([
+        getTools(),
+        getMCPServers().catch(err => {
+          console.warn("Failed to fetch MCP servers", err);
+          return [] as MCPServer[];
+        })
+      ])
+      setTools(toolsData)
+      setMCPServers(mcpData)
+    } catch (err: any) {
+      console.error('Failed to fetch tools:', err)
+      setError('Failed to load tools')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchData()
+  }, [])
 
   const toggleFolder = (folderId: string) => {
     const newExpanded = new Set(expandedFolders)
@@ -34,20 +66,28 @@ const ToolsExplorer: React.FC = () => {
     setExpandedFolders(newExpanded)
   }
 
-  const mockCustomTools = [
-    { id: '1', name: 'Email Sender', type: 'python', status: 'active' },
-    { id: '2', name: 'Database Query', type: 'sql', status: 'active' },
-    { id: '3', name: 'File Processor', type: 'python', status: 'inactive' },
-  ]
+  // Filter custom tools (assuming anything not MCP is custom for now, or check tool_type)
+  const customTools = tools.filter(t => t.tool_type === 'custom' || !t.tool_type)
 
-  const mockMCPServers = [
-    { id: '1', name: 'GitHub Integration', status: 'connected', tools: 5 },
-    { id: '2', name: 'Slack Bot', status: 'connected', tools: 3 },
-    { id: '3', name: 'Weather API', status: 'disconnected', tools: 2 },
-  ]
+  if (loading && tools.length === 0) {
+    return (
+      <Box sx={{ p: 2, display: 'flex', justifyContent: 'center' }}>
+        <CircularProgress size={20} color="secondary" />
+      </Box>
+    )
+  }
 
   return (
     <Box sx={{ p: 1 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, px: 1 }}>
+        <Typography variant="overline" sx={{ color: '#969696', fontWeight: 'bold' }}>
+          Explorer
+        </Typography>
+        <IconButton size="small" onClick={fetchData} sx={{ color: '#969696' }}>
+          <RefreshIcon fontSize="small" />
+        </IconButton>
+      </Box>
+
       {/* Custom Tools folder */}
       <ListItem
         disablePadding
@@ -80,7 +120,7 @@ const ToolsExplorer: React.FC = () => {
             )}
           </ListItemIcon>
           <ListItemText
-            primary="Custom Tools"
+            primary={`Custom Tools (${customTools.length})`}
             primaryTypographyProps={{
               fontSize: '13px',
               color: '#cccccc',
@@ -105,7 +145,7 @@ const ToolsExplorer: React.FC = () => {
       {/* Custom Tools list */}
       <Collapse in={expandedFolders.has('custom-tools')}>
         <List sx={{ pl: 2 }}>
-          {mockCustomTools.map((tool) => (
+          {customTools.map((tool) => (
             <ListItem
               key={tool.id}
               disablePadding
@@ -123,19 +163,22 @@ const ToolsExplorer: React.FC = () => {
                 }}
               >
                 <ListItemIcon sx={{ minWidth: 20, mr: 1 }}>
-                  <CodeIcon 
-                    sx={{ 
-                      fontSize: 16, 
-                      color: tool.status === 'active' ? '#4ec9b0' : '#969696' 
-                    }} 
+                  <CodeIcon
+                    sx={{
+                      fontSize: 16,
+                      color: tool.status === 'active' ? '#4ec9b0' : '#969696'
+                    }}
                   />
                 </ListItemIcon>
                 <ListItemText
                   primary={tool.name}
-                  secondary={tool.type}
+                  secondary={tool.category || 'Utility'}
                   primaryTypographyProps={{
                     fontSize: '13px',
                     color: '#cccccc',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
                   }}
                   secondaryTypographyProps={{
                     fontSize: '11px',
@@ -145,6 +188,11 @@ const ToolsExplorer: React.FC = () => {
               </ListItemButton>
             </ListItem>
           ))}
+          {customTools.length === 0 && (
+            <Typography sx={{ px: 4, py: 1, fontSize: '12px', color: '#666', fontStyle: 'italic' }}>
+              No custom tools found
+            </Typography>
+          )}
         </List>
       </Collapse>
 
@@ -180,7 +228,7 @@ const ToolsExplorer: React.FC = () => {
             )}
           </ListItemIcon>
           <ListItemText
-            primary="MCP Servers"
+            primary={`MCP Servers (${mcpServers.length})`}
             primaryTypographyProps={{
               fontSize: '13px',
               color: '#cccccc',
@@ -205,7 +253,7 @@ const ToolsExplorer: React.FC = () => {
       {/* MCP Servers list */}
       <Collapse in={expandedFolders.has('mcp-servers')}>
         <List sx={{ pl: 2 }}>
-          {mockMCPServers.map((server) => (
+          {mcpServers.map((server) => (
             <ListItem
               key={server.id}
               disablePadding
@@ -223,19 +271,22 @@ const ToolsExplorer: React.FC = () => {
                 }}
               >
                 <ListItemIcon sx={{ minWidth: 20, mr: 1 }}>
-                  <ExtensionIcon 
-                    sx={{ 
-                      fontSize: 16, 
-                      color: server.status === 'connected' ? '#4ec9b0' : '#f48771' 
-                    }} 
+                  <ExtensionIcon
+                    sx={{
+                      fontSize: 16,
+                      color: server.status === 'connected' ? '#4ec9b0' : '#f48771'
+                    }}
                   />
                 </ListItemIcon>
                 <ListItemText
                   primary={server.name}
-                  secondary={`${server.tools} tools • ${server.status}`}
+                  secondary={`${server.tool_count || 0} tools • ${server.status}`}
                   primaryTypographyProps={{
                     fontSize: '13px',
                     color: '#cccccc',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
                   }}
                   secondaryTypographyProps={{
                     fontSize: '11px',
@@ -245,83 +296,11 @@ const ToolsExplorer: React.FC = () => {
               </ListItemButton>
             </ListItem>
           ))}
-        </List>
-      </Collapse>
-
-      {/* Tool Registry folder */}
-      <ListItem
-        disablePadding
-        sx={{
-          '&:hover': {
-            backgroundColor: '#2a2d2e',
-          },
-        }}
-      >
-        <ListItemButton
-          onClick={() => toggleFolder('registry')}
-          sx={{
-            py: 0.5,
-            px: 1,
-            minHeight: 'auto',
-          }}
-        >
-          <ListItemIcon sx={{ minWidth: 20, mr: 1 }}>
-            {expandedFolders.has('registry') ? (
-              <ExpandMoreIcon sx={{ fontSize: 16, color: '#cccccc' }} />
-            ) : (
-              <ChevronRightIcon sx={{ fontSize: 16, color: '#cccccc' }} />
-            )}
-          </ListItemIcon>
-          <ListItemIcon sx={{ minWidth: 20, mr: 1 }}>
-            {expandedFolders.has('registry') ? (
-              <FolderOpenIcon sx={{ fontSize: 16, color: '#dcb67a' }} />
-            ) : (
-              <FolderIcon sx={{ fontSize: 16, color: '#dcb67a' }} />
-            )}
-          </ListItemIcon>
-          <ListItemText
-            primary="Tool Registry"
-            primaryTypographyProps={{
-              fontSize: '13px',
-              color: '#cccccc',
-            }}
-          />
-        </ListItemButton>
-      </ListItem>
-
-      {/* Registry list */}
-      <Collapse in={expandedFolders.has('registry')}>
-        <List sx={{ pl: 2 }}>
-          {['Web Scraper', 'PDF Generator', 'Image Processor', 'API Client'].map((tool) => (
-            <ListItem
-              key={tool}
-              disablePadding
-              sx={{
-                '&:hover': {
-                  backgroundColor: '#2a2d2e',
-                },
-              }}
-            >
-              <ListItemButton
-                sx={{
-                  py: 0.5,
-                  px: 1,
-                  minHeight: 'auto',
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: 20, mr: 1 }}>
-                  <ToolIcon sx={{ fontSize: 16, color: '#569cd6' }} />
-                </ListItemIcon>
-                <ListItemText
-                  primary={tool}
-                  primaryTypographyProps={{
-                    fontSize: '13px',
-                    color: '#cccccc',
-                  }}
-                />
-              </ListItemButton>
-            </ListItem>
-          ))}
+          {mcpServers.length === 0 && (
+            <Typography sx={{ px: 4, py: 1, fontSize: '12px', color: '#666', fontStyle: 'italic' }}>
+              No MCP servers connected
+            </Typography>
+          )}
         </List>
       </Collapse>
     </Box>

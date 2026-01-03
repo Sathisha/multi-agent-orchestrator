@@ -4,13 +4,13 @@ export interface WorkflowRequest {
     name: string
     description?: string
     version?: string
-    bpmn_xml: string
     category?: string
     tags?: string[]
     input_schema?: Record<string, any>
     output_schema?: Record<string, any>
     timeout_minutes?: number
     max_concurrent_executions?: number
+    bpmn_xml?: string
 }
 
 export interface WorkflowResponse {

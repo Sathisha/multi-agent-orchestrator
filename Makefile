@@ -136,7 +136,7 @@ rebuild:
 	@echo "🔄 Stopping all services..."
 	@docker-compose down
 	@echo "⏳ Waiting for database to be ready..."
-	@timeout 10
+	@timeout 3
 	@echo "🚀 Starting all services..."
 	@docker-compose up -d
 	@echo "🚀 All services restarted!"

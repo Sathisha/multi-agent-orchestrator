@@ -47,9 +47,6 @@ class Workflow(SystemEntity):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     version: Mapped[str] = mapped_column(String(50), nullable=False, default="1.0.0")
     
-    bpmn_xml: Mapped[str] = mapped_column(Text, nullable=False)
-    process_definition_key: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    
     status: Mapped[str] = mapped_column(String(50), default="draft", nullable=False, index=True)
     tags: Mapped[List[str]] = mapped_column(JSONB, nullable=True, server_default=text("'[]'::jsonb"))
     category: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)

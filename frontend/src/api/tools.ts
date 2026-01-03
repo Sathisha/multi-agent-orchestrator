@@ -66,9 +66,9 @@ export const validateTool = async (id: string): Promise<{ is_valid: boolean; err
 }
 
 export const executeTool = async (
-    id: string, 
-    inputs: Record<string, any>, 
-    context: Record<string, any> = {}, 
+    id: string,
+    inputs: Record<string, any>,
+    context: Record<string, any> = {},
     timeout_override?: number
 ): Promise<any> => {
     const response = await apiClient.post(`/tools/${id}/execute`, { inputs, context, timeout_override })
@@ -77,5 +77,25 @@ export const executeTool = async (
 
 export const getToolTemplates = async (): Promise<any[]> => {
     const response = await apiClient.get('/tools/templates/')
+    return response.data
+}
+
+export interface MCPServer {
+    id: string
+    name: string
+    type: string
+    status: string
+    base_url?: string
+    version: string
+    is_active: boolean
+    created_at: string
+    updated_at: string
+    last_connected_at?: string
+    error_count: number
+    tool_count?: number
+}
+
+export const getMCPServers = async (): Promise<MCPServer[]> => {
+    const response = await apiClient.get<MCPServer[]>('/mcp/servers/')
     return response.data
 }

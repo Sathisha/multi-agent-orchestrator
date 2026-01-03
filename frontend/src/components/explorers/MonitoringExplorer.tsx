@@ -1,12 +1,12 @@
 import React, { useState } from 'react'
-import { 
-  Box, 
-  Typography, 
-  IconButton, 
-  Collapse, 
-  List, 
-  ListItem, 
-  ListItemIcon, 
+import {
+  Box,
+  Typography,
+  IconButton,
+  Collapse,
+  List,
+  ListItem,
+  ListItemIcon,
   ListItemText,
   ListItemButton,
   Chip,
@@ -23,9 +23,22 @@ import {
   Security as AuditIcon,
   Speed as PerformanceIcon,
 } from '@mui/icons-material'
+import { useQuery } from 'react-query'
+import { getDashboardStats, getHealthStatus } from '../../api/monitoring'
 
 const MonitoringExplorer: React.FC = () => {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['system-health']))
+
+  const { data: dashboardStats } = useQuery('dashboard-stats-explorer', getDashboardStats, {
+    refetchInterval: 30000
+  })
+
+  // We can fetch basic health for the CPU/Memory stats if we want them in the explorer too
+  const { data: health } = useQuery('health-status-explorer', getHealthStatus, {
+    refetchInterval: 60000
+  })
+
+  const systemResources = health?.health_checks?.system_resources?.details || {}
 
   const toggleFolder = (folderId: string) => {
     const newExpanded = new Set(expandedFolders)
@@ -38,10 +51,10 @@ const MonitoringExplorer: React.FC = () => {
   }
 
   const systemMetrics = [
-    { name: 'CPU Usage', value: '45%', status: 'good' },
-    { name: 'Memory Usage', value: '67%', status: 'warning' },
-    { name: 'Active Agents', value: '3', status: 'good' },
-    { name: 'API Requests/min', value: '127', status: 'good' },
+    { name: 'CPU Usage', value: `${(systemResources.cpu_percent || 0).toFixed(0)}%`, status: (systemResources.cpu_percent || 0) > 80 ? 'error' : 'good' },
+    { name: 'Memory Usage', value: `${(systemResources.memory_percent || 0).toFixed(0)}%`, status: (systemResources.memory_percent || 0) > 85 ? 'warning' : 'good' },
+    { name: 'Active Agents', value: `${dashboardStats?.agents?.active || 0}`, status: 'good' },
+    { name: 'Workflows', value: `${dashboardStats?.workflows?.total || 0}`, status: 'good' },
   ]
 
   const getStatusColor = (status: string) => {
@@ -134,11 +147,11 @@ const MonitoringExplorer: React.FC = () => {
                 }}
               >
                 <ListItemIcon sx={{ minWidth: 20, mr: 1 }}>
-                  <MetricsIcon 
-                    sx={{ 
-                      fontSize: 16, 
+                  <MetricsIcon
+                    sx={{
+                      fontSize: 16,
                       color: getStatusColor(metric.status)
-                    }} 
+                    }}
                   />
                 </ListItemIcon>
                 <ListItemText

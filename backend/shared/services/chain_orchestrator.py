@@ -15,6 +15,7 @@ from shared.models.chain import (
     Chain, ChainNode, ChainEdge, ChainExecution, ChainExecutionLog,
     ChainStatus, ChainNodeType, ChainExecutionStatus
 )
+from shared.database.connection import get_database_session
 from shared.models.agent import Agent
 from shared.schemas.chain import ChainValidationResult
 from shared.services.base import BaseService
@@ -321,8 +322,16 @@ class ChainOrchestratorService(BaseService):
             ChainValidationError: If chain validation fails
             ChainExecutionError: If execution fails
         """
-        logger.info(f"Starting chain execution for chain {chain_id}")
-        
+    async def create_execution(
+        self,
+        session: AsyncSession,
+        chain_id: UUID,
+        input_data: Dict[str, Any],
+        execution_name: Optional[str] = None,
+        variables: Optional[Dict[str, Any]] = None,
+        correlation_id: Optional[str] = None
+    ) -> ChainExecution:
+        """Create execution record without running it."""
         # Validate chain first
         validation_result = await self.validate_chain(session, chain_id)
         if not validation_result.is_valid:
@@ -330,7 +339,83 @@ class ChainOrchestratorService(BaseService):
                 f"Chain validation failed: {', '.join(validation_result.errors)}"
             )
         
-        # Load chain with nodes and edges
+        # Create execution record
+        execution = ChainExecution(
+            chain_id=chain_id,
+            execution_name=execution_name,
+            status=ChainExecutionStatus.RUNNING, # Ideally QUEUED, but keeping RUNNING for now
+            input_data=input_data,
+            variables=variables or {},
+            node_results={},
+            started_at=datetime.now(timezone.utc),
+            completed_nodes=[],
+            active_edges=[],
+            edge_results={},
+            correlation_id=correlation_id
+        )
+        session.add(execution)
+        await session.commit()
+        await session.refresh(execution)
+        
+        # Update chain execution count
+        chain_result = await session.execute(
+            select(Chain).where(Chain.id == chain_id)
+        )
+        chain = chain_result.scalar_one()
+        chain.execution_count += 1
+        chain.last_executed_at = datetime.now(timezone.utc)
+        await session.commit()
+        
+        return execution
+
+    async def run_execution_background(self, execution_id: UUID, timeout_seconds: int = 300):
+        """Run execution in a separate session (for background tasks)."""
+        async with get_database_session() as session:
+            try:
+                # Load execution
+                result = await session.execute(
+                    select(ChainExecution).where(ChainExecution.id == execution_id)
+                )
+                execution = result.scalar_one_or_none()
+                if not execution:
+                    logger.error(f"Execution {execution_id} not found for background run")
+                    return
+
+                # Load components
+                nodes_result = await session.execute(
+                    select(ChainNode).where(ChainNode.chain_id == execution.chain_id).order_by(ChainNode.order_index)
+                )
+                nodes = list(nodes_result.scalars().all())
+                
+                edges_result = await session.execute(
+                    select(ChainEdge).where(ChainEdge.chain_id == execution.chain_id)
+                )
+                edges = list(edges_result.scalars().all())
+
+                # Run logic
+                await self._run_execution_logic(session, execution, nodes, edges, execution.input_data, timeout_seconds)
+
+            except Exception as e:
+                logger.error(f"Background execution {execution_id} failed: {e}", exc_info=True)
+
+    async def execute_chain(
+        self,
+        session: AsyncSession,
+        chain_id: UUID,
+        input_data: Dict[str, Any],
+        execution_name: Optional[str] = None,
+        variables: Optional[Dict[str, Any]] = None,
+        correlation_id: Optional[str] = None,
+        timeout_seconds: int = 300
+    ) -> ChainExecution:
+        """Execute chain synchronously (legacy/backward compatibility)."""
+        logger.info(f"Starting synchronous chain execution for chain {chain_id}")
+        
+        execution = await self.create_execution(
+            session, chain_id, input_data, execution_name, variables, correlation_id
+        )
+        
+        # Load components for execution
         nodes_result = await session.execute(
             select(ChainNode).where(ChainNode.chain_id == chain_id).order_by(ChainNode.order_index)
         )
@@ -340,35 +425,22 @@ class ChainOrchestratorService(BaseService):
             select(ChainEdge).where(ChainEdge.chain_id == chain_id)
         )
         edges = list(edges_result.scalars().all())
-        
-        # Create execution record
-        execution = ChainExecution(
-            chain_id=chain_id,
-            execution_name=execution_name,
-            status=ChainExecutionStatus.RUNNING,
-            input_data=input_data,
-            variables=variables or {},
-            node_results={},
-            started_at=datetime.now(timezone.utc),
-            completed_nodes=[],
-            correlation_id=correlation_id
-        )
-        session.add(execution)
-        await session.commit()
-        await session.refresh(execution)
-        
+
+        await self._run_execution_logic(session, execution, nodes, edges, input_data, timeout_seconds)
+        return execution
+
+    async def _run_execution_logic(
+        self, 
+        session: AsyncSession, 
+        execution: ChainExecution, 
+        nodes: List[ChainNode], 
+        edges: List[ChainEdge],
+        input_data: Dict[str, Any],
+        timeout_seconds: int
+    ):
+        """Core execution logic wrapper with error handling and updates."""
         try:
-            # Update chain execution count
-            chain_result = await session.execute(
-                select(Chain).where(Chain.id == chain_id)
-            )
-            chain = chain_result.scalar_one()
-            chain.execution_count += 1
-            chain.last_executed_at = datetime.now(timezone.utc)
-            await session.commit()
-            
-            # Execute the chain with timeout
-            logger.info(f"Starting chain execution {execution.id} with timeout {timeout_seconds}s")
+            logger.info(f"Starting chain execution logic {execution.id} with timeout {timeout_seconds}s")
             try:
                 await asyncio.wait_for(
                     self._execute_chain_internal(
@@ -390,9 +462,7 @@ class ChainOrchestratorService(BaseService):
             
             await session.commit()
             await session.refresh(execution)
-            
             logger.info(f"Chain execution {execution.id} completed successfully")
-            return execution
             
         except Exception as e:
             logger.error(f"Chain execution {execution.id} failed: {e}", exc_info=True)
@@ -410,6 +480,9 @@ class ChainOrchestratorService(BaseService):
             await session.commit()
             await session.refresh(execution)
             
+            # Re-raise if synchronous? No, let caller handle or just log.
+            # If called from background, this exception is caught by run_execution_background
+            # If called from execute_chain, it propagates.
             raise ChainExecutionError(f"Chain execution failed: {str(e)}") from e
     
     async def _execute_chain_internal(
@@ -445,7 +518,13 @@ class ChainOrchestratorService(BaseService):
         
         # Inactive Edges: set of edge_ids that were NOT taken (condition false)
         # We need this to determine if a node should be SKIPPED (all incoming edges inactive)
+        # Inactive Edges: set of edge_ids that were NOT taken (condition false)
+        # We need this to determine if a node should be SKIPPED (all incoming edges inactive)
         inactive_edges = set()
+        
+        # Edge Results: track condition evaluation
+        edge_results = {}
+
         
         context = {
             'input': initial_input,
@@ -518,8 +597,14 @@ class ChainOrchestratorService(BaseService):
                     continue
                 
                 # Update DB to show Running
+                # Update DB to show Running
                 execution.current_node_id = node_id
-                # await session.commit() 
+                
+                # Persist intermediate state
+                execution.active_edges = list(active_edges)
+                execution.edge_results = edge_results
+                await session.commit() 
+ 
                 
                 task = asyncio.create_task(process_node_task(node_id))
                 task.set_name(node_id)
@@ -557,9 +642,12 @@ class ChainOrchestratorService(BaseService):
                                 is_met = self._evaluate_condition(edge.condition, output)
                             
                             if is_met:
+
                                 active_edges.add(edge.edge_id)
+                                edge_results[edge.edge_id] = {"met": True, "output": output}
                             else:
                                 inactive_edges.add(edge.edge_id)
+                                edge_results[edge.edge_id] = {"met": False, "output": output}
                         
                         # Check readiness of all successors
                         # For each successor, check if ALL incoming edges are resolved
@@ -642,9 +730,13 @@ class ChainOrchestratorService(BaseService):
             # Or just empty
              execution.output_data = {}  # Could improve heuristics here
         
+        # Save execution state
+        execution.active_edges = list(active_edges)
+        
         # Save node states in metadata or some field? 
         # (For later UI feature)
         execution.node_results['__states__'] = node_states
+        execution.completed_nodes = list(execution.completed_nodes) # Ensure list
         
         await session.commit()
     def _evaluate_condition(self, condition: Dict[str, Any], source_output: Any) -> bool:

@@ -4,7 +4,7 @@ import logging
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
 from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -12,14 +12,14 @@ from sqlalchemy.orm import selectinload
 from shared.database.connection import get_async_db
 from shared.models.chain import (
     Chain, ChainNode, ChainEdge, ChainExecution, ChainExecutionLog,
-    ChainStatus, ChainExecutionStatus
+    ChainStatus, ChainExecutionStatus, ChainNodeType
 )
 from shared.schemas.chain import (
     ChainCreateRequest, ChainUpdateRequest, ChainResponse,
     ChainListResponse, ChainExecuteRequest, ChainExecutionResponse,
     ChainExecutionListResponse, ChainExecutionLogResponse,
     ChainValidationResult, ChainExecutionStatusResponse,
-    ChainNodeResponse, ChainEdgeResponse
+    ChainNodeResponse, ChainEdgeResponse, ChainNodeSchema
 )
 from shared.services.chain_orchestrator import (
     ChainOrchestratorService,
@@ -54,9 +54,14 @@ async def create_chain(
     session: AsyncSession = Depends(get_async_db)
 ):
     """
-    Create a new chain.
+    Create a new chain orchestration workflow.
     
-    Creates a chain with nodes and edges for agent orchestration.
+    This endpoint initializes a new chain and its associated nodes and edges.
+    If no nodes are provided, it automatically creates default START and END nodes.
+    
+    - **name**: Descriptive name for the chain.
+    - **nodes**: List of orchestration nodes (optional).
+    - **edges**: List of connections between nodes (optional).
     """
     try:
         # Create chain
@@ -73,9 +78,33 @@ async def create_chain(
         session.add(chain)
         await session.flush()  # Get chain.id
         
+        # Auto-create START and END nodes if no nodes provided
+        nodes_to_create = request.nodes if request.nodes else []
+        if not nodes_to_create:
+            # Auto-create default START and END nodes
+            nodes_to_create = [
+                ChainNodeSchema(
+                    node_id="start",
+                    node_type=ChainNodeType.START,
+                    label="Start",
+                    position_x=100,
+                    position_y=300,
+                    order_index=0
+                ),
+                ChainNodeSchema(
+                    node_id="end",
+                    node_type=ChainNodeType.END,
+                    label="End",
+                    position_x=400,
+                    position_y=300,
+                    order_index=1
+                )
+            ]
+            logger.info(f"Auto-created START and END nodes for chain {chain.id}")
+        
         # Create nodes
         nodes = []
-        for node_data in request.nodes:
+        for node_data in nodes_to_create:
             node = ChainNode(
                 chain_id=chain.id,
                 node_id=node_data.node_id,
@@ -162,9 +191,10 @@ async def list_chains(
     session: AsyncSession = Depends(get_async_db)
 ):
     """
-    List all chains with optional filtering.
+    List all orchestration chains with optional filtering.
     
-    Returns a lightweight list of chains without full node/edge details.
+    Returns a lightweight list of chains including metadata like node counts and execution history summary.
+    Use this endpoint for population chain lists in the UI.
     """
     try:
         # Build query
@@ -218,7 +248,12 @@ async def get_chain(
     chain_id: UUID,
     session: AsyncSession = Depends(get_async_db)
 ):
-    """Get chain details including nodes and edges."""
+    """
+    Get full details of a specific chain.
+    
+    Returns the complete chain configuration, including all nodes, edges, and schemas.
+    Required for rendering the visual Chain Builder canvas.
+    """
     try:
         # Get chain
         result = await session.execute(
@@ -279,7 +314,12 @@ async def update_chain(
     request: ChainUpdateRequest,
     session: AsyncSession = Depends(get_async_db)
 ):
-    """Update an existing chain."""
+    """
+    Update an existing chain configuration.
+    
+    Supports partial updates of metadata and full replacement of node/edge graphs.
+    When updating nodes or edges, the existing graph is replaced with the new one.
+    """
     try:
         # Get chain
         result = await session.execute(
@@ -467,6 +507,7 @@ async def validate_chain(
 async def execute_chain(
     chain_id: UUID,
     request: ChainExecuteRequest,
+    background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_async_db),
     orchestrator: ChainOrchestratorService = Depends(get_chain_orchestrator_service)
 ):
@@ -476,7 +517,8 @@ async def execute_chain(
     Starts asynchronous execution of the chain with the provided input data.
     """
     try:
-        execution = await orchestrator.execute_chain(
+        # Create execution record
+        execution = await orchestrator.create_execution(
             session=session,
             chain_id=chain_id,
             input_data=request.input_data,
@@ -484,6 +526,9 @@ async def execute_chain(
             variables=request.variables,
             correlation_id=request.correlation_id
         )
+        
+        # Schedule background execution
+        background_tasks.add_task(orchestrator.run_execution_background, execution.id)
         
         return ChainExecutionResponse.model_validate(execution)
         

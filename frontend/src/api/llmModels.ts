@@ -57,7 +57,12 @@ export const discoverOllamaModels = async (): Promise<OllamaModel[]> => {
     return response.data;
 };
 
-export const testLLMModel = async (modelId: string, prompt: string, system_prompt?: string): Promise<string> => {
-    const response = await apiClient.post<string>('/llm-models/test', { model_id: modelId, prompt, system_prompt });
+export const testLLMModel = async (modelId: string, prompt: string, system_prompt?: string): Promise<{ job_id: string; status: string }> => {
+    const response = await apiClient.post<{ job_id: string; status: string }>('/llm-models/test', { model_id: modelId, prompt, system_prompt });
+    return response.data;
+};
+
+export const getTestStatus = async (jobId: string): Promise<any> => {
+    const response = await apiClient.get<any>(`/llm-models/test/${jobId}`);
     return response.data;
 };

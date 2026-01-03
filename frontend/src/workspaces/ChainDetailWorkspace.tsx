@@ -34,6 +34,7 @@ import ChainCanvas from '../components/chain/ChainCanvas'
 import EdgeConditionDialog from '../components/chain/EdgeConditionDialog'
 import ExecutionHistory from '../components/chain/ExecutionHistory'
 import NodeConfigPanel from '../components/chain/NodeConfigPanel'
+import TestWorkflowModal from '../components/chain/TestWorkflowModal'
 import { useNotification } from '../contexts/NotificationContext'
 
 const ChainDetailWorkspace: React.FC = () => {
@@ -56,6 +57,9 @@ const ChainDetailWorkspace: React.FC = () => {
     // Node configuration state
     const [selectedNode, setSelectedNode] = useState<Node | null>(null)
     const [nodeConfigPanelOpen, setNodeConfigPanelOpen] = useState(false)
+
+    // Test Modal state
+    const [isTestModalOpen, setIsTestModalOpen] = useState(false)
 
     // Execution state
     const [showExecutionPanel, setShowExecutionPanel] = useState(true)
@@ -397,15 +401,16 @@ const ChainDetailWorkspace: React.FC = () => {
                             <Button variant="outlined" size="small" onClick={handleValidate}>
                                 Validate
                             </Button>
+
                             {chain.nodes.length > 0 && (
                                 <Button
                                     variant="contained"
+                                    color="secondary"
                                     size="small"
                                     startIcon={<PlayArrowIcon />}
-                                    onClick={handleExecute}
-                                    disabled={executeMutation.isLoading}
+                                    onClick={() => setIsTestModalOpen(true)}
                                 >
-                                    Execute
+                                    Test Workflow
                                 </Button>
                             )}
                         </>
@@ -485,22 +490,24 @@ const ChainDetailWorkspace: React.FC = () => {
             />
 
             {/* Validation Results */}
-            {validationResult && (
-                <Paper sx={{ position: 'absolute', bottom: 20, right: 20, p: 2, maxWidth: 400, zIndex: 1000 }}>
-                    <Alert severity={validationResult.is_valid ? 'success' : 'error'}>
-                        {validationResult.is_valid ? (
-                            'Chain is valid!'
-                        ) : (
-                            <>
-                                <Typography variant="body2" fontWeight="bold">Errors:</Typography>
-                                {validationResult.errors.map((error: string, idx: number) => (
-                                    <Typography key={idx} variant="body2">• {error}</Typography>
-                                ))}
-                            </>
-                        )}
-                    </Alert>
-                </Paper>
-            )}
+            {
+                validationResult && (
+                    <Paper sx={{ position: 'absolute', bottom: 20, right: 20, p: 2, maxWidth: 400, zIndex: 1000 }}>
+                        <Alert severity={validationResult.is_valid ? 'success' : 'error'}>
+                            {validationResult.is_valid ? (
+                                'Chain is valid!'
+                            ) : (
+                                <>
+                                    <Typography variant="body2" fontWeight="bold">Errors:</Typography>
+                                    {validationResult.errors.map((error: string, idx: number) => (
+                                        <Typography key={idx} variant="body2">• {error}</Typography>
+                                    ))}
+                                </>
+                            )}
+                        </Alert>
+                    </Paper>
+                )
+            }
 
             {/* Add Node Dialog */}
             <Dialog open={addNodeDialogOpen} onClose={() => setAddNodeDialogOpen(false)} maxWidth="sm" fullWidth>
@@ -526,29 +533,31 @@ const ChainDetailWorkspace: React.FC = () => {
             </Dialog>
 
             {/* Node Configuration Panel */}
-            {nodeConfigPanelOpen && selectedNode && (
-                <Box
-                    sx={{
-                        position: 'fixed',
-                        top: 48,
-                        right: 0,
-                        height: 'calc(100vh - 48px)',
-                        zIndex: 1300,
-                        backgroundColor: '#fafafa',
-                        boxShadow: '-2px 0 8px rgba(0,0,0,0.1)'
-                    }}
-                >
-                    <NodeConfigPanel
-                        node={selectedNode}
-                        agents={agents}
-                        onClose={() => {
-                            setNodeConfigPanelOpen(false)
-                            setSelectedNode(null)
+            {
+                nodeConfigPanelOpen && selectedNode && (
+                    <Box
+                        sx={{
+                            position: 'fixed',
+                            top: 48,
+                            right: 0,
+                            height: 'calc(100vh - 48px)',
+                            zIndex: 1300,
+                            backgroundColor: '#fafafa',
+                            boxShadow: '-2px 0 8px rgba(0,0,0,0.1)'
                         }}
-                        onSave={handleNodeConfigSave}
-                    />
-                </Box>
-            )}
+                    >
+                        <NodeConfigPanel
+                            node={selectedNode}
+                            agents={agents}
+                            onClose={() => {
+                                setNodeConfigPanelOpen(false)
+                                setSelectedNode(null)
+                            }}
+                            onSave={handleNodeConfigSave}
+                        />
+                    </Box>
+                )
+            }
 
             {/* Edge Configuration Dialog */}
             <EdgeConditionDialog
@@ -560,8 +569,16 @@ const ChainDetailWorkspace: React.FC = () => {
                     setSelectedEdge(null)
                 }}
                 onSave={handleEdgeConfigSave}
+
             />
-        </Box>
+
+            {/* Test Workflow Modal */}
+            <TestWorkflowModal
+                open={isTestModalOpen}
+                onClose={() => setIsTestModalOpen(false)}
+                chain={chain}
+            />
+        </Box >
     )
 }
 

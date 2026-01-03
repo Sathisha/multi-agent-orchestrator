@@ -37,14 +37,53 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
+from httpx import AsyncClient
 from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+from sqlalchemy.ext.compiler import compiles
+import sqlalchemy.types
+from sqlalchemy.dialects import postgresql
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.types import Text, VARCHAR
+from sqlalchemy.sql.expression import TextClause
+
+# Monkeypatch PostgreSQL UUID to work with SQLite (store as String)
+class StringyUUID(sqlalchemy.types.TypeDecorator):
+    impl = sqlalchemy.types.String
+    cache_ok = True
+    
+    def __init__(self, as_uuid=True, **kwargs):
+        # Swallow as_uuid, pass other kwargs to impl
+        super().__init__(**kwargs)
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        return str(value)
+    def process_result_value(self, value, dialect):
+        return value
+
+postgresql.UUID = StringyUUID
 
 from main import app
 from shared.database.connection import Base, get_async_db
 from shared.config.settings import Settings
+from shared.services.auth import get_current_user
+from shared.models.user import User
+from uuid import uuid4
+from contextlib import asynccontextmanager
+
+# Handle JSONB in SQLite for testing
+@compiles(JSONB, "sqlite")
+def compile_jsonb(type_, compiler, **kw):
+    return "TEXT"
+
+# Strip ::jsonb cast in SQLite for testing
+@compiles(TextClause, "sqlite")
+def compile_text_clause(element, compiler, **kw):
+    return element.text.replace("::jsonb", "")
 
 # Test database URL
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
@@ -66,6 +105,7 @@ async def async_engine():
         TEST_DATABASE_URL,
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
+        echo=True
     )
     
     async with engine.begin() as conn:
@@ -91,18 +131,91 @@ async def async_session(async_engine) -> AsyncGenerator[AsyncSession, None]:
 
 
 @pytest.fixture
-def test_client(async_session):
+def test_client(async_engine, async_session):
     """Create test client with database dependency override."""
     
     async def override_get_async_db():
-        yield async_session
+        async with AsyncSession(async_engine, expire_on_commit=False) as session:
+            yield session
     
+    async def override_get_current_user():
+        return User(
+            id=uuid4(),
+            email="test@example.com",
+            username="testuser",
+            is_active=True
+        )
+
+    @asynccontextmanager
+    async def mock_get_db_session():
+        async with AsyncSession(async_engine, expire_on_commit=False) as session:
+            yield session
+
     app.dependency_overrides[get_async_db] = override_get_async_db
+    app.dependency_overrides[get_current_user] = override_get_current_user
     
-    with TestClient(app) as client:
-        yield client
+    with patch("shared.middleware.audit.get_database_session", side_effect=mock_get_db_session):
+        with TestClient(app) as client:
+            yield client
     
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+async def async_client(async_engine, async_session):
+    """Create async client for async tests."""
+    
+    async def override_get_async_db():
+        async with AsyncSession(async_engine, expire_on_commit=False) as session:
+            yield session
+    
+    async def override_get_current_user():
+        return User(
+            id=uuid4(),
+            email="test@example.com",
+            username="testuser",
+            is_active=True
+        )
+
+    @asynccontextmanager
+    async def mock_get_db_session():
+        async with AsyncSession(async_engine, expire_on_commit=False) as session:
+            yield session
+
+    app.dependency_overrides[get_async_db] = override_get_async_db
+    app.dependency_overrides[get_current_user] = override_get_current_user
+    
+    with patch("shared.middleware.audit.get_database_session", side_effect=mock_get_db_session):
+        async with AsyncClient(app=app, base_url="http://testserver") as client:
+            yield client
+    
+    app.dependency_overrides.clear()
+
+
+from unittest.mock import AsyncMock, patch, MagicMock
+
+@pytest.fixture(scope="function", autouse=True)
+async def mock_db_init(async_engine):
+    """Mock database initialization, background services, and session factory."""
+    # Create a factory that returns a NEW session each time
+    def session_factory():
+        return AsyncSession(async_engine, expire_on_commit=False)
+
+    with patch("shared.database.connection.init_database_on_startup", new_callable=AsyncMock) as mock_db, \
+         patch("shared.services.monitoring.monitoring_service.start", new_callable=AsyncMock), \
+         patch("shared.services.monitoring.monitoring_service.stop", new_callable=AsyncMock), \
+         patch("shared.services.agent_executor.lifecycle_manager.start_monitoring", new_callable=AsyncMock), \
+         patch("shared.services.agent_executor.lifecycle_manager.stop_monitoring", new_callable=AsyncMock), \
+         patch("shared.services.agent_state_manager.global_state_manager.start_global_monitoring", new_callable=AsyncMock), \
+         patch("shared.services.agent_state_manager.global_state_manager.stop_global_monitoring", new_callable=AsyncMock), \
+         patch("shared.database.connection.AsyncSessionLocal", side_effect=session_factory), \
+         patch("shared.services.agent_executor.AsyncSessionLocal", side_effect=session_factory):
+        yield mock_db
+
+
+
+
+
 
 
 @pytest.fixture
@@ -173,28 +286,35 @@ def test_settings() -> Settings:
         }
     )
 
+@pytest.fixture
+def mock_zeebe_client():
+    """Mock Zeebe client to prevent actual network calls."""
+    with patch("pyzeebe.aio.client.ZeebeClient", autospec=True) as mock_cls:
+        mock_instance = mock_cls.return_value
+        mock_instance.create_process_instance = AsyncMock(return_value={"processInstanceKey": 12345})
+        mock_instance.deploy_resource = AsyncMock(return_value={"key": 1})
+        mock_instance.publish_message = AsyncMock(return_value={})
+        mock_instance.cancel_process_instance = AsyncMock(return_value={})
+        mock_instance.topology = AsyncMock(return_value={"brokers": []})
+        
+        # Also attempt to patch where it might be instantiated or imported
+        # We also patch the shared zeebe_service which the API uses
+        with patch("shared.core.workflow.zeebe_service", new_callable=MagicMock) as mock_service:
+            mock_service.run_workflow = AsyncMock(return_value=12345)
+            mock_service.deploy_workflow = AsyncMock(return_value="deployed")
+            
+            yield mock_instance
 
-# Pytest configuration and hooks
-def pytest_configure(config):
-    """Configure pytest with custom markers."""
-    config.addinivalue_line(
-        "markers", "unit: mark test as a unit test"
-    )
-    config.addinivalue_line(
-        "markers", "integration: mark test as an integration test"
-    )
-    config.addinivalue_line(
-        "markers", "property: mark test as a property-based test"
-    )
-    config.addinivalue_line(
-        "markers", "slow: mark test as slow"
-    )
-    config.addinivalue_line(
-        "markers", "db: mark test as requiring database"
-    )
-    config.addinivalue_line(
-        "markers", "llm: mark test as requiring LLM services"
-    )
-    config.addinivalue_line(
-        "markers", "requires_docker: mark test as requiring Docker"
-    )
+@pytest.fixture(autouse=True)
+async def reset_workflow_service():
+    """Reset the workflow orchestrator service singleton before each test."""
+    try:
+        from shared.api.workflow_orchestrator import _workflow_orchestrator_instance
+        # We can't easily reset a global var in another module without importing it.
+        # But if get_workflow_orchestrator_service checks if it's None...
+        # We can try to set it to None if we can import the module.
+        import shared.api.workflow_orchestrator
+        shared.api.workflow_orchestrator._workflow_orchestrator_instance = None
+    except (ImportError, AttributeError):
+        pass
+    yield

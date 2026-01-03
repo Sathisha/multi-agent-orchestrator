@@ -1,6 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Box } from '@mui/material'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import { Allotment } from 'allotment'
 import 'allotment/dist/style.css'
 import '../../styles/allotment-theme.css'
@@ -11,9 +11,26 @@ import TerminalPanel from './TerminalPanel'
 import StatusBar from './StatusBar'
 
 const VSCodeLayout: React.FC = () => {
-  const [activeView, setActiveView] = useState('agents')
+  const location = useLocation()
+
+  const getInitialView = () => {
+    const path = location.pathname
+    if (path.startsWith('/agents')) return 'agents'
+    if (path.startsWith('/chains') || path.startsWith('/workflows')) return 'workflows'
+    if (path.startsWith('/tools')) return 'tools'
+    if (path.startsWith('/models')) return 'models'
+    if (path.startsWith('/monitoring')) return 'monitoring'
+    return 'agents'
+  }
+
+  const [activeView, setActiveView] = useState(getInitialView())
   const [sidePanelOpen, setSidePanelOpen] = useState(true)
   const [terminalOpen, setTerminalOpen] = useState(false)
+
+  // Sync active view with location changes (e.g. browser back button)
+  useEffect(() => {
+    setActiveView(getInitialView())
+  }, [location.pathname])
 
   return (
     <Box

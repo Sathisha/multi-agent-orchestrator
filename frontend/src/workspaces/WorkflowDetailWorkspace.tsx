@@ -4,7 +4,7 @@ import { Box, Typography, IconButton, CircularProgress } from '@mui/material'
 import { ArrowBack } from '@mui/icons-material'
 import { useQuery } from 'react-query'
 import { getWorkflow, updateWorkflow } from '../api/workflows'
-import WorkflowModeler from '../components/workflow/WorkflowModeler'
+
 import { useMutation, useQueryClient } from 'react-query'
 
 const WorkflowDetailWorkspace: React.FC = () => {
@@ -61,11 +61,10 @@ const WorkflowDetailWorkspace: React.FC = () => {
                 Status: {workflow.status} | Version: {workflow.version} | Executions: {workflow.execution_count}
             </Typography>
 
-            <Box sx={{ mt: 4, flex: 1, border: '1px solid #444', borderRadius: 1, overflow: 'hidden' }}>
-                <WorkflowModeler
-                    xml={workflow.bpmn_xml}
-                    onSave={(xml) => updateMutation.mutate({ ...workflow, bpmn_xml: xml })}
-                />
+            <Box sx={{ mt: 4, flex: 1, border: '1px solid #444', borderRadius: 1, overflow: 'hidden', p: 3, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                <Typography variant="body1" color="text.secondary">
+                    BPMN visualization is disabled.
+                </Typography>
             </Box>
         </Box>
     )

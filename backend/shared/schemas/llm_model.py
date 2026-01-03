@@ -46,3 +46,7 @@ class LLMModelTestRequest(BaseModel):
     model_id: UUID = Field(..., description="ID of the LLM model to test")
     prompt: str = Field(..., min_length=1, description="Sample prompt to send to the model")
     system_prompt: Optional[str] = Field(None, description="Optional system prompt for the model")
+
+    model_config = {
+        "protected_namespaces": ()
+    }

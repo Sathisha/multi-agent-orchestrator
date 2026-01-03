@@ -72,4 +72,4 @@ python-json-logger==2.0.7
 psutil==5.9.6
 
 # Workflow orchestration
-pyzeebe==4.7.0
+

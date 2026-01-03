@@ -119,3 +119,55 @@ class ToolExecutionResponse(BaseModel):
     execution_time: Optional[int] = None
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
+
+class MCPServerStatus(str, Enum):
+    CONNECTED = "connected"
+    DISCONNECTED = "disconnected"
+    ERROR = "error"
+    MAINTENANCE = "maintenance"
+
+class MCPServer(BaseEntity):
+    __tablename__ = "mcp_servers"
+
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    base_url: Mapped[str] = mapped_column(String(255), nullable=False)
+    version: Mapped[str] = mapped_column(String(50), default="1.0.0")
+    status: Mapped[MCPServerStatus] = mapped_column(String(50), default=MCPServerStatus.DISCONNECTED)
+    auth_config: Mapped[Dict[str, Any]] = mapped_column(JSONB, default=text("'{}'::jsonb"))
+    capabilities: Mapped[List[str]] = mapped_column(JSONB, default=text("'[]'::jsonb"))
+    
+    last_connected_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    error_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_health_check_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    success_rate: Mapped[float] = mapped_column(Float, default=100.0)
+    total_requests: Mapped[int] = mapped_column(Integer, default=0)
+    successful_requests: Mapped[int] = mapped_column(Integer, default=0)
+    failed_requests: Mapped[int] = mapped_column(Integer, default=0)
+    average_response_time: Mapped[float] = mapped_column(Float, default=0.0)
+
+
+class MCPServerRequest(BaseModel):
+    name: str
+    description: Optional[str] = None
+    base_url: str
+    version: Optional[str] = "1.0.0"
+    auth_config: Optional[Dict[str, Any]] = {}
+
+class MCPServerResponse(BaseModel):
+    id: UUID
+    name: str
+    description: Optional[str]
+    base_url: str
+    version: str
+    status: MCPServerStatus
+    capabilities: List[str]
+    last_connected_at: Optional[Any]
+    error_count: int
+    tool_count: Optional[int] = 0
+    created_at: Any
+    updated_at: Any
+
+    class Config:
+        from_attributes = True

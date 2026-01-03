@@ -1,0 +1,158 @@
+[
+    {
+        "name": "Intelligent Chatbot Pipeline",
+        "description": "A standard RAG pipeline with safety guardrails and query analysis.",
+        "category": "Customer Support",
+        "status": "active",
+        "nodes": [
+            {
+                "node_id": "start",
+                "node_type": "start",
+                "label": "Input",
+                "position_x": 100,
+                "position_y": 300,
+                "order_index": 0
+            },
+            {
+                "node_id": "input_guardrail",
+                "node_type": "agent",
+                "label": "Safety Check",
+                "position_x": 300,
+                "position_y": 300,
+                "order_index": 1,
+                "config": {
+                    "timeout": 30
+                }
+            },
+            {
+                "node_id": "query_analyzer",
+                "node_type": "agent",
+                "label": "Query Analysis",
+                "position_x": 550,
+                "position_y": 300,
+                "order_index": 2
+            },
+            {
+                "node_id": "llm_responder",
+                "node_type": "agent",
+                "label": "LLM Response",
+                "position_x": 800,
+                "position_y": 300,
+                "order_index": 3
+            },
+            {
+                "node_id": "output_guardrail",
+                "node_type": "agent",
+                "label": "Output Filter",
+                "position_x": 1050,
+                "position_y": 300,
+                "order_index": 4
+            },
+            {
+                "node_id": "end",
+                "node_type": "end",
+                "label": "Output",
+                "position_x": 1300,
+                "position_y": 300,
+                "order_index": 5
+            }
+        ],
+        "edges": [
+            {
+                "edge_id": "e1",
+                "source_node_id": "start",
+                "target_node_id": "input_guardrail"
+            },
+            {
+                "edge_id": "e2",
+                "source_node_id": "input_guardrail",
+                "target_node_id": "query_analyzer"
+            },
+            {
+                "edge_id": "e3",
+                "source_node_id": "query_analyzer",
+                "target_node_id": "llm_responder"
+            },
+            {
+                "edge_id": "e4",
+                "source_node_id": "llm_responder",
+                "target_node_id": "output_guardrail"
+            },
+            {
+                "edge_id": "e5",
+                "source_node_id": "output_guardrail",
+                "target_node_id": "end"
+            }
+        ]
+    },
+    {
+        "name": "Parallel Research Synthesis",
+        "description": "Executes parallel research tasks and synthesizes them into a summary.",
+        "category": "Research",
+        "status": "active",
+        "nodes": [
+            {
+                "node_id": "start",
+                "node_type": "start",
+                "label": "Task",
+                "position_x": 100,
+                "position_y": 300
+            },
+            {
+                "node_id": "researcher_1",
+                "node_type": "agent",
+                "label": "Market Research",
+                "position_x": 350,
+                "position_y": 150
+            },
+            {
+                "node_id": "researcher_2",
+                "node_type": "agent",
+                "label": "Tech Deep Dive",
+                "position_x": 350,
+                "position_y": 450
+            },
+            {
+                "node_id": "synthesizer",
+                "node_type": "agent",
+                "label": "Synthesis",
+                "position_x": 650,
+                "position_y": 300
+            },
+            {
+                "node_id": "end",
+                "node_type": "end",
+                "label": "Report",
+                "position_x": 900,
+                "position_y": 300
+            }
+        ],
+        "edges": [
+            {
+                "edge_id": "e1",
+                "source_node_id": "start",
+                "target_node_id": "researcher_1"
+            },
+            {
+                "edge_id": "e2",
+                "source_node_id": "start",
+                "target_node_id": "researcher_2"
+            },
+            {
+                "edge_id": "e3",
+                "source_node_id": "researcher_1",
+                "target_node_id": "synthesizer"
+            },
+            {
+                "edge_id": "e4",
+                "source_node_id": "researcher_2",
+                "target_node_id": "synthesizer"
+            },
+            {
+                "edge_id": "e5",
+                "source_node_id": "synthesizer",
+                "target_node_id": "end"
+            }
+        ]
+    }
+]

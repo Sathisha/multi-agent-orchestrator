@@ -1,0 +1,349 @@
+import React, { useState, useEffect, useRef } from 'react';
+import {
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+    Button,
+    Grid,
+    Paper,
+    Typography,
+    Box,
+    TextField,
+    CircularProgress,
+    IconButton,
+    Tabs,
+    Tab,
+    Chip,
+    Alert,
+    Divider
+} from '@mui/material';
+import {
+    Close,
+    PlayArrow,
+    Stop,
+    Refresh,
+    CheckCircle,
+    Error as ErrorIcon,
+    HourglassEmpty
+} from '@mui/icons-material';
+import { Node, Edge } from 'reactflow';
+import { useQuery, useMutation, useQueryClient } from 'react-query';
+
+import { executeChain, getExecutionStatus, getExecutionLogs, cancelExecution } from '../../api/chains';
+import { Chain, ChainExecutionStatusResponse, ChainExecutionLog, ChainExecution } from '../../types/chain';
+import ChainCanvas from './ChainCanvas';
+
+interface TestWorkflowModalProps {
+    open: boolean;
+    onClose: () => void;
+    chain: Chain;
+}
+
+interface LogEntry {
+    timestamp: string;
+    level: string;
+    message: string;
+    node_id?: string;
+    metadata?: any;
+}
+
+const TestWorkflowModal: React.FC<TestWorkflowModalProps> = ({ open, onClose, chain }) => {
+    const queryClient = useQueryClient();
+    const [inputData, setInputData] = useState('{}');
+    const [executionId, setExecutionId] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState(0);
+
+    // Canvas State
+    const [nodes, setNodes] = useState<Node[]>([]);
+    const [edges, setEdges] = useState<Edge[]>([]);
+
+    // Initialize nodes/edges from chain
+    useEffect(() => {
+        if (chain && open) {
+            // Reset state on open
+            if (!executionId) {
+                const initialNodes: Node[] = chain.nodes.map((node) => ({
+                    id: node.node_id,
+                    type: 'agentNode',
+                    position: { x: node.position_x, y: node.position_y },
+                    data: {
+                        label: node.label,
+                        agentId: node.agent_id,
+                        nodeType: node.node_type,
+                        status: 'pending' // Initial status
+                    },
+                }));
+                setNodes(initialNodes);
+
+                const initialEdges: Edge[] = chain.edges.map((edge) => ({
+                    id: edge.edge_id,
+                    source: edge.source_node_id,
+                    target: edge.target_node_id,
+                    label: edge.label,
+                    animated: false, // Default not animated
+                    style: { stroke: '#bdbdbd', strokeWidth: 2 } // Default gray
+                }));
+                setEdges(initialEdges);
+            }
+        }
+    }, [chain, open, executionId]);
+
+    // Execute Mutation
+    const executeMutation = useMutation(
+        async () => {
+            let data;
+            try {
+                // Try parsing as JSON first
+                data = JSON.parse(inputData);
+            } catch (e) {
+                // If invalid JSON, treat as raw string input wrapped in default key 'input'
+                data = { input: inputData };
+            }
+
+            // If it parsed but isn't an object (e.g. number/boolean/string), wrap it
+            if (typeof data !== 'object' || data === null) {
+                data = { input: data };
+            }
+
+            return await executeChain(chain.id, { input_data: data });
+        },
+        {
+            onSuccess: (data: ChainExecution) => {
+                setExecutionId(data.id);
+            },
+            onError: (error: any) => {
+                const msg = error.response?.data?.detail || error.message || 'Execution failed';
+                alert(`Execution failed: ${msg}`);
+            }
+        }
+    );
+
+    // Cancel Mutation
+    const cancelMutation = useMutation(
+        async () => {
+            if (executionId) {
+                await cancelExecution(executionId);
+            }
+        },
+        {
+            onSuccess: () => {
+                queryClient.invalidateQueries(['executionStatus', executionId]);
+            }
+        }
+    );
+
+    // Poll Status
+    const { data: status } = useQuery<ChainExecutionStatusResponse>(
+        ['executionStatus', executionId],
+        () => getExecutionStatus(executionId!),
+        {
+            enabled: !!executionId,
+            refetchInterval: (data) => {
+                if (!data) return 1000;
+                return ['running', 'pending'].includes(data.status.toLowerCase()) ? 500 : false;
+            },
+            onSuccess: (data) => {
+                updateVisuals(data);
+            }
+        }
+    );
+
+    // Poll Logs
+    const { data: logs } = useQuery<ChainExecutionLog[]>(
+        ['executionLogs', executionId],
+        () => getExecutionLogs(executionId!, { skip: 0, limit: 1000 }), // Fetch all (limited to 1000)
+        {
+            enabled: !!executionId,
+            refetchInterval: (data) => {
+                // Stop polling logs when status is final, but need to check status independently?
+                // Rely on status poll to stop this query implicitly via enabled? No, status doesn't disable this.
+                // We can check status from the status query result.
+                return status && ['running', 'pending'].includes(status.status.toLowerCase()) ? 1000 : false;
+            }
+        }
+    );
+
+    const updateVisuals = (statusData: ChainExecutionStatusResponse) => {
+        // Update Nodes
+        setNodes((currentNodes) => currentNodes.map(node => {
+            let nodeStatus = 'pending';
+            if (statusData.current_node_id === node.id) nodeStatus = 'running';
+            else if (statusData.completed_nodes.includes(node.id)) nodeStatus = 'completed';
+            else if (statusData.node_states && statusData.node_states[node.id]) {
+                nodeStatus = statusData.node_states[node.id].toLowerCase();
+            }
+            // Handle failures
+            if (statusData.status === 'failed' && nodeStatus === 'running') nodeStatus = 'failed';
+
+            return {
+                ...node,
+                data: { ...node.data, status: nodeStatus }
+            };
+        }));
+
+        // Update Edges
+        setEdges((currentEdges) => currentEdges.map(edge => {
+            const isActive = statusData.active_edges?.includes(edge.id);
+            return {
+                ...edge,
+                animated: isActive,
+                style: isActive
+                    ? { stroke: '#4caf50', strokeWidth: 3 }
+                    : { stroke: '#bdbdbd', strokeWidth: 1 }
+            };
+        }));
+    };
+
+    const handleReset = () => {
+        setExecutionId(null);
+        // Reset visuals done by useEffect
+    };
+
+    // Render Logs Helper
+    const renderLogs = () => {
+        if (!logs || logs.length === 0) return <Typography color="text.secondary" sx={{ p: 2 }}>Waiting for logs...</Typography>;
+
+        return (
+            <Box sx={{ flex: 1, overflowY: 'auto', p: 1, maxHeight: '60vh', fontFamily: 'monospace', fontSize: '0.9rem' }}>
+                {logs.map((log) => (
+                    <Box key={log.id} sx={{ mb: 1, borderLeft: `3px solid ${getLogColor(log.level)}`, pl: 1 }}>
+                        <Typography variant="caption" color="text.secondary">
+                            {new Date(log.timestamp).toLocaleTimeString()} [{log.level}] {log.node_id ? `[${log.node_id}]` : ''}
+                        </Typography>
+                        <Typography component="pre" sx={{ whiteSpace: 'pre-wrap', m: 0 }}>
+                            {log.message}
+                        </Typography>
+                        {log.metadata && Object.keys(log.metadata).length > 0 && (
+                            <Box sx={{ mt: 0.5, bgcolor: '#f5f5f5', p: 0.5, borderRadius: 1 }}>
+                                <Typography variant="caption" component="pre" sx={{ fontSize: '0.75rem' }}>
+                                    {JSON.stringify(log.metadata, null, 2)}
+                                </Typography>
+                            </Box>
+                        )}
+                    </Box>
+                ))}
+            </Box>
+        );
+    };
+
+    const getLogColor = (level: string) => {
+        switch (level) {
+            case 'ERROR': return '#f44336';
+            case 'WARNING': return '#ff9800';
+            case 'INFO': return '#2196f3';
+            default: return '#9e9e9e';
+        }
+    };
+
+    return (
+        <Dialog fullScreen open={open} onClose={onClose}>
+            <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                {/* Header */}
+                <Box sx={{ p: 2, borderBottom: '1px solid #ddd', display: 'flex', alignItems: 'center', justifyContent: 'space-between', bgcolor: '#f5f5f5' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Button startIcon={<Close />} onClick={onClose} variant="outlined">
+                            Close
+                        </Button>
+                        <Typography variant="h6">Test Workflow: {chain.name}</Typography>
+                        {status && (
+                            <Chip
+                                label={status.status}
+                                color={
+                                    status.status === 'completed' ? 'success' :
+                                        status.status === 'failed' ? 'error' :
+                                            status.status === 'running' ? 'primary' : 'default'
+                                }
+                            />
+                        )}
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                        {!executionId ? (
+                            <Button
+                                variant="contained"
+                                color="success"
+                                startIcon={executeMutation.isLoading ? <CircularProgress size={20} color="inherit" /> : <PlayArrow />}
+                                onClick={() => executeMutation.mutate()}
+                                disabled={executeMutation.isLoading}
+                            >
+                                Start Execution
+                            </Button>
+                        ) : (
+                            <>
+                                <Button
+                                    variant="outlined"
+                                    startIcon={<Refresh />}
+                                    onClick={handleReset}
+                                    disabled={['running', 'pending'].includes(status?.status || '')}
+                                >
+                                    New Test
+                                </Button>
+                                {['running', 'pending'].includes(status?.status || '') && (
+                                    <Button
+                                        variant="contained"
+                                        color="error"
+                                        startIcon={<Stop />}
+                                        onClick={() => cancelMutation.mutate()}
+                                    >
+                                        Stop
+                                    </Button>
+                                )}
+                            </>
+                        )}
+                    </Box>
+                </Box>
+
+                {/* Body */}
+                <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+                    {/* Left: Canvas */}
+                    <Box sx={{ flex: 2, borderRight: '1px solid #ddd', position: 'relative' }}>
+                        <ChainCanvas
+                            nodes={nodes}
+                            edges={edges}
+                            readonly={true}
+                        />
+                    </Box>
+
+                    {/* Right: Controls & Logs */}
+                    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', bgcolor: 'white' }}>
+                        <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ borderBottom: 1, borderColor: 'divider' }}>
+                            <Tab label="Input & Config" />
+                            <Tab label="Logs & Output" />
+                        </Tabs>
+
+                        <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                            {activeTab === 0 && (
+                                <Box sx={{ p: 2, overflowY: 'auto' }}>
+                                    <Typography variant="subtitle2" gutterBottom>Execution Input (JSON)</Typography>
+                                    <TextField
+                                        fullWidth
+                                        multiline
+                                        rows={10}
+                                        value={inputData}
+                                        onChange={(e) => setInputData(e.target.value)}
+                                        disabled={!!executionId}
+                                        helperText="Provide JSON input for the workflow start node."
+                                        sx={{ fontFamily: 'monospace' }}
+                                    />
+                                </Box>
+                            )}
+
+                            {activeTab === 1 && (
+                                <>
+                                    {renderLogs()}
+                                    {status?.error_message && (
+                                        <Alert severity="error" sx={{ m: 1 }}>
+                                            {status.error_message}
+                                        </Alert>
+                                    )}
+                                </>
+                            )}
+                        </Box>
+                    </Box>
+                </Box>
+            </Box>
+        </Dialog>
+    );
+};
+
+export default TestWorkflowModal;

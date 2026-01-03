@@ -9,7 +9,6 @@ class WorkflowBase(BaseModel):
     name: str
     description: Optional[str] = None
     version: str = "1.0.0"
-    bpmn_xml: str
     category: Optional[str] = None
     tags: List[str] = []
     input_schema: Dict[str, Any] = {}
@@ -24,7 +23,6 @@ class WorkflowRequest(WorkflowBase):
 
 class WorkflowResponse(WorkflowBase):
     id: UUID
-    process_definition_key: str
     status: WorkflowStatus
     created_at: datetime
     updated_at: Optional[datetime] = None

@@ -244,6 +244,18 @@ class ChainExecution(SystemEntity):
         server_default=text("'[]'::jsonb")
     )
     
+    # Path tracking
+    active_edges: Mapped[List[str]] = mapped_column(
+        JSONB, 
+        nullable=True, 
+        server_default=text("'[]'::jsonb")
+    )
+    edge_results: Mapped[Dict[str, Any]] = mapped_column(
+        JSONB, 
+        nullable=True, 
+        server_default=text("'{}'::jsonb")
+    )
+    
     # Error tracking
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     error_details: Mapped[Dict[str, Any]] = mapped_column(

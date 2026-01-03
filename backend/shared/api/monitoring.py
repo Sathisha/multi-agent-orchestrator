@@ -18,7 +18,7 @@ from ..models.user import User
 
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/monitoring", tags=["monitoring"])
+router = APIRouter(prefix="/api/v1/monitoring", tags=["monitoring"])
 
 
 @router.get("/health")
@@ -297,6 +297,21 @@ async def get_performance_summary(current_user: User = Depends(get_current_user)
         logger.error(f"Error getting performance summary: {e}")
         raise HTTPException(status_code=500, detail="Failed to get performance summary")
 
+
+
+@router.get("/stats")
+async def get_dashboard_stats(current_user: User = Depends(get_current_user)):
+    """
+    Get aggregated dashboard statistics
+    
+    Returns counts for Agents, Tools, and Workflows
+    """
+    try:
+        stats = await monitoring_service.get_dashboard_statistics()
+        return stats
+    except Exception as e:
+        logger.error(f"Error getting dashboard stats: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get dashboard statistics")
 
 # Add missing import
 from datetime import datetime

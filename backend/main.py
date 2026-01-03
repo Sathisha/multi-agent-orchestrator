@@ -101,9 +101,6 @@ app.add_middleware(AuditMiddleware)
 # Include API routers
 app.include_router(api_router)
 
-# Add monitoring endpoints
-from shared.api.monitoring import router as monitoring_router
-app.include_router(monitoring_router)
 
 # Add Prometheus metrics endpoint (use monitoring service metrics)
 @app.get("/metrics")

@@ -27,7 +27,7 @@ import {
 } from '@mui/material';
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Refresh as RefreshIcon, PlayArrow as PlayArrowIcon } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
-import { getModels, createModel, updateModel, deleteModel, discoverOllamaModels, testLLMModel, LLMModel, LLMModelCreate, LLMModelUpdate, OllamaModel } from '../api/llmModels';
+import { getModels, createModel, updateModel, deleteModel, discoverOllamaModels, testLLMModel, getTestStatus, LLMModel, LLMModelCreate, LLMModelUpdate, OllamaModel } from '../api/llmModels';
 
 
 const LLMModelsWorkspace: React.FC = () => {
@@ -289,17 +289,55 @@ const ModelTestDialog: React.FC<ModelTestDialogProps> = ({ open, onClose, model 
     const [systemPrompt, setSystemPrompt] = useState<string>('');
     const [testResponse, setTestResponse] = useState<string>('');
     const [testingLoading, setTestingLoading] = useState(false);
+    const [jobId, setJobId] = useState<string | null>(null);
+
+    React.useEffect(() => {
+        if (open) {
+            setPrompt('');
+            setSystemPrompt('');
+            setTestResponse('');
+            setJobId(null);
+            setTestingLoading(false);
+        }
+    }, [open, model]);
+
+    React.useEffect(() => {
+        let pollInterval: NodeJS.Timeout | null = null;
+        if (jobId && testingLoading) {
+            pollInterval = setInterval(async () => {
+                try {
+                    const statusData = await getTestStatus(jobId);
+                    if (statusData.status === 'completed') {
+                        setTestResponse(statusData.result);
+                        setTestingLoading(false);
+                        setJobId(null);
+                        if (pollInterval) clearInterval(pollInterval);
+                    } else if (statusData.status === 'failed') {
+                        setTestResponse(`Error: ${statusData.error}`);
+                        setTestingLoading(false);
+                        setJobId(null);
+                        if (pollInterval) clearInterval(pollInterval);
+                    }
+                } catch (error) {
+                    console.error("Polling error", error);
+                }
+            }, 2000);
+        }
+        return () => {
+            if (pollInterval) clearInterval(pollInterval);
+        }
+    }, [jobId, testingLoading]);
 
     const handleTestModel = async () => {
         setTestingLoading(true);
         setTestResponse('');
+        setJobId(null);
         try {
             const response = await testLLMModel(model.id, prompt, systemPrompt);
-            setTestResponse(response);
+            setJobId(response.job_id);
         } catch (error: any) {
-            setTestResponse(`Error: ${error.response?.data?.detail || error.message}`);
-        } finally {
             setTestingLoading(false);
+            setTestResponse(`Error: ${error.response?.data?.detail || error.message}`);
         }
     };
 

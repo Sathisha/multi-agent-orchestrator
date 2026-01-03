@@ -156,6 +156,8 @@ class ChainExecutionResponse(BaseModel):
     duration_seconds: Optional[int]
     current_node_id: Optional[str]
     completed_nodes: List[str]
+    active_edges: List[str] = Field(default_factory=list)
+    edge_results: Optional[Dict[str, Any]] = None
     error_message: Optional[str]
     error_details: Optional[Dict[str, Any]]
     correlation_id: Optional[str]
@@ -212,6 +214,7 @@ class ChainExecutionStatusResponse(BaseModel):
     status: ChainExecutionStatus
     current_node_id: Optional[str]
     completed_nodes: List[str]
+    active_edges: List[str] = Field(default_factory=list)
     node_states: Optional[Dict[str, str]] = Field(None, description="Status of each node (pending, running, completed, failed, skipped)")
     progress_percentage: float = Field(0.0, ge=0.0, le=100.0)
     error_message: Optional[str]

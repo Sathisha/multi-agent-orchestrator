@@ -45,6 +45,24 @@ export interface Alert {
   [key: string]: any
 }
 
+
+export interface DashboardStats {
+  agents: {
+    total: number
+    active: number
+    inactive: number
+  }
+  tools: {
+    total: number
+    available: number
+  }
+  workflows: {
+    total: number
+    active: number
+    completed: number
+  }
+}
+
 export const getHealthStatus = async (): Promise<HealthCheckResult> => {
   const response = await apiClient.get('/monitoring/health')
   return response.data
@@ -60,6 +78,27 @@ export const getAlerts = async (): Promise<{ alerts: Alert[], count: number }> =
   return response.data
 }
 
+export const getDashboardStats = async (): Promise<DashboardStats> => {
+  const response = await apiClient.get('/monitoring/stats')
+  return response.data
+}
+
 export const acknowledgeAlert = async (alertId: string): Promise<void> => {
   await apiClient.post(`/monitoring/alerts/${alertId}/acknowledge`)
 }
+
+export const getMetricsHistory = async (metric: string, durationStr: string = '1h'): Promise<{ timestamp: number; value: number }[]> => {
+  // Calculate start/end based on duration
+  const end = Math.floor(Date.now() / 1000);
+  let start = end - 3600; // Default 1h
+
+  if (durationStr === '30m') start = end - 1800;
+  if (durationStr === '6h') start = end - 21600;
+  if (durationStr === '24h') start = end - 86400;
+
+  const response = await apiClient.get('/monitoring/metrics/history', {
+    params: { metric, start, end, step: '30s' }
+  })
+  return response.data
+}
+
