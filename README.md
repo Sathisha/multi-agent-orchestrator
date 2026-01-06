@@ -5,6 +5,8 @@ A comprehensive platform that enables developers to create, orchestrate, and dep
 ## 🚀 Key Features
 
 - **VS Code-Style Interface**: Familiar developer experience with workspaces for agents, workflows, tools, and monitoring.
+- **Advanced Workflow Orchestration**: Create complex, multi-agent workflows with branching, parallel execution, and conditional logic.
+- **API-First Design**: Execute workflows programmatically via securely authenticated REST APIs.
 - **Enterprise Security**: Built-in RBAC (Casbin), guardrails, audit trails, and compliance features.
 - **LLM Management**: Centralized management for OpenAI, Anthropic, Azure OpenAI, Gemini, and local Ollama models.
 - **Ollama Integration**: Auto-discovery and easy import of local Ollama models.
@@ -12,7 +14,6 @@ A comprehensive platform that enables developers to create, orchestrate, and dep
 - **Agent Capabilities**: Configurable agents with specific LLM selection and tool integration.
 - **Extensible Architecture**: Plugin system for custom tools and MCP server integrations.
 - **Self-Hosting**: Complete data sovereignty with Docker-first deployment.
-
 
 ## 🛡️ Enterprise-Grade Capabilities
 
@@ -45,12 +46,17 @@ Designed for mission-critical applications, the platform includes a robust suite
 
 - **Backend**: Python microservices with FastAPI, PostgreSQL, Redis
 - **Frontend**: React 18+ with TypeScript and VS Code-style interface
+- **Orchestration**: Custom graph-based workflow engine with parallel execution support
 - **Security**: Keycloak authentication, Casbin RBAC, comprehensive guardrails
 - **Monitoring**: Prometheus metrics with Apache Superset dashboards
 
 ## 📋 Project Status
 
-This project is in **Active Development**. Core architecture is in place, including multi-tenancy removal, comprehensive model management, and workflow orchestration. See `MEMORY[GEMINI.md]` for the latest implementation details.
+This project is in **Active Development**. Core architecture is in place, featuring:
+- **Docker-First Development**: Consistent environments for all developers.
+- **Multi-Tenancy Removal**: Simplified architecture for single-tenant enterprise deployments.
+- **Workflow Engine**: New internal orchestration engine replacing external BPMN dependencies.
+- **Ollama Integration**: Seamless local LLM support.
 
 ## 🛠️ Technology Stack
 
@@ -72,11 +78,9 @@ The memory system can be configured using environment variables:
 ## 📁 Project Structure
 
 ```
-ai-agent-framework/
+multi-agent-orchestrator/
 ├── .kiro/                          # Kiro configuration and specs
-│   ├── specs/                      # Feature specifications
-│   └── steering/                   # AI assistant guidance rules
-├── backend/                        # Python microservices
+├── backend/                        # Python FastAPI services
 ├── frontend/                       # React TypeScript application
 ├── infrastructure/                 # Deployment and infrastructure
 ├── docs/                           # Documentation
@@ -89,69 +93,52 @@ ai-agent-framework/
 
 - **Docker**: Install Docker Desktop or Docker Engine
 - **Docker Compose**: Included with Docker Desktop, or install separately
+- **Make**: (Optional) For running simplified commands. Windows users can use WSL2 or Git Bash.
 
 ### Quick Start
 
 1. **Clone and Setup**:
    ```bash
    git clone <repository-url>
-   cd ai-agent-framework
+   cd multi-agent-orchestrator
    ```
 
-2. **Run Setup Script** (Linux/Mac):
+2. **Start Development Environment**:
    ```bash
-   ./scripts/docker-setup.sh
+   make dev-deploy
    ```
+   This command builds all images and starts the services in development mode.
 
-3. **Manual Setup** (Windows or alternative):
-   ```bash
-   # Copy environment file
-   copy .env.example .env
-   
-   # Build and start services
-   make setup
-   ```
-
-4. **Start Development**:
-   ```bash
-   # Start API server
-   make api
-   
-   # In another terminal, run tests
-   make test
-   ```
-
-5. **Access the Application**:
-   - Frontend: http://localhost:3000 (or http://localhost:3001 for dev)
-   - API: http://localhost:8000
-   - API Documentation: http://localhost:8000/docs
-   - Health Check: http://localhost:8000/health
+3. **Access the Application**:
+   - **Frontend**: http://localhost:3000
+   - **Backend API**: http://localhost:8000
+   - **API Documentation**: http://localhost:8000/docs
+   - **Superset (Monitoring)**: http://localhost:8088 (User: `admin`, Pass: `admin`)
+   - **Prometheus**: http://localhost:9090
+   - **Keycloak**: http://localhost:8080 (User: `admin`, Pass: `admin`)
 
 ### Development Commands
 
+We provide a `Makefile` to simplify common development tasks:
+
 ```bash
-# Essential commands
-make help          # Show all available commands
-make setup         # Complete setup (build, start, migrate)
-make start         # Start core services (postgres, redis)
-make api           # Start API server with hot reload
-make test          # Run all tests in Docker
-make logs          # View backend service logs
-make shell         # Open shell in backend container
+# 🏗️  Local Development
+make dev-build        # Build all Docker images locally
+make dev-deploy       # Deploy locally (build + start all services)
+make logs             # View backend logs
+make shell            # Open shell in backend container
+make clean            # Stop and remove all containers/volumes
 
-# Code quality
-make format        # Format code with black and isort
-make lint          # Lint code with flake8 and mypy
-make test-coverage # Run tests with coverage report
+# 🧪 Testing
+make test             # Run all tests with coverage
+make test-quick       # Run quick tests (no slow tests)
 
-# Database operations
-make migrate                           # Run migrations
-make migration MESSAGE="description"   # Create new migration
+# 🚀 Production
+make prod-deploy      # Deploy using production images from GHCR
+make prod-stop        # Stop production deployment
 
-# Service management
-make start-all     # Start all services (including optional)
-make stop          # Stop all services
-make clean         # Clean up containers and volumes
+# 📦 CI/CD
+make docker-publish   # Build and push images to GHCR (requires permissions)
 ```
 
 ### Docker-First Development
@@ -163,30 +150,34 @@ This project uses a **Docker-first development approach**:
 - ✅ Consistent environment across all developers and deployment targets
 - ✅ Easy setup and teardown of development environment
 
-### Project Structure
+### Production Deployment
 
-```
-ai-agent-framework/
-├── backend/                        # Python FastAPI services
-│   ├── main.py                     # Main application entry point
-│   ├── requirements.txt            # Python dependencies
-│   ├── alembic/                    # Database migrations
-│   ├── shared/                     # Shared utilities and models
-│   └── tests/                      # Test suite
-├── infrastructure/                 # Docker and deployment configs
-│   └── docker/                     # Docker service configurations
-├── scripts/                        # Development helper scripts
-├── docker-compose.yml              # Main service definitions
-├── docker-compose.override.yml     # Development overrides
-├── Makefile                        # Development commands
-└── .env.example                    # Environment configuration template
-```
+For production environments, we recommend using the pre-built images stored in GitHub Container Registry (GHCR) rather than building from source.
+
+1. **Pull and Deploy**:
+   ```bash
+   make prod-deploy
+   ```
+   This uses `docker-compose.prod.yml` to pull optimized images and run them.
+
+2. **Update**:
+   ```bash
+   make prod-update
+   ```
+
+## 📚 Documentation
+
+- [Workflow Usage Guide](docs/workflow_usage.md): Comprehensive guide on creating and using workflows, including API usage.
+- [Deployment Guide](DEPLOYMENT.md): Detailed deployment instructions.
+- [Docker Images](DOCKER_IMAGES.md): Information about the Docker images and containers used.
 
 ## 📄 License & Attribution
 
 ### Project License
 
-This project uses only permissive licenses (MIT, Apache 2.0, BSD) that are safe for commercial use and monetization.
+This project is licensed under the **Apache License, Version 2.0**. See the [LICENSE](LICENSE) file for the full license text.
+
+Dependencies for this project are predominantly under permissive licenses (MIT, Apache 2.0, BSD) that are safe for commercial use and monetization.
 
 ### Third-Party Software
 

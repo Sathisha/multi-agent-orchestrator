@@ -3,6 +3,7 @@ import VSCodeLayout from './components/layout/VSCodeLayout'
 import AgentWorkspace from './workspaces/AgentWorkspace'
 import WorkflowWorkspace from './workspaces/WorkflowWorkspace'
 import ToolsWorkspace from './workspaces/ToolsWorkspace'
+import ToolDetailWorkspace from './workspaces/ToolDetailWorkspace'
 import MonitoringWorkspace from './workspaces/MonitoringWorkspace'
 import AgentDetailWorkspace from './workspaces/AgentDetailWorkspace'
 import WorkflowDetailWorkspace from './workspaces/WorkflowDetailWorkspace'
@@ -31,6 +32,7 @@ function App() {
           <Route path="/chains" element={<ChainWorkspace />} />
           <Route path="/chains/:chainId" element={<ChainDetailWorkspace />} />
           <Route path="/tools" element={<ToolsWorkspace />} />
+          <Route path="/tools/:toolId" element={<ToolDetailWorkspace />} />
           <Route path="/monitoring" element={<MonitoringWorkspace />} />
           <Route path="/models" element={<LLMModelsWorkspace />} />
           <Route path="/vision-test" element={<VisionTestWorkspace />} />

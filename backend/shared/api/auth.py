@@ -736,7 +736,7 @@ async def remove_role_from_user(
     return {"message": "Role removed successfully"}
 
 
-@router.post(\"/roles\", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/roles", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
 async def create_role(
     role_data: 'RoleCreate',
     current_user = Depends(get_current_user),
@@ -871,7 +871,7 @@ async def delete_role(
     return {"message": "Role deleted successfully"}
 
 
-@router.get("/permissions", response_model=list['PermissionResponse'])
+@router.get("/permissions", response_model=list[PermissionResponse])
 async def list_permissions(
     current_user = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db)

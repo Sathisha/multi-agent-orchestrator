@@ -27,6 +27,7 @@ import {
     Save as SaveIcon,
     PlayArrow as PlayArrowIcon,
     Code as CodeIcon,
+    History as HistoryIcon,
 } from '@mui/icons-material'
 import { getChain, updateChain, executeChain, validateChain, getChainExecutions, getExecutionStatus } from '../api/chains'
 import { Agent } from '../api/agents'
@@ -49,7 +50,6 @@ const ChainDetailWorkspace: React.FC = () => {
     const [editMode, setEditMode] = useState(false)
     const [editedName, setEditedName] = useState('')
     const [editedDescription, setEditedDescription] = useState('')
-    const [executionInput, setExecutionInput] = useState('{}')
     const [validationResult, setValidationResult] = useState<any>(null)
     const [addNodeDialogOpen, setAddNodeDialogOpen] = useState(false)
 
@@ -66,7 +66,7 @@ const ChainDetailWorkspace: React.FC = () => {
     const [isUseApiModalOpen, setIsUseApiModalOpen] = useState(false)
 
     // Execution state
-    const [showExecutionPanel, setShowExecutionPanel] = useState(true)
+    const [showExecutionPanel, setShowExecutionPanel] = useState(false)
     const [selectedExecutionId, setSelectedExecutionId] = useState<string | null>(null)
 
     // Canvas state
@@ -198,22 +198,7 @@ const ChainDetailWorkspace: React.FC = () => {
         }
     )
 
-    // Execute chain mutation
-    const executeMutation = useMutation(
-        (request: ChainExecuteRequest) => executeChain(chainId!, request),
-        {
-            onSuccess: (execution) => {
-                // alert(`Chain execution started! Execution ID: ${execution.id}`)
-                queryClient.invalidateQueries(['chainExecutions', chainId])
-                setSelectedExecutionId(execution.id)
-                setShowExecutionPanel(true)
-            },
-            onError: (error: any) => {
-                const message = error.response?.data?.detail || error.message || 'Execution failed'
-                showError(`Error executing chain: ${message}`)
-            }
-        }
-    )
+
 
     // Validate chain
     const handleValidate = async () => {
@@ -225,15 +210,7 @@ const ChainDetailWorkspace: React.FC = () => {
         }
     }
 
-    // Execute chain
-    const handleExecute = () => {
-        try {
-            const inputData = JSON.parse(executionInput)
-            executeMutation.mutate({ input_data: inputData })
-        } catch (error) {
-            alert('Invalid JSON input')
-        }
-    }
+
 
     // Save chain canvas
     const handleSaveCanvas = useCallback((savedNodes: Node[], savedEdges: Edge[]) => {
@@ -406,27 +383,32 @@ const ChainDetailWorkspace: React.FC = () => {
                                 Validate
                             </Button>
 
-                            {chain.nodes.length > 0 && (
-                                <>
-                                    <Button
-                                        variant="contained"
-                                        color="secondary"
-                                        size="small"
-                                        startIcon={<PlayArrowIcon />}
-                                        onClick={() => setIsTestModalOpen(true)}
-                                    >
-                                        Test Workflow
-                                    </Button>
-                                    <Button
-                                        variant="outlined"
-                                        size="small"
-                                        startIcon={<CodeIcon />}
-                                        onClick={() => setIsUseApiModalOpen(true)}
-                                    >
-                                        Use as API
-                                    </Button>
-                                </>
-                            )}
+                            <Button
+                                variant="contained"
+                                color="secondary"
+                                size="small"
+                                startIcon={<PlayArrowIcon />}
+                                onClick={() => setIsTestModalOpen(true)}
+                            >
+                                Test Workflow
+                            </Button>
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                startIcon={<HistoryIcon />}
+                                onClick={() => setShowExecutionPanel(!showExecutionPanel)}
+                                color={showExecutionPanel ? 'primary' : 'inherit'}
+                            >
+                                History
+                            </Button>
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                startIcon={<CodeIcon />}
+                                onClick={() => setIsUseApiModalOpen(true)}
+                            >
+                                API & Instructions
+                            </Button>
                         </>
                     )}
                 </Box>
@@ -447,7 +429,7 @@ const ChainDetailWorkspace: React.FC = () => {
                     />
                 </Box>
 
-                {/* Execution Panel */}
+                {/* Execution History Panel */}
                 {showExecutionPanel && (
                     <Paper
                         elevation={3}
@@ -459,28 +441,11 @@ const ChainDetailWorkspace: React.FC = () => {
                             zIndex: 10
                         }}
                     >
-                        <Box sx={{ p: 2, borderBottom: '1px solid #eee' }}>
-                            <Typography variant="subtitle2" gutterBottom>Execute Chain</Typography>
-                            <TextField
-                                multiline
-                                rows={3}
-                                fullWidth
-                                placeholder='{"input": "value"}'
-                                value={executionInput}
-                                onChange={(e) => setExecutionInput(e.target.value)}
-                                size="small"
-                                sx={{ mb: 1, fontFamily: 'monospace' }}
-                            />
-                            <Button
-                                fullWidth
-                                variant="contained"
-                                color="success"
-                                startIcon={executeMutation.isLoading ? <CircularProgress size={20} color="inherit" /> : <PlayArrowIcon />}
-                                onClick={handleExecute}
-                                disabled={executeMutation.isLoading}
-                            >
-                                {executeMutation.isLoading ? 'Starting...' : 'Run Chain'}
-                            </Button>
+                        <Box sx={{ p: 2, borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="subtitle2">Execution History</Typography>
+                            <IconButton size="small" onClick={() => setShowExecutionPanel(false)}>
+                                <ArrowBackIcon sx={{ transform: 'rotate(180deg)' }} fontSize="small" />
+                            </IconButton>
                         </Box>
 
                         <ExecutionHistory

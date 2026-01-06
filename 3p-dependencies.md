@@ -2,16 +2,14 @@
 
 This document tracks all third-party libraries, frameworks, and Docker images used in the AI Agent Framework project.
 
-**Last Updated:** January 1, 2026 (Updated after frontend/Dockerfile dependency installation change - now includes dev dependencies in production build)
+**Last Updated:** January 6, 2026
 
 ## Recent Changes
 
-### January 1, 2026 - Frontend Dockerfile Dependency Change
-- **Change**: Modified `frontend/Dockerfile` from `npm ci --only=production` to `npm ci`
-- **Impact**: Production frontend build now includes development dependencies
-- **Security Consideration**: Development dependencies are now included in production image, increasing attack surface
-- **Recommendation**: Consider reverting to `--only=production` or use multi-stage build to exclude dev dependencies from final image
-- **Affected Dependencies**: All frontend devDependencies listed below are now included in production builds
+### January 6, 2026 - Dependency Synchronization
+- **Backend**: Verified against `backend/requirements.txt`
+- **Frontend**: Verified against `frontend/package.json`
+- **Updates**: Added ReactFlow, Recharts, Allotment, Vitest. Removed PyZeebe and React Split Pane.
 
 ## Docker Images
 
@@ -49,6 +47,7 @@ This document tracks all third-party libraries, frameworks, and Docker images us
 | email-validator | 2.1.0 | backend/requirements.txt | Email validation | Active | CC0-1.0 | For Pydantic email fields |
 | python-jose | 3.3.0 | backend/requirements.txt | JWT handling | Active | MIT | With cryptography extras |
 | passlib | 1.7.4 | backend/requirements.txt | Password hashing | Active | BSD-2-Clause | With bcrypt extras |
+| argon2-cffi | 23.1.0 | backend/requirements.txt | Password hashing | Active | MIT | Secure password hashing |
 | python-keycloak | 3.7.0 | backend/requirements.txt | Keycloak integration | Active | MIT | Official Python client |
 | casbin | 1.36.2 | backend/requirements.txt | Authorization library | Active | Apache-2.0 | RBAC/ABAC enforcement |
 | casbin-sqlalchemy-adapter | 1.4.0 | backend/requirements.txt | Casbin SQLAlchemy adapter | Active | Apache-2.0 | Database adapter for Casbin |
@@ -62,7 +61,6 @@ This document tracks all third-party libraries, frameworks, and Docker images us
 | python-dotenv | 1.0.0 | backend/requirements.txt | Environment variables | Active | BSD-3-Clause | .env file support |
 | python-json-logger | 2.0.7 | backend/requirements.txt | JSON logging formatter | Active | BSD-2-Clause | Structured JSON logging |
 | psutil | 5.9.6 | backend/requirements.txt | System and process utilities | Active | BSD-3-Clause | System monitoring and resource usage |
-| pyzeebe | 4.7.0 | backend/requirements.txt | Zeebe workflow engine client | Active | Apache-2.0 | BPMN workflow orchestration |
 
 ## Development Dependencies (Backend)
 
@@ -102,7 +100,7 @@ This document tracks all third-party libraries, frameworks, and Docker images us
 | @types/node | ^20.10.0 | frontend/package.json | Node.js TypeScript definitions | Active | MIT | Type definitions for Node.js |
 | @monaco-editor/react | ^4.6.0 | frontend/package.json | Monaco Editor React wrapper | Active | MIT | VS Code-style code editor component |
 | react-router-dom | ^6.20.1 | frontend/package.json | React routing library | Active | MIT | Client-side routing for SPA |
-| react-split-pane | ^0.1.92 | frontend/package.json | Resizable split pane component | Active | MIT | VS Code-style resizable panels |
+| allotment | ^1.20.2 | frontend/package.json | Resizable split pane component | Active | MIT | VS Code-style resizable panels |
 | @emotion/react | ^11.11.1 | frontend/package.json | CSS-in-JS library | Active | MIT | Emotion CSS-in-JS for styling |
 | @emotion/styled | ^11.11.0 | frontend/package.json | Styled components for Emotion | Active | MIT | Styled components API for Emotion |
 | @mui/material | ^5.15.0 | frontend/package.json | Material-UI component library | Active | MIT | Google Material Design components |
@@ -110,19 +108,26 @@ This document tracks all third-party libraries, frameworks, and Docker images us
 | axios | ^1.6.2 | frontend/package.json | HTTP client library | Active | MIT | Promise-based HTTP client |
 | react-query | ^3.39.3 | frontend/package.json | Data fetching and caching | Active | MIT | Server state management (now TanStack Query) |
 | web-vitals | ^3.5.0 | frontend/package.json | Web performance metrics | Active | Apache-2.0 | Core Web Vitals measurement |
+| reactflow | ^11.10.4 | frontend/package.json | Visual workflow builder | Active | MIT | For workflow node graph editing |
+| recharts | ^2.10.3 | frontend/package.json | Charting library | Active | MIT | For data visualization |
 
 ## Frontend Development Dependencies
 
 | Name | Version | Location | Purpose | EOL Date | License | Notes |
 |------|---------|----------|---------|----------|---------|-------|
 | vite | ^5.0.8 | frontend/package.json | Build tool and dev server | Active | MIT | Fast build tool and development server |
+| vitest | ^1.0.0 | frontend/package.json | Test framework | Active | MIT | Unit testing powered by Vite |
+| @vitest/ui | ^1.0.0 | frontend/package.json | Test UI | Active | MIT | UI for Vitest |
 | @vitejs/plugin-react | ^4.2.0 | frontend/package.json | Vite React plugin | Active | MIT | React support for Vite |
-| @types/react-split-pane | ^0.1.3 | frontend/package.json | TypeScript definitions for react-split-pane | Active | MIT | Type definitions |
 | eslint | ^8.55.0 | frontend/package.json | JavaScript/TypeScript linter | Active | MIT | Code quality and style enforcement |
 | @typescript-eslint/eslint-plugin | ^6.14.0 | frontend/package.json | TypeScript ESLint plugin | Active | MIT | TypeScript-specific linting rules |
 | @typescript-eslint/parser | ^6.14.0 | frontend/package.json | TypeScript ESLint parser | Active | MIT | TypeScript parser for ESLint |
 | eslint-plugin-react | ^7.33.2 | frontend/package.json | React ESLint plugin | Active | MIT | React-specific linting rules |
 | eslint-plugin-react-hooks | ^4.6.0 | frontend/package.json | React Hooks ESLint plugin | Active | MIT | React Hooks linting rules |
+| @testing-library/react | ^14.1.2 | frontend/package.json | React testing utilities | Active | MIT | Testing helpers for React |
+| @testing-library/jest-dom | ^6.1.5 | frontend/package.json | DOM matchers | Active | MIT | Custom matchers for Jest/Vitest |
+| jsdom | ^23.0.1 | frontend/package.json | DOM implementation | Active | MIT | JSDOM for testing in Node |
+| vite-tsconfig-paths | ^4.3.1 | frontend/package.json | TypeScript path resolver | Active | MIT | Resolve TS paths in Vite |
 
 ## Infrastructure Configuration
 
@@ -217,7 +222,7 @@ This document tracks all third-party libraries, frameworks, and Docker images us
 22. ESLint with TypeScript plugins ensures code quality and consistency
 23. React Router DOM enables client-side routing for single-page application experience
 24. Emotion provides CSS-in-JS styling solution with excellent performance
-25. React Split Pane enables VS Code-style resizable panel layouts
+25. Allotment enables VS Code-style resizable panel layouts (superseding react-split-pane)
 26. Node.js 18 Alpine provides secure, minimal runtime environment for frontend builds
 27. Nginx Alpine serves static frontend assets with minimal security footprint
 28. Python 3.11 Slim provides secure, minimal runtime for backend services
@@ -226,3 +231,4 @@ This document tracks all third-party libraries, frameworks, and Docker images us
 31. Camunda Platform 8 provides enterprise-grade BPMN workflow orchestration
 32. Elasticsearch powers Camunda's workflow data storage and search capabilities
 33. Apache Superset provides self-hosted business intelligence and data visualization
+34. Vitest provides a fast, modern testing framework for the frontend, replacing Jest

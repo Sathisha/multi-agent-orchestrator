@@ -23,8 +23,6 @@ from ..database import get_database_session
 from ..models.tool import MCPServer, MCPServerStatus, Tool, ToolType, ToolStatus
 from ..models.tool import MCPServerRequest, MCPServerResponse
 from ..models.audit import AuditLog, AuditEventType
-from ..services.base import BaseService
-from ..services.rbac import RBACService
 from ..logging.config import get_logger
 
 logger = get_logger(__name__)
@@ -45,12 +43,10 @@ class MCPProtocolError(Exception):
     pass
 
 
-class MCPGatewayService(BaseService):
+class MCPGatewayService:
     """Service for managing MCP server connections and tool discovery."""
     
     def __init__(self):
-        super().__init__()
-        self.rbac_service = RBACService()
         self._connections = {}  # Active MCP server connections
         self._health_check_tasks = {}  # Background health check tasks
         self._discovery_cache = {}  # Tool discovery cache
@@ -62,14 +58,6 @@ class MCPGatewayService(BaseService):
         server_request: MCPServerRequest
     ) -> MCPServerResponse:
         """Create a new MCP server configuration."""
-        
-        # Check permissions
-        await self.rbac_service.check_permission(
-            user_id=user_id,
-            resource="tool",
-            action="create"
-        )
-        
         async with get_database_session() as session:
             # Check if server name already exists
             existing_server = await session.execute(
@@ -123,14 +111,6 @@ class MCPGatewayService(BaseService):
         server_id: UUID
     ) -> Optional[MCPServerResponse]:
         """Get an MCP server by ID."""
-        
-        # Check permissions
-        await self.rbac_service.check_permission(
-            user_id=user_id,
-            resource="tool",
-            action="read"
-        )
-        
         async with get_database_session() as session:
             result = await session.execute(
                 select(MCPServer)
@@ -155,14 +135,6 @@ class MCPGatewayService(BaseService):
         offset: int = 0
     ) -> List[MCPServerResponse]:
         """List MCP servers with optional filtering."""
-        
-        # Check permissions
-        await self.rbac_service.check_permission(
-            user_id=user_id,
-            resource="tool",
-            action="read"
-        )
-        
         async with get_database_session() as session:
             query = select(MCPServer)
             
@@ -187,14 +159,6 @@ class MCPGatewayService(BaseService):
         server_request: MCPServerRequest
     ) -> MCPServerResponse:
         """Update an existing MCP server."""
-        
-        # Check permissions
-        await self.rbac_service.check_permission(
-            user_id=user_id,
-            resource="tool",
-            action="update"
-        )
-        
         async with get_database_session() as session:
             # Get existing server
             result = await session.execute(
@@ -263,14 +227,6 @@ class MCPGatewayService(BaseService):
         server_id: UUID
     ) -> bool:
         """Delete an MCP server."""
-        
-        # Check permissions
-        await self.rbac_service.check_permission(
-            user_id=user_id,
-            resource="tool",
-            action="delete"
-        )
-        
         async with get_database_session() as session:
             # Get existing server
             result = await session.execute(
@@ -319,14 +275,6 @@ class MCPGatewayService(BaseService):
         server_id: UUID
     ) -> Dict[str, Any]:
         """Manually connect to an MCP server."""
-        
-        # Check permissions
-        await self.rbac_service.check_permission(
-            user_id=user_id,
-            resource="tool",
-            action="execute"
-        )
-        
         async with get_database_session() as session:
             # Get server
             result = await session.execute(
@@ -357,14 +305,6 @@ class MCPGatewayService(BaseService):
         force_refresh: bool = False
     ) -> Dict[str, Any]:
         """Discover available tools on an MCP server."""
-        
-        # Check permissions
-        await self.rbac_service.check_permission(
-            user_id=user_id,
-            resource="tool",
-            action="read"
-        )
-        
         cache_key = f"{server_id}"
         
         # Check cache first
@@ -417,14 +357,6 @@ class MCPGatewayService(BaseService):
         context: Optional[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """Call a tool on an MCP server."""
-        
-        # Check permissions
-        await self.rbac_service.check_permission(
-            user_id=user_id,
-            resource="tool",
-            action="execute"
-        )
-        
         async with get_database_session() as session:
             # Get server
             result = await session.execute(
