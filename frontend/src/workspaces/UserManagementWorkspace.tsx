@@ -27,6 +27,12 @@ import {
     User, UserDetail, Role
 } from '../api/users'
 
+const DEFAULT_ROLES = [
+    { id: '5a9143c1-11d9-43c2-841f-846175654321', name: 'admin', description: 'Administrator' },
+    { id: '5a9143c1-11d9-43c2-841f-846175654322', name: 'standard', description: 'Standard User' },
+    { id: '5a9143c1-11d9-43c2-841f-846175654323', name: 'service', description: 'Service Account' }
+]
+
 const UserManagementWorkspace: React.FC = () => {
     const queryClient = useQueryClient()
 
@@ -55,8 +61,9 @@ const UserManagementWorkspace: React.FC = () => {
     const [editUserRoles, setEditUserRoles] = useState<string[]>([])
 
     // Queries
-    const { data: users, isLoading, refetch } = useQuery('users', getUsers)
     const { data: roles, isLoading: rolesLoading } = useQuery('roles', getRoles)
+    const availableRoles = (roles && roles.length > 0) ? roles : (DEFAULT_ROLES as unknown as Role[])
+    const { data: users, isLoading, refetch } = useQuery('users', getUsers)
 
     // Mutations
     const createMutation = useMutation(createUser, {
@@ -619,13 +626,13 @@ const UserManagementWorkspace: React.FC = () => {
                             renderValue={(selected) => (
                                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                                     {selected.map((value) => {
-                                        const role = roles?.find(r => r.id === value)
+                                        const role = availableRoles?.find(r => r.id === value)
                                         return <Chip key={value} label={role?.name || value} size="small" />
                                     })}
                                 </Box>
                             )}
                         >
-                            {roles?.map((role) => (
+                            {availableRoles?.map((role) => (
                                 <MenuItem key={role.id} value={role.id}>
                                     <Checkbox checked={newUserRoles.includes(role.id)} />
                                     <ListItemText primary={role.name} secondary={role.description} />
@@ -700,13 +707,13 @@ const UserManagementWorkspace: React.FC = () => {
                             renderValue={(selected) => (
                                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                                     {selected.map((value) => {
-                                        const role = roles?.find(r => r.id === value)
+                                        const role = availableRoles?.find(r => r.id === value)
                                         return <Chip key={value} label={role?.name || value} size="small" />
                                     })}
                                 </Box>
                             )}
                         >
-                            {roles?.map((role) => (
+                            {availableRoles?.map((role) => (
                                 <MenuItem key={role.id} value={role.id}>
                                     <Checkbox checked={editUserRoles.includes(role.id)} />
                                     <ListItemText primary={role.name} secondary={role.description} />

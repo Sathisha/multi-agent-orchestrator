@@ -37,7 +37,8 @@ class RBACService:
         self,
         name: str,
         description: str,
-        permissions: Optional[List[str]] = None
+        permissions: Optional[List[str]] = None,
+        role_id: Optional[UUID] = None
     ) -> Role:
         """Create a new role."""
         # Check if role already exists
@@ -46,7 +47,7 @@ class RBACService:
             raise ValueError(f"Role '{name}' already exists")
         
         role = Role(
-            id=uuid4(),
+            id=role_id or uuid4(),
             name=name,
             description=description,
             created_at=datetime.utcnow(),
@@ -283,6 +284,7 @@ class RBACService:
         default_roles = [
             {
                 "name": "system_admin",
+                "id": UUID("5a9143c1-11d9-43c2-841f-846175654320"),
                 "description": "System administrator with full access",
                 "permissions": [
                     "system.manage",
@@ -298,7 +300,25 @@ class RBACService:
                 ]
             },
             {
+                "name": "admin",
+                "id": UUID("5a9143c1-11d9-43c2-841f-846175654321"),
+                "description": "Administrator with full access",
+                "permissions": [
+                    "system.manage",
+                    "user.manage",
+                    "role.manage",
+                    "agent.create",
+                    "agent.manage",
+                    "workflow.create",
+                    "workflow.manage",
+                    "tool.create",
+                    "tool.manage",
+                    "user.invite"
+                ]
+            },
+            {
                 "name": "developer",
+                "id": UUID("5a9143c1-11d9-43c2-841f-846175654324"),
                 "description": "Developer with agent and workflow creation rights",
                 "permissions": [
                     "agent.create",
@@ -310,24 +330,22 @@ class RBACService:
                 ]
             },
             {
-                "name": "developer",
-                "description": "Developer with agent and workflow creation rights",
-                "permissions": [
-                    "agent.create",
-                    "agent.manage",
-                    "workflow.create",
-                    "workflow.manage",
-                    "tool.create",
-                    "tool.manage"
-                ]
-            },
-            {
-                "name": "user",
-                "description": "Basic user with read access",
+                "name": "standard",
+                "id": UUID("5a9143c1-11d9-43c2-841f-846175654322"),
+                "description": "Standard user with read access",
                 "permissions": [
                     "agent.view",
                     "workflow.view",
                     "tool.view"
+                ]
+            },
+            {
+                "name": "service",
+                "id": UUID("5a9143c1-11d9-43c2-841f-846175654323"),
+                "description": "Service account for automated tasks",
+                "permissions": [
+                    "agent.execute",
+                    "workflow.execute"
                 ]
             }
         ]
@@ -337,7 +355,8 @@ class RBACService:
                 await self.create_role(
                     name=role_data["name"],
                     description=role_data["description"],
-                    permissions=role_data["permissions"]
+                    permissions=role_data["permissions"],
+                    role_id=role_data["id"]
                 )
             except ValueError:
                 # Role already exists, skip

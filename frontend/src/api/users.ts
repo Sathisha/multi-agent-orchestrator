@@ -69,7 +69,7 @@ export interface UpdateRoleRequest {
  * Get all users (admin only)
  */
 export const getUsers = async (): Promise<User[]> => {
-    const response = await apiClient.get('/api/v1/auth/users')
+    const response = await apiClient.get('/auth/users')
     return response.data
 }
 
@@ -77,7 +77,7 @@ export const getUsers = async (): Promise<User[]> => {
  * Get user details with roles (admin only)
  */
 export const getUser = async (userId: string): Promise<UserDetail> => {
-    const response = await apiClient.get(`/api/v1/auth/users/${userId}`)
+    const response = await apiClient.get(`/auth/users/${userId}`)
     return response.data
 }
 
@@ -85,7 +85,7 @@ export const getUser = async (userId: string): Promise<UserDetail> => {
  * Create a new user (admin only)
  */
 export const createUser = async (userData: CreateUserRequest): Promise<UserDetail> => {
-    const response = await apiClient.post('/api/v1/auth/users', userData)
+    const response = await apiClient.post('/auth/users', userData)
     return response.data
 }
 
@@ -96,7 +96,7 @@ export const updateUser = async (
     userId: string,
     userData: UpdateUserRequest
 ): Promise<UserDetail> => {
-    const response = await apiClient.put(`/api/v1/auth/users/${userId}`, userData)
+    const response = await apiClient.put(`/auth/users/${userId}`, userData)
     return response.data
 }
 
@@ -104,14 +104,14 @@ export const updateUser = async (
  * Delete/deactivate user (admin only)
  */
 export const deleteUser = async (userId: string): Promise<void> => {
-    await apiClient.delete(`/api/v1/auth/users/${userId}`)
+    await apiClient.delete(`/auth/users/${userId}`)
 }
 
 /**
  * Get all available roles (admin only)
  */
 export const getRoles = async (): Promise<Role[]> => {
-    const response = await apiClient.get('/api/v1/auth/roles')
+    const response = await apiClient.get('/auth/roles')
     return response.data
 }
 
@@ -119,7 +119,7 @@ export const getRoles = async (): Promise<Role[]> => {
  * Get roles for a specific user (admin only)
  */
 export const getUserRoles = async (userId: string): Promise<Role[]> => {
-    const response = await apiClient.get(`/api/v1/auth/users/${userId}/roles`)
+    const response = await apiClient.get(`/auth/users/${userId}/roles`)
     return response.data
 }
 
@@ -127,21 +127,21 @@ export const getUserRoles = async (userId: string): Promise<Role[]> => {
  * Assign a role to a user (admin only)
  */
 export const assignRole = async (userId: string, roleId: string): Promise<void> => {
-    await apiClient.post(`/api/v1/auth/users/${userId}/roles/${roleId}`)
+    await apiClient.post(`/auth/users/${userId}/roles/${roleId}`)
 }
 
 /**
  * Remove a role from a user (admin only)
  */
 export const removeRole = async (userId: string, roleId: string): Promise<void> => {
-    await apiClient.delete(`/api/v1/auth/users/${userId}/roles/${roleId}`)
+    await apiClient.delete(`/auth/users/${userId}/roles/${roleId}`)
 }
 
 /**
  * Create a new role (admin only)
  */
 export const createRole = async (roleData: CreateRoleRequest): Promise<Role> => {
-    const response = await apiClient.post('/api/v1/auth/roles', roleData)
+    const response = await apiClient.post('/auth/roles', roleData)
     return response.data
 }
 
@@ -152,7 +152,7 @@ export const updateRole = async (
     roleId: string,
     roleData: UpdateRoleRequest
 ): Promise<Role> => {
-    const response = await apiClient.put(`/api/v1/auth/roles/${roleId}`, roleData)
+    const response = await apiClient.put(`/auth/roles/${roleId}`, roleData)
     return response.data
 }
 
@@ -160,13 +160,13 @@ export const updateRole = async (
  * Delete a role (admin only)
  */
 export const deleteRole = async (roleId: string): Promise<void> => {
-    await apiClient.delete(`/api/v1/auth/roles/${roleId}`)
+    await apiClient.delete(`/auth/roles/${roleId}`)
 }
 
 /**
  * Get all available permissions (admin only)
  */
 export const getPermissions = async (): Promise<Permission[]> => {
-    const response = await apiClient.get('/api/v1/auth/permissions')
+    const response = await apiClient.get('/auth/permissions')
     return response.data
 }
