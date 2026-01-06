@@ -25,6 +25,8 @@ const SidePanel: React.FC<SidePanelProps> = ({ activeView, onClose }) => {
         return 'LLM MODELS'
       case 'monitoring':
         return 'MONITORING'
+      case 'users':
+        return 'USERS'
       default:
         return 'EXPLORER'
     }
@@ -42,6 +44,14 @@ const SidePanel: React.FC<SidePanelProps> = ({ activeView, onClose }) => {
         return <ModelsExplorer />
       case 'monitoring':
         return <MonitoringExplorer />
+      case 'users':
+        return (
+          <Box sx={{ p: 2 }}>
+            <Typography variant="body2" sx={{ color: '#969696', textAlign: 'center', mt: 4 }}>
+              User management is shown in the main panel
+            </Typography>
+          </Box>
+        )
       default:
         return <AgentExplorer />
     }

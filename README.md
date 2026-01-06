@@ -13,6 +13,34 @@ A comprehensive platform that enables developers to create, orchestrate, and dep
 - **Extensible Architecture**: Plugin system for custom tools and MCP server integrations.
 - **Self-Hosting**: Complete data sovereignty with Docker-first deployment.
 
+
+## 🛡️ Enterprise-Grade Capabilities
+
+Designed for mission-critical applications, the platform includes a robust suite of enterprise features:
+
+### 🔐 Advanced Security & RBAC
+- **Fine-Grained Access Control**: Implements Casbin for attribute-based and role-based access control (RBAC).
+  - **System Admin**: Full access to all system configurations and user management.
+  - **Developer**: Create and manage agents, workflows, and tools.
+  - **User/Viewer**: Execute agents and view results without modification rights.
+- **Identity Management**: Integrated Keycloak for centralized authentication, SSO, and user management.
+- **Secure Communication**: End-to-end encryption for all data in transit.
+
+### 🛡️ AI Guardrails & Safety
+- **Input/Output Validation**: Real-time validation of LLM inputs and outputs to prevent injection attacks and ensure content safety.
+- **Policy Enforcement**: Define and enforce organization-wide policies for AI agent behaviors.
+- **Hallucination Detection**: Mechanisms to cross-reference and validate LLM-generated content (planned).
+
+### ⚖️ Scalability & Reliability
+- **Load Balancing**: Kong Gateway acts as an API gateway to manage traffic, enforce rate limits, and provide load balancing across services.
+- **High Availability**: Stateless microservices architecture designed to run on Kubernetes or Docker Swarm.
+- **Resource Management**: Optimized container orchestration to handle varying loads efficiently.
+
+### 📊 Audit & Compliance
+- **Comprehensive Audit Logs**: Detailed tracking of who did what and when for security auditing.
+- **Execution History**: Complete storage of agent execution runs, prompts, and completion data for review.
+- **Data Sovereignty**: Flexible deployment options allow you to keep all data within your own infrastructure.
+
 ## 🏗️ Architecture
 
 - **Backend**: Python microservices with FastAPI, PostgreSQL, Redis
@@ -154,9 +182,48 @@ ai-agent-framework/
 └── .env.example                    # Environment configuration template
 ```
 
-## 📄 License
+## 📄 License & Attribution
+
+### Project License
 
 This project uses only permissive licenses (MIT, Apache 2.0, BSD) that are safe for commercial use and monetization.
+
+### Third-Party Software
+
+This project incorporates and extends the following open-source software:
+
+**Core Infrastructure:**
+- **Ollama** - MIT License - Copyright (c) Ollama
+  - Source: https://github.com/ollama/ollama
+  - We extend the official Ollama Docker image with custom model management
+  - See `deployment/LICENSES/OLLAMA-LICENSE` for full license text
+
+**Docker Base Images:**
+- PostgreSQL (PostgreSQL License)
+- Redis (BSD 3-Clause)
+- Keycloak (Apache 2.0)
+- Kong Gateway (Apache 2.0)
+- Prometheus (Apache 2.0)
+- Apache Superset (Apache 2.0)
+- nginx (2-Clause BSD)
+
+### LLM Model Licensing
+
+> **⚠️ Important**: LLM models have separate licenses from the Ollama software and this project.
+
+**Pre-configured Models** (auto-downloaded on first startup):
+- `nomic-embed-text` - Apache License 2.0
+- `tinyllama` - Apache License 2.0
+- `phi` - MIT License
+
+**User Responsibility**: When you pull additional models using `ollama pull <model>`, you are responsible for:
+1. Reviewing the model's license (available at https://ollama.com/library/<model>)
+2. Ensuring it permits your intended use (commercial, research, etc.)
+3. Complying with any attribution or usage requirements
+
+Some models (e.g., Meta Llama) have proprietary licenses with specific terms for commercial use and attribution requirements.
+
+**For Complete Details**: See `deployment/LICENSES/THIRD-PARTY-NOTICES.md`
 
 ## 🤝 Contributing
 

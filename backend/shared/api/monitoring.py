@@ -79,6 +79,36 @@ async def get_metrics():
         raise HTTPException(status_code=500, detail="Failed to get metrics")
 
 
+@router.get("/metrics/history")
+async def get_metrics_history(
+    metric: str,
+    start: float = None,
+    end: float = None,
+    step: str = "30s",
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get historical metrics data from Prometheus
+    """
+    try:
+        # Defaults if not provided
+        if not end:
+            end = datetime.utcnow().timestamp()
+        if not start:
+            start = end - 3600  # Last hour
+            
+        history = await monitoring_service.get_metrics_history(
+            metric_name=metric,
+            start_time=int(start),
+            end_time=int(end),
+            step=step
+        )
+        return history
+    except Exception as e:
+        logger.error(f"Error getting metrics history: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get metrics history")
+
+
 @router.get("/alerts")
 async def get_active_alerts(current_user: User = Depends(get_current_user)):
     """

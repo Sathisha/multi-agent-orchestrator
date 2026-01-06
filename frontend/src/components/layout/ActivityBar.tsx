@@ -10,6 +10,8 @@ import {
   Menu as MenuIcon,
   Dns as LLMIcon,
   Link as ChainIcon,
+  Visibility as VisionIcon,
+  People as PeopleIcon,
 } from '@mui/icons-material'
 
 interface ActivityBarProps {
@@ -29,7 +31,9 @@ const ActivityBar: React.FC<ActivityBarProps> = ({
     { id: 'workflows', icon: WorkflowIcon, label: 'Workflows', path: '/chains' },
     { id: 'tools', icon: ToolsIcon, label: 'Tools', path: '/tools' },
     { id: 'models', icon: LLMIcon, label: 'LLM Models', path: '/models' },
+    { id: 'vision-test', icon: VisionIcon, label: 'Vision Test', path: '/vision-test' },
     { id: 'monitoring', icon: MonitoringIcon, label: 'Monitoring', path: '/monitoring' },
+    { id: 'users', icon: PeopleIcon, label: 'Users', path: '/users' },
   ]
 
   const handleItemClick = (item: typeof menuItems[0]) => {

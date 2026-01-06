@@ -25,6 +25,7 @@ class LLMMessage(BaseModel):
     
     role: str = Field(..., description="Message role (system, user, assistant)")
     content: str = Field(..., description="Message content")
+    images: Optional[List[str]] = Field(None, description="List of base64 encoded images")
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional metadata")
 
 

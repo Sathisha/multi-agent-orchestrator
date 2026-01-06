@@ -26,6 +26,7 @@ import {
     ArrowBack as ArrowBackIcon,
     Save as SaveIcon,
     PlayArrow as PlayArrowIcon,
+    Code as CodeIcon,
 } from '@mui/icons-material'
 import { getChain, updateChain, executeChain, validateChain, getChainExecutions, getExecutionStatus } from '../api/chains'
 import { Agent } from '../api/agents'
@@ -34,7 +35,9 @@ import ChainCanvas from '../components/chain/ChainCanvas'
 import EdgeConditionDialog from '../components/chain/EdgeConditionDialog'
 import ExecutionHistory from '../components/chain/ExecutionHistory'
 import NodeConfigPanel from '../components/chain/NodeConfigPanel'
+
 import TestWorkflowModal from '../components/chain/TestWorkflowModal'
+import UseAsApiModal from '../components/chain/UseAsApiModal'
 import { useNotification } from '../contexts/NotificationContext'
 
 const ChainDetailWorkspace: React.FC = () => {
@@ -60,6 +63,7 @@ const ChainDetailWorkspace: React.FC = () => {
 
     // Test Modal state
     const [isTestModalOpen, setIsTestModalOpen] = useState(false)
+    const [isUseApiModalOpen, setIsUseApiModalOpen] = useState(false)
 
     // Execution state
     const [showExecutionPanel, setShowExecutionPanel] = useState(true)
@@ -403,15 +407,25 @@ const ChainDetailWorkspace: React.FC = () => {
                             </Button>
 
                             {chain.nodes.length > 0 && (
-                                <Button
-                                    variant="contained"
-                                    color="secondary"
-                                    size="small"
-                                    startIcon={<PlayArrowIcon />}
-                                    onClick={() => setIsTestModalOpen(true)}
-                                >
-                                    Test Workflow
-                                </Button>
+                                <>
+                                    <Button
+                                        variant="contained"
+                                        color="secondary"
+                                        size="small"
+                                        startIcon={<PlayArrowIcon />}
+                                        onClick={() => setIsTestModalOpen(true)}
+                                    >
+                                        Test Workflow
+                                    </Button>
+                                    <Button
+                                        variant="outlined"
+                                        size="small"
+                                        startIcon={<CodeIcon />}
+                                        onClick={() => setIsUseApiModalOpen(true)}
+                                    >
+                                        Use as API
+                                    </Button>
+                                </>
                             )}
                         </>
                     )}
@@ -576,6 +590,13 @@ const ChainDetailWorkspace: React.FC = () => {
             <TestWorkflowModal
                 open={isTestModalOpen}
                 onClose={() => setIsTestModalOpen(false)}
+                chain={chain}
+            />
+
+            {/* Use as API Modal */}
+            <UseAsApiModal
+                open={isUseApiModalOpen}
+                onClose={() => setIsUseApiModalOpen(false)}
                 chain={chain}
             />
         </Box >

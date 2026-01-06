@@ -154,6 +154,8 @@ services:
     environment:
       - OLLAMA_HOST=0.0.0.0
       - OLLAMA_KEEP_ALIVE=24h
+      - OLLAMA_NUM_PARALLEL=4
+      - OLLAMA_MAX_LOADED_MODELS=4
     volumes:
       - ollama_data:/root/.ollama
     networks:

@@ -1,0 +1,1177 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.14, pytest-7.4.3, pluggy-1.6.0 -- /usr/local/bin/python3.11
+cachedir: .pytest_cache
+hypothesis profile 'default' -> database=DirectoryBasedExampleDatabase(PosixPath('/app/.hypothesis/examples'))
+rootdir: /app
+configfile: pytest.ini
+plugins: hypothesis-6.92.1, cov-4.1.0, anyio-4.12.0, asyncio-0.21.1
+asyncio: mode=Mode.AUTO
+collecting ... collected 1 item
+
+tests/integration/test_chain_api_auth.py::test_execute_chain_auth ERROR  [100%]
+
+==================================== ERRORS ====================================
+__________________ ERROR at setup of test_execute_chain_auth ___________________
+file /app/tests/integration/test_chain_api_auth.py, line 6
+  @pytest.mark.asyncio
+  async def test_execute_chain_auth(
+      async_client: AsyncClient,
+      db_session: AsyncSession
+  ):
+      """Test chain execution with and without auth."""
+      # Clear dependency override for this test to verify real auth
+      from main import app
+      from shared.api.auth import get_current_user_or_api_key
+      app.dependency_overrides.pop(get_current_user_or_api_key, None)
+
+      # 1. Create a chain
+      chain_data = {
+          "name": "Auth Test Chain",
+          "description": "Testing Auth",
+          "nodes": [],
+          "edges": []
+      }
+      response = await async_client.post("/api/v1/chains", json=chain_data)
+      # Auth middleware (if applied globally) might block this too?
+      # Current implementation secured only execute endpoint or global?
+      # Based on main.py, audit is global, but not strict auth on all endpoints unless defined?
+      # Chains create endpoint in chains.py uses Depends(get_async_db) but NOT get_current_user?
+      # Wait, create_chain in chains.py:
+      # @router.post("", response_model=ChainResponse, status_code=status.HTTP_201_CREATED)
+      # async def create_chain(...):
+      # It seems UNPROTECTED currently! (I only secured execute_chain)
+
+      assert response.status_code == 201
+      chain_id = response.json()["id"]
+
+      # 2. Execute without auth
+      execute_url = f"/api/v1/chains/{chain_id}/execute"
+      payload = {"input_data": {"test": "val"}}
+
+      resp_no_auth = await async_client.post(execute_url, json=payload)
+      assert resp_no_auth.status_code == 401
+
+      # 3. Execute with invalid API Key
+      resp_bad_key = await async_client.post(
+          execute_url,
+          json=payload,
+          headers={"X-API-Key": "invalid_key"}
+      )
+      assert resp_bad_key.status_code == 401
+
+      # 4. Execute with valid API Key
+      # We need a valid API Key.
+      # The fixture sample_api_key_headers should provide one if I define it,
+      # OR I can create one via API if I have a user token.
+      # Let's assume I need to create one.
+
+      # Register user to get token
+      # (Assuming basic fixtures exist or I do it manually)
+      # Actually, simpler: Use the dependency injection override or just create key in DB.
+
+      # Generate a key directly in DB for this test to avoid dependency on other APIs
+      from shared.models.api_key import APIKey
+      from shared.services.api_key import APIKeyService
+      from datetime import datetime
+
+      # Create user for the key
+      # (Need a user ID, maybe use a random UUID if FK not strict or create user)
+      # Using existing test fixtures usually provides a user.
+      # I'll rely on db_session to insert one.
+
+      user_id = uuid4()
+      # Note: If FK constraint exists, I need a real user.
+      # Let's try to fetch a user from fixture or create one.
+      # I'll try creating a key via Service.
+
+      service = APIKeyService(db_session)
+      # Create key
+      # We need a user_id.
+      # Let's create a dummy user first?
+      # Or just use the service.
+
+      # Since this is integration test, it's better to use the fixture `admin_user` or similar if available.
+      # I'll blindly try to use a random UUID, if it fails I'll fix it.
+
+      api_key, plain_key = await service.create_api_key(
+          user_id=user_id,
+          name="Test Key"
+      )
+
+      headers = {"X-API-Key": plain_key}
+
+      resp_valid = await async_client.post(execute_url, json=payload, headers=headers)
+      assert resp_valid.status_code == 202
+E       fixture 'db_session' not found
+>       available fixtures: anyio_backend, anyio_backend_name, anyio_backend_options, async_client, async_db_session, async_engine, async_session, cache, capfd, capfdbinary, caplog, capsys, capsysbinary, client, cov, doctest_namespace, event_loop, free_tcp_port, free_tcp_port_factory, free_udp_port, free_udp_port_factory, mock_db_init, mock_zeebe_client, monkeypatch, no_cover, pytestconfig, record_property, record_testsuite_property, record_xml_attribute, recwarn, reset_workflow_service, test_client, test_settings, tmp_path, tmp_path_factory, tmpdir, tmpdir_factory, unused_tcp_port, unused_tcp_port_factory, unused_udp_port, unused_udp_port_factory
+>       use 'pytest --fixtures [testpath]' for help on them.
+
+/app/tests/integration/test_chain_api_auth.py:6
+---------------------------- Captured stdout setup -----------------------------
+2026-01-06 05:05:45,914 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+{"timestamp": "2026-01-06T05:05:45.915031", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "BEGIN (implicit)", "correlation_id": "74f970e5-40b7-40a5-b6f5-7e0b4a555529", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,915 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("users")
+{"timestamp": "2026-01-06T05:05:45.915343", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA main.table_info(\"users\")", "correlation_id": "4554852e-b55e-4e64-866e-f57ccfc03e9f", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,915 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.915427", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "14b227e7-cf29-4805-9bdf-89a55469699f", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,916 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("users")
+{"timestamp": "2026-01-06T05:05:45.916403", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA temp.table_info(\"users\")", "correlation_id": "763ae521-4075-4e27-8a95-4e7f83d961c8", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,916 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.916499", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "7ff12d22-2acf-4ef4-91f5-298ba56fb4c0", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,917 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("role_permissions")
+{"timestamp": "2026-01-06T05:05:45.917060", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA main.table_info(\"role_permissions\")", "correlation_id": "f2a93c5e-4f40-4db7-85df-0271886db655", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,917 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.917138", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "d0d2b412-5259-4549-b58a-a07efd626e93", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,917 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("role_permissions")
+{"timestamp": "2026-01-06T05:05:45.917608", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA temp.table_info(\"role_permissions\")", "correlation_id": "a6ecb2f9-02c8-470f-8686-38e2007a5eb9", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,917 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.917680", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "ae9dd1dd-36a7-4b8e-ad86-9983d41d6f48", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,918 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("permissions")
+{"timestamp": "2026-01-06T05:05:45.918103", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA main.table_info(\"permissions\")", "correlation_id": "1af6b14d-7d99-49c1-b245-473e178db6ee", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,918 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.918155", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "36bc7e55-28bd-4078-a915-1659f7853881", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,918 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("permissions")
+{"timestamp": "2026-01-06T05:05:45.918677", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA temp.table_info(\"permissions\")", "correlation_id": "c5abe96d-820a-4e47-94b0-2647802b38e4", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,918 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.918735", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "d771e753-d56f-45f5-95c1-c02f460b73fb", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,919 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("roles")
+{"timestamp": "2026-01-06T05:05:45.919439", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA main.table_info(\"roles\")", "correlation_id": "56d7ab61-af75-43fb-8df5-eefcd34cd9d3", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,919 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.919534", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "e5457ed3-bcb5-4fcc-80a9-7345164b930b", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,920 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("roles")
+{"timestamp": "2026-01-06T05:05:45.920172", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA temp.table_info(\"roles\")", "correlation_id": "01bb854a-bbe9-48eb-b2b9-7ac2b9039700", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,920 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.920241", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "2811173c-6830-405c-81e3-47f2dfff000c", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,920 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("user_roles")
+{"timestamp": "2026-01-06T05:05:45.920734", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA main.table_info(\"user_roles\")", "correlation_id": "f63c81b3-e54d-4455-8578-54d6dbd228ad", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,920 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.920804", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "83ee66d7-41ef-4538-b5f2-bf7f5439a509", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,921 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("user_roles")
+{"timestamp": "2026-01-06T05:05:45.921393", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA temp.table_info(\"user_roles\")", "correlation_id": "c31652c6-58fe-4008-b2df-d29d0bc5de09", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,921 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.921474", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "c4c31f14-9b47-4e9d-91f9-96ab9b229651", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,922 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("agents")
+{"timestamp": "2026-01-06T05:05:45.922156", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA main.table_info(\"agents\")", "correlation_id": "9e63a9c0-cd17-4103-9d21-444eb3b9ca13", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,922 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.922208", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "f7b47309-f183-4596-bdee-09eaaa7234f6", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,922 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("agents")
+{"timestamp": "2026-01-06T05:05:45.922669", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA temp.table_info(\"agents\")", "correlation_id": "e1e4993e-16ac-4e0d-be99-a09f09b06dce", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,922 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.922714", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "9fab1594-1c47-48b0-9e72-e0c462109ebd", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,923 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("agent_deployments")
+{"timestamp": "2026-01-06T05:05:45.923126", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA main.table_info(\"agent_deployments\")", "correlation_id": "c32874f5-b2d7-4a67-9939-dd917e542abc", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,923 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.923170", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "89bbdac7-83bb-447d-9559-d2d8ff71c9d5", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,923 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("agent_deployments")
+{"timestamp": "2026-01-06T05:05:45.923535", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA temp.table_info(\"agent_deployments\")", "correlation_id": "c2f90a36-963f-46d9-a784-859493deb77d", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,923 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.923577", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "65f48e44-1d64-4c22-a464-fddb660360dc", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,923 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("agent_executions")
+{"timestamp": "2026-01-06T05:05:45.923946", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA main.table_info(\"agent_executions\")", "correlation_id": "53f6a71a-13cf-444a-921e-6b0e2913ded0", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,923 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.923994", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "b639a7c8-6fe0-475c-81bf-b8f64a474547", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,924 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("agent_executions")
+{"timestamp": "2026-01-06T05:05:45.924434", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA temp.table_info(\"agent_executions\")", "correlation_id": "e510acc8-d9ef-49fa-9991-76824268d1af", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,924 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.924488", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "bfca80b6-5f3a-4c56-916a-171617d76e0f", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,924 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("agent_memories")
+{"timestamp": "2026-01-06T05:05:45.924939", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA main.table_info(\"agent_memories\")", "correlation_id": "84e4fc82-b72e-4e96-bf58-d0f87ec5ed9e", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,924 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.924987", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "b5a69a47-2abc-475c-8d2e-6311e6b46b96", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,925 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("agent_memories")
+{"timestamp": "2026-01-06T05:05:45.925319", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA temp.table_info(\"agent_memories\")", "correlation_id": "abd42b22-086e-4ae5-933f-2e941d122ea5", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,925 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.925359", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "a2e41905-1763-4438-a475-527290a321c2", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,925 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("workflows")
+{"timestamp": "2026-01-06T05:05:45.925676", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA main.table_info(\"workflows\")", "correlation_id": "2a091f86-c836-4f36-bbf8-17f2eea77b90", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,925 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.925714", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "01ff4a65-d279-4a85-8515-7af967d53266", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,926 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("workflows")
+{"timestamp": "2026-01-06T05:05:45.926103", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA temp.table_info(\"workflows\")", "correlation_id": "17bf7528-b398-40c2-b69a-bf68ebd58ae3", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,926 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.926163", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "c83887db-e613-45b9-b6f9-957c912c0076", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,926 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("workflow_executions")
+{"timestamp": "2026-01-06T05:05:45.926571", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA main.table_info(\"workflow_executions\")", "correlation_id": "7a9b7e2b-f049-45df-b2e0-47d5af7ae177", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,926 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.926615", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "29202192-9736-45b8-be7f-bd14cec7b1e9", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,927 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("workflow_executions")
+{"timestamp": "2026-01-06T05:05:45.927239", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA temp.table_info(\"workflow_executions\")", "correlation_id": "8347b94f-6715-4012-91fd-aacc2c7d1e9b", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,927 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.927289", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "27029529-c05d-44e7-bb31-39d81361364c", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,927 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("execution_logs")
+{"timestamp": "2026-01-06T05:05:45.927841", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA main.table_info(\"execution_logs\")", "correlation_id": "aba4b765-c8ba-44bd-9ef2-dc450b419f53", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,927 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.927890", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "063b4db2-2fa3-46cd-bd93-cc9a03e2dd81", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,928 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("execution_logs")
+{"timestamp": "2026-01-06T05:05:45.928373", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA temp.table_info(\"execution_logs\")", "correlation_id": "67c8eb8a-78b2-4c3f-b304-03408c15f428", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,928 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.928423", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "b608119e-9e02-40c6-85ab-5dca4dc69ccd", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,928 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("tools")
+{"timestamp": "2026-01-06T05:05:45.928891", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA main.table_info(\"tools\")", "correlation_id": "8ebe408e-5f10-4c8a-bdf2-4e93d5ec8265", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,928 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.928938", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "873a8524-bee8-4527-8939-55bae3db4ce3", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,929 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("tools")
+{"timestamp": "2026-01-06T05:05:45.929317", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA temp.table_info(\"tools\")", "correlation_id": "e76e9af2-205b-4263-b7a7-a49f29a208d6", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,929 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.929375", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "b0496021-5d9e-4b9b-be3b-cb6ad2a9ddf6", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,929 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("mcp_servers")
+{"timestamp": "2026-01-06T05:05:45.929886", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA main.table_info(\"mcp_servers\")", "correlation_id": "e9eff0e6-898e-4a47-b1a6-a4f55d6bb2c5", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,929 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.929943", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "a5db3128-6677-480d-ba70-eeb1be2d8f28", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,930 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("mcp_servers")
+{"timestamp": "2026-01-06T05:05:45.930351", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA temp.table_info(\"mcp_servers\")", "correlation_id": "e114448c-9f27-4f1b-96cf-71eb08f0e426", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,930 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.930420", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "6bd83396-380b-4675-84b5-e695cd545976", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,930 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("audit_logs")
+{"timestamp": "2026-01-06T05:05:45.930832", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA main.table_info(\"audit_logs\")", "correlation_id": "177799f7-013c-43af-a274-ad8c0570857c", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,930 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.930877", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "0ec09da3-e251-41d4-8c67-10bd5d23e137", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,931 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("audit_logs")
+{"timestamp": "2026-01-06T05:05:45.931218", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA temp.table_info(\"audit_logs\")", "correlation_id": "52f9a3bd-fe04-471a-aad0-1fb78b305833", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,931 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.931263", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "5408028c-b82f-44c9-94b6-55cf1575bbaf", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,931 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("llm_models")
+{"timestamp": "2026-01-06T05:05:45.931609", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA main.table_info(\"llm_models\")", "correlation_id": "0001efe7-7084-407b-9006-d8a89b0be192", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,931 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.931653", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "1992478c-5807-447a-881b-7199fa142ba1", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,932 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("llm_models")
+{"timestamp": "2026-01-06T05:05:45.932095", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA temp.table_info(\"llm_models\")", "correlation_id": "9f05229a-c4d4-417e-afe2-bba51b5f818c", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,932 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.932152", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "39c0a967-f580-4b03-9870-2370151ae977", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,932 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("api_keys")
+{"timestamp": "2026-01-06T05:05:45.932529", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA main.table_info(\"api_keys\")", "correlation_id": "50c1c103-d8f9-48cd-aeec-3343c100262b", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,932 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.932585", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "383da5e3-6dd4-483b-8fb3-9ad5f70b0d95", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,932 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("api_keys")
+{"timestamp": "2026-01-06T05:05:45.932993", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA temp.table_info(\"api_keys\")", "correlation_id": "6c9e76ba-ef3f-4555-9b51-5418478330e4", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,933 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.933039", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "06da4314-11cf-4fd4-94a1-a84dde444201", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,933 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("tenants")
+{"timestamp": "2026-01-06T05:05:45.933468", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA main.table_info(\"tenants\")", "correlation_id": "e9e99206-8904-4dd9-96a3-f8ee718c9510", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,933 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.933522", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "71c69ffb-b07c-46d3-9b8f-5a81a32f2b88", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,933 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("tenants")
+{"timestamp": "2026-01-06T05:05:45.933997", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA temp.table_info(\"tenants\")", "correlation_id": "9d9a7076-05b3-4215-a505-7cd4bc96a519", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,934 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.934054", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "a423299a-43fa-4bf4-81fc-ed431ee29243", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,934 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("tenant_users")
+{"timestamp": "2026-01-06T05:05:45.934580", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA main.table_info(\"tenant_users\")", "correlation_id": "12d09279-8124-4648-b471-964b8bacdff2", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,934 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.934630", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "2c1f2b08-54c8-455f-8680-c3f6fcebaa87", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,935 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("tenant_users")
+{"timestamp": "2026-01-06T05:05:45.935062", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA temp.table_info(\"tenant_users\")", "correlation_id": "2bc3d019-a3ea-4786-884e-beb1154e9489", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,935 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.935112", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "cdd90427-1f2c-43ec-bdb0-0a8e82b4ab2f", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,935 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("chains")
+{"timestamp": "2026-01-06T05:05:45.935595", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA main.table_info(\"chains\")", "correlation_id": "7226440c-2d5a-442d-8d6a-3028716fdf45", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,935 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.935645", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "d836dcef-b918-4fd0-8a8c-082380c9fa5e", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,936 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("chains")
+{"timestamp": "2026-01-06T05:05:45.936122", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA temp.table_info(\"chains\")", "correlation_id": "0a1404f6-1680-42bf-95f0-c682d9fac51a", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,936 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.936186", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "89050bf3-2a6c-4be8-8d11-d630a526c170", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,936 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("chain_nodes")
+{"timestamp": "2026-01-06T05:05:45.936837", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA main.table_info(\"chain_nodes\")", "correlation_id": "0246e1f2-75a3-4803-a8ec-07ff36b89f55", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,936 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.936886", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "77df04a1-86cf-4013-92fc-3c0012924ee9", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,937 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("chain_nodes")
+{"timestamp": "2026-01-06T05:05:45.937318", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA temp.table_info(\"chain_nodes\")", "correlation_id": "ac632bb1-c5c3-45d3-b122-d648f37728bc", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,937 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.937376", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "e6b9ac9a-6a89-480b-aa6e-7a1f00d6164f", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,937 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("chain_edges")
+{"timestamp": "2026-01-06T05:05:45.938005", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA main.table_info(\"chain_edges\")", "correlation_id": "9d307785-0d5a-450b-983c-0e02b6834f37", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,938 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.938077", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "231f0b5c-75d3-4a0b-ae24-beb6696935d1", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,938 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("chain_edges")
+{"timestamp": "2026-01-06T05:05:45.938789", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA temp.table_info(\"chain_edges\")", "correlation_id": "0904aa90-9c67-4a57-a8e8-0917b9d53cdf", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,938 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.938842", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "279e44fc-e485-460d-8b47-752d403eede7", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,939 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("chain_executions")
+{"timestamp": "2026-01-06T05:05:45.939265", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA main.table_info(\"chain_executions\")", "correlation_id": "06faa2d8-7cd2-48f4-b4fb-2bb66cb9b45c", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,939 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.939312", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "a36d8879-c648-4051-afa6-89652c2f78cc", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,939 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("chain_executions")
+{"timestamp": "2026-01-06T05:05:45.939761", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA temp.table_info(\"chain_executions\")", "correlation_id": "f3ded71a-e5ef-4460-8e98-1de2c954c8cd", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,939 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.939813", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "cf068120-ea00-4f92-bef5-e687a24f87e2", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,940 INFO sqlalchemy.engine.Engine PRAGMA main.table_info("chain_execution_logs")
+{"timestamp": "2026-01-06T05:05:45.940247", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA main.table_info(\"chain_execution_logs\")", "correlation_id": "15d54fb8-6c4c-4c01-8498-59fff5269d47", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,940 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.940305", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "74244609-b1bf-4c64-9423-0380ef2f4959", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,940 INFO sqlalchemy.engine.Engine PRAGMA temp.table_info("chain_execution_logs")
+{"timestamp": "2026-01-06T05:05:45.940827", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "PRAGMA temp.table_info(\"chain_execution_logs\")", "correlation_id": "35028ce1-69e8-440d-963a-a8a735257907", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,940 INFO sqlalchemy.engine.Engine [raw sql] ()
+{"timestamp": "2026-01-06T05:05:45.940876", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[raw sql] ()", "correlation_id": "17c13120-8d98-47cf-bc5b-866585d63121", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,941 INFO sqlalchemy.engine.Engine 
+CREATE TABLE users (
+	username VARCHAR(255) NOT NULL, 
+	email VARCHAR(255) NOT NULL, 
+	first_name VARCHAR(255), 
+	last_name VARCHAR(255), 
+	password_hash VARCHAR(255) NOT NULL, 
+	status VARCHAR(50) NOT NULL, 
+	auth_provider VARCHAR(50) NOT NULL, 
+	is_active BOOLEAN NOT NULL, 
+	last_login DATETIME, 
+	user_metadata TEXT DEFAULT '{}', 
+	id VARCHAR NOT NULL, 
+	created_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	updated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	created_by VARCHAR, 
+	updated_by VARCHAR, 
+	is_deleted BOOLEAN NOT NULL, 
+	PRIMARY KEY (id)
+)
+
+
+{"timestamp": "2026-01-06T05:05:45.941972", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "\nCREATE TABLE users (\n\tusername VARCHAR(255) NOT NULL, \n\temail VARCHAR(255) NOT NULL, \n\tfirst_name VARCHAR(255), \n\tlast_name VARCHAR(255), \n\tpassword_hash VARCHAR(255) NOT NULL, \n\tstatus VARCHAR(50) NOT NULL, \n\tauth_provider VARCHAR(50) NOT NULL, \n\tis_active BOOLEAN NOT NULL, \n\tlast_login DATETIME, \n\tuser_metadata TEXT DEFAULT '{}', \n\tid VARCHAR NOT NULL, \n\tcreated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tupdated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tcreated_by VARCHAR, \n\tupdated_by VARCHAR, \n\tis_deleted BOOLEAN NOT NULL, \n\tPRIMARY KEY (id)\n)\n\n", "correlation_id": "3b964e31-0716-409d-8f22-ef994732dfde", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,942 INFO sqlalchemy.engine.Engine [no key 0.00009s] ()
+{"timestamp": "2026-01-06T05:05:45.942036", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00009s] ()", "correlation_id": "fc19f797-bec4-46b9-a419-b4b8c0280c2a", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,942 INFO sqlalchemy.engine.Engine CREATE UNIQUE INDEX ix_users_email ON users (email)
+{"timestamp": "2026-01-06T05:05:45.942664", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE UNIQUE INDEX ix_users_email ON users (email)", "correlation_id": "079686b3-aedf-45d8-aac2-7cfe7b92e4bd", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,942 INFO sqlalchemy.engine.Engine [no key 0.00008s] ()
+{"timestamp": "2026-01-06T05:05:45.942717", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00008s] ()", "correlation_id": "da0be3b3-34a6-45c1-808f-fd4ef5baed96", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,943 INFO sqlalchemy.engine.Engine CREATE INDEX ix_users_is_active ON users (is_active)
+{"timestamp": "2026-01-06T05:05:45.943134", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_users_is_active ON users (is_active)", "correlation_id": "eba394e8-af43-45ea-a2ce-ba83b834cc99", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,943 INFO sqlalchemy.engine.Engine [no key 0.00008s] ()
+{"timestamp": "2026-01-06T05:05:45.943196", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00008s] ()", "correlation_id": "65162474-3bbd-490f-865f-c50887c15757", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,943 INFO sqlalchemy.engine.Engine CREATE INDEX ix_users_status ON users (status)
+{"timestamp": "2026-01-06T05:05:45.943571", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_users_status ON users (status)", "correlation_id": "2219728d-a150-4a00-8680-e1d3988f8d05", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,943 INFO sqlalchemy.engine.Engine [no key 0.00007s] ()
+{"timestamp": "2026-01-06T05:05:45.943619", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00007s] ()", "correlation_id": "d3ba1f69-704b-445d-aad9-b58cd3ca63bd", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,944 INFO sqlalchemy.engine.Engine CREATE UNIQUE INDEX ix_users_username ON users (username)
+{"timestamp": "2026-01-06T05:05:45.944078", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE UNIQUE INDEX ix_users_username ON users (username)", "correlation_id": "30026633-b8f2-4988-b472-4df5a5d51151", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,944 INFO sqlalchemy.engine.Engine [no key 0.00007s] ()
+{"timestamp": "2026-01-06T05:05:45.944135", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00007s] ()", "correlation_id": "2645a11a-7bb6-4ca2-864a-6c82fe783ec3", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,945 INFO sqlalchemy.engine.Engine 
+CREATE TABLE permissions (
+	name VARCHAR(100) NOT NULL, 
+	resource VARCHAR(100) NOT NULL, 
+	action VARCHAR(100) NOT NULL, 
+	description TEXT, 
+	conditions TEXT DEFAULT '{}', 
+	id VARCHAR NOT NULL, 
+	created_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	updated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	created_by VARCHAR, 
+	updated_by VARCHAR, 
+	is_deleted BOOLEAN NOT NULL, 
+	PRIMARY KEY (id), 
+	UNIQUE (name)
+)
+
+
+{"timestamp": "2026-01-06T05:05:45.945182", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "\nCREATE TABLE permissions (\n\tname VARCHAR(100) NOT NULL, \n\tresource VARCHAR(100) NOT NULL, \n\taction VARCHAR(100) NOT NULL, \n\tdescription TEXT, \n\tconditions TEXT DEFAULT '{}', \n\tid VARCHAR NOT NULL, \n\tcreated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tupdated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tcreated_by VARCHAR, \n\tupdated_by VARCHAR, \n\tis_deleted BOOLEAN NOT NULL, \n\tPRIMARY KEY (id), \n\tUNIQUE (name)\n)\n\n", "correlation_id": "8d72cfe3-7436-4ed3-8576-cef38c058ac9", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,945 INFO sqlalchemy.engine.Engine [no key 0.00037s] ()
+{"timestamp": "2026-01-06T05:05:45.945514", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00037s] ()", "correlation_id": "c347fe85-72c0-4457-ad6b-f216d7b56555", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,946 INFO sqlalchemy.engine.Engine 
+CREATE TABLE roles (
+	name VARCHAR(100) NOT NULL, 
+	description TEXT, 
+	is_system_role BOOLEAN NOT NULL, 
+	is_default BOOLEAN NOT NULL, 
+	id VARCHAR NOT NULL, 
+	created_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	updated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	created_by VARCHAR, 
+	updated_by VARCHAR, 
+	is_deleted BOOLEAN NOT NULL, 
+	PRIMARY KEY (id)
+)
+
+
+{"timestamp": "2026-01-06T05:05:45.946951", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "\nCREATE TABLE roles (\n\tname VARCHAR(100) NOT NULL, \n\tdescription TEXT, \n\tis_system_role BOOLEAN NOT NULL, \n\tis_default BOOLEAN NOT NULL, \n\tid VARCHAR NOT NULL, \n\tcreated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tupdated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tcreated_by VARCHAR, \n\tupdated_by VARCHAR, \n\tis_deleted BOOLEAN NOT NULL, \n\tPRIMARY KEY (id)\n)\n\n", "correlation_id": "d797cfbc-940f-4ac1-89a8-9da418c15bfe", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,947 INFO sqlalchemy.engine.Engine [no key 0.00021s] ()
+{"timestamp": "2026-01-06T05:05:45.947080", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00021s] ()", "correlation_id": "04d962c4-bc35-4051-a153-1a41a279e93e", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,948 INFO sqlalchemy.engine.Engine 
+CREATE TABLE agents (
+	name VARCHAR(255) NOT NULL, 
+	description TEXT, 
+	type VARCHAR(50) NOT NULL, 
+	status VARCHAR(50) NOT NULL, 
+	version VARCHAR(50) NOT NULL, 
+	config TEXT DEFAULT '{}' NOT NULL, 
+	system_prompt TEXT, 
+	model_config TEXT DEFAULT '{}', 
+	available_tools TEXT DEFAULT '[]', 
+	capabilities TEXT DEFAULT '[]', 
+	tags TEXT DEFAULT '[]', 
+	agent_metadata TEXT DEFAULT '{}', 
+	id VARCHAR NOT NULL, 
+	created_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	updated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	created_by VARCHAR, 
+	updated_by VARCHAR, 
+	is_deleted BOOLEAN NOT NULL, 
+	PRIMARY KEY (id)
+)
+
+
+{"timestamp": "2026-01-06T05:05:45.948323", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "\nCREATE TABLE agents (\n\tname VARCHAR(255) NOT NULL, \n\tdescription TEXT, \n\ttype VARCHAR(50) NOT NULL, \n\tstatus VARCHAR(50) NOT NULL, \n\tversion VARCHAR(50) NOT NULL, \n\tconfig TEXT DEFAULT '{}' NOT NULL, \n\tsystem_prompt TEXT, \n\tmodel_config TEXT DEFAULT '{}', \n\tavailable_tools TEXT DEFAULT '[]', \n\tcapabilities TEXT DEFAULT '[]', \n\ttags TEXT DEFAULT '[]', \n\tagent_metadata TEXT DEFAULT '{}', \n\tid VARCHAR NOT NULL, \n\tcreated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tupdated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tcreated_by VARCHAR, \n\tupdated_by VARCHAR, \n\tis_deleted BOOLEAN NOT NULL, \n\tPRIMARY KEY (id)\n)\n\n", "correlation_id": "d43f1a8b-8f00-4b7b-8590-f165ec7c2606", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,948 INFO sqlalchemy.engine.Engine [no key 0.00016s] ()
+{"timestamp": "2026-01-06T05:05:45.948424", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00016s] ()", "correlation_id": "2a1f6d94-c229-4882-ab66-5a6e7c54b6f3", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,949 INFO sqlalchemy.engine.Engine CREATE INDEX ix_agents_type ON agents (type)
+{"timestamp": "2026-01-06T05:05:45.949139", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_agents_type ON agents (type)", "correlation_id": "3de7ed4a-cd81-49df-9c46-68e0fd569a47", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,949 INFO sqlalchemy.engine.Engine [no key 0.00008s] ()
+{"timestamp": "2026-01-06T05:05:45.949194", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00008s] ()", "correlation_id": "baae4927-ac84-4670-a1e7-7516894d19f4", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,949 INFO sqlalchemy.engine.Engine CREATE INDEX ix_agents_name ON agents (name)
+{"timestamp": "2026-01-06T05:05:45.949612", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_agents_name ON agents (name)", "correlation_id": "81c32482-e936-4d26-9781-f0dee778d12d", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,949 INFO sqlalchemy.engine.Engine [no key 0.00007s] ()
+{"timestamp": "2026-01-06T05:05:45.949665", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00007s] ()", "correlation_id": "146af575-5354-4355-890c-4096e640c374", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,950 INFO sqlalchemy.engine.Engine CREATE INDEX ix_agents_status ON agents (status)
+{"timestamp": "2026-01-06T05:05:45.950117", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_agents_status ON agents (status)", "correlation_id": "b41e5311-50fc-468d-bd35-4df27ff540a1", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,950 INFO sqlalchemy.engine.Engine [no key 0.00007s] ()
+{"timestamp": "2026-01-06T05:05:45.950165", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00007s] ()", "correlation_id": "f8fdae49-0b57-45d4-b44b-6a3d3323e2c5", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,950 INFO sqlalchemy.engine.Engine 
+CREATE TABLE workflows (
+	name VARCHAR(255) NOT NULL, 
+	description TEXT, 
+	version VARCHAR(50) NOT NULL, 
+	status VARCHAR(50) NOT NULL, 
+	tags TEXT DEFAULT '[]', 
+	category VARCHAR(255), 
+	input_schema TEXT DEFAULT '{}', 
+	output_schema TEXT DEFAULT '{}', 
+	default_variables TEXT DEFAULT '{}', 
+	timeout_minutes INTEGER, 
+	max_concurrent_executions INTEGER NOT NULL, 
+	retry_policy TEXT DEFAULT '{}', 
+	required_agents TEXT DEFAULT '[]', 
+	required_tools TEXT DEFAULT '[]', 
+	required_mcp_servers TEXT DEFAULT '[]', 
+	id VARCHAR NOT NULL, 
+	created_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	updated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	created_by VARCHAR, 
+	updated_by VARCHAR, 
+	is_deleted BOOLEAN NOT NULL, 
+	PRIMARY KEY (id)
+)
+
+
+{"timestamp": "2026-01-06T05:05:45.950942", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "\nCREATE TABLE workflows (\n\tname VARCHAR(255) NOT NULL, \n\tdescription TEXT, \n\tversion VARCHAR(50) NOT NULL, \n\tstatus VARCHAR(50) NOT NULL, \n\ttags TEXT DEFAULT '[]', \n\tcategory VARCHAR(255), \n\tinput_schema TEXT DEFAULT '{}', \n\toutput_schema TEXT DEFAULT '{}', \n\tdefault_variables TEXT DEFAULT '{}', \n\ttimeout_minutes INTEGER, \n\tmax_concurrent_executions INTEGER NOT NULL, \n\tretry_policy TEXT DEFAULT '{}', \n\trequired_agents TEXT DEFAULT '[]', \n\trequired_tools TEXT DEFAULT '[]', \n\trequired_mcp_servers TEXT DEFAULT '[]', \n\tid VARCHAR NOT NULL, \n\tcreated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tupdated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tcreated_by VARCHAR, \n\tupdated_by VARCHAR, \n\tis_deleted BOOLEAN NOT NULL, \n\tPRIMARY KEY (id)\n)\n\n", "correlation_id": "4dec8b4b-b565-4ec2-955e-96c3c70411e9", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,950 INFO sqlalchemy.engine.Engine [no key 0.00010s] ()
+{"timestamp": "2026-01-06T05:05:45.951001", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00010s] ()", "correlation_id": "674f7417-af6f-49e9-824b-4d5ef0ffb6f5", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,951 INFO sqlalchemy.engine.Engine CREATE INDEX ix_workflows_category ON workflows (category)
+{"timestamp": "2026-01-06T05:05:45.951486", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_workflows_category ON workflows (category)", "correlation_id": "b65f3622-0379-4192-bdcd-787b43af6f59", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,951 INFO sqlalchemy.engine.Engine [no key 0.00009s] ()
+{"timestamp": "2026-01-06T05:05:45.951551", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00009s] ()", "correlation_id": "20ef378b-043b-48fc-9dee-dc182e879b69", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,951 INFO sqlalchemy.engine.Engine CREATE INDEX ix_workflows_status ON workflows (status)
+{"timestamp": "2026-01-06T05:05:45.952005", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_workflows_status ON workflows (status)", "correlation_id": "a9a3352f-f49a-4e6d-be6a-fa73f010305b", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,952 INFO sqlalchemy.engine.Engine [no key 0.00008s] ()
+{"timestamp": "2026-01-06T05:05:45.952064", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00008s] ()", "correlation_id": "a60cd984-68d6-46d1-9a5a-6e2f560204a4", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,952 INFO sqlalchemy.engine.Engine CREATE INDEX ix_workflows_name ON workflows (name)
+{"timestamp": "2026-01-06T05:05:45.952600", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_workflows_name ON workflows (name)", "correlation_id": "6c8ef091-5652-4df2-addb-6f00c777927d", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,952 INFO sqlalchemy.engine.Engine [no key 0.00009s] ()
+{"timestamp": "2026-01-06T05:05:45.952734", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00009s] ()", "correlation_id": "51cfed88-d04a-4a4b-830a-5977162f545a", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,953 INFO sqlalchemy.engine.Engine 
+CREATE TABLE tools (
+	name VARCHAR(255) NOT NULL, 
+	description TEXT, 
+	version VARCHAR(50) NOT NULL, 
+	tool_type VARCHAR(50) NOT NULL, 
+	status VARCHAR(50) NOT NULL, 
+	code TEXT, 
+	entry_point VARCHAR(255), 
+	input_schema TEXT NOT NULL, 
+	output_schema TEXT NOT NULL, 
+	category VARCHAR(100), 
+	tags TEXT NOT NULL, 
+	capabilities TEXT NOT NULL, 
+	tool_metadata TEXT NOT NULL, 
+	usage_count INTEGER NOT NULL, 
+	last_used_at DATETIME, 
+	average_execution_time INTEGER, 
+	timeout_seconds INTEGER NOT NULL, 
+	last_validated_at DATETIME, 
+	validation_errors TEXT NOT NULL, 
+	id VARCHAR NOT NULL, 
+	created_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	updated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	created_by VARCHAR, 
+	updated_by VARCHAR, 
+	is_deleted BOOLEAN NOT NULL, 
+	PRIMARY KEY (id)
+)
+
+
+{"timestamp": "2026-01-06T05:05:45.953898", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "\nCREATE TABLE tools (\n\tname VARCHAR(255) NOT NULL, \n\tdescription TEXT, \n\tversion VARCHAR(50) NOT NULL, \n\ttool_type VARCHAR(50) NOT NULL, \n\tstatus VARCHAR(50) NOT NULL, \n\tcode TEXT, \n\tentry_point VARCHAR(255), \n\tinput_schema TEXT NOT NULL, \n\toutput_schema TEXT NOT NULL, \n\tcategory VARCHAR(100), \n\ttags TEXT NOT NULL, \n\tcapabilities TEXT NOT NULL, \n\ttool_metadata TEXT NOT NULL, \n\tusage_count INTEGER NOT NULL, \n\tlast_used_at DATETIME, \n\taverage_execution_time INTEGER, \n\ttimeout_seconds INTEGER NOT NULL, \n\tlast_validated_at DATETIME, \n\tvalidation_errors TEXT NOT NULL, \n\tid VARCHAR NOT NULL, \n\tcreated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tupdated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tcreated_by VARCHAR, \n\tupdated_by VARCHAR, \n\tis_deleted BOOLEAN NOT NULL, \n\tPRIMARY KEY (id)\n)\n\n", "correlation_id": "b1e6693d-f1ff-406d-925f-63d1818e51ee", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,953 INFO sqlalchemy.engine.Engine [no key 0.00014s] ()
+{"timestamp": "2026-01-06T05:05:45.953976", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00014s] ()", "correlation_id": "b692e5af-9638-4985-b2af-429dde066d20", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,955 INFO sqlalchemy.engine.Engine 
+CREATE TABLE mcp_servers (
+	name VARCHAR(255) NOT NULL, 
+	description TEXT, 
+	base_url VARCHAR(255) NOT NULL, 
+	version VARCHAR(50) NOT NULL, 
+	status VARCHAR(50) NOT NULL, 
+	auth_config TEXT NOT NULL, 
+	capabilities TEXT NOT NULL, 
+	last_connected_at DATETIME, 
+	error_count INTEGER NOT NULL, 
+	last_health_check_at DATETIME, 
+	last_error TEXT, 
+	success_rate FLOAT NOT NULL, 
+	total_requests INTEGER NOT NULL, 
+	successful_requests INTEGER NOT NULL, 
+	failed_requests INTEGER NOT NULL, 
+	average_response_time FLOAT NOT NULL, 
+	id VARCHAR NOT NULL, 
+	created_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	updated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	created_by VARCHAR, 
+	updated_by VARCHAR, 
+	is_deleted BOOLEAN NOT NULL, 
+	PRIMARY KEY (id)
+)
+
+
+{"timestamp": "2026-01-06T05:05:45.955233", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "\nCREATE TABLE mcp_servers (\n\tname VARCHAR(255) NOT NULL, \n\tdescription TEXT, \n\tbase_url VARCHAR(255) NOT NULL, \n\tversion VARCHAR(50) NOT NULL, \n\tstatus VARCHAR(50) NOT NULL, \n\tauth_config TEXT NOT NULL, \n\tcapabilities TEXT NOT NULL, \n\tlast_connected_at DATETIME, \n\terror_count INTEGER NOT NULL, \n\tlast_health_check_at DATETIME, \n\tlast_error TEXT, \n\tsuccess_rate FLOAT NOT NULL, \n\ttotal_requests INTEGER NOT NULL, \n\tsuccessful_requests INTEGER NOT NULL, \n\tfailed_requests INTEGER NOT NULL, \n\taverage_response_time FLOAT NOT NULL, \n\tid VARCHAR NOT NULL, \n\tcreated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tupdated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tcreated_by VARCHAR, \n\tupdated_by VARCHAR, \n\tis_deleted BOOLEAN NOT NULL, \n\tPRIMARY KEY (id)\n)\n\n", "correlation_id": "6827a1ce-bba0-419c-9c46-f9b5af11cc17", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,955 INFO sqlalchemy.engine.Engine [no key 0.00021s] ()
+{"timestamp": "2026-01-06T05:05:45.955338", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00021s] ()", "correlation_id": "9e795028-6cb4-4059-9d61-a244724058a5", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,956 INFO sqlalchemy.engine.Engine 
+CREATE TABLE audit_logs (
+	event_type VARCHAR(50) NOT NULL, 
+	event_id VARCHAR(50) NOT NULL, 
+	correlation_id VARCHAR(50) NOT NULL, 
+	timestamp DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	user_id VARCHAR, 
+	username VARCHAR(255), 
+	session_id VARCHAR(255), 
+	source_ip VARCHAR(50), 
+	user_agent TEXT, 
+	source_service VARCHAR(100), 
+	resource_type VARCHAR(100), 
+	resource_id VARCHAR(255), 
+	resource_name VARCHAR(255), 
+	action VARCHAR(100) NOT NULL, 
+	outcome VARCHAR(20) NOT NULL, 
+	severity VARCHAR(20) NOT NULL, 
+	message TEXT, 
+	details TEXT DEFAULT '{}', 
+	request_data TEXT DEFAULT '{}', 
+	response_data TEXT DEFAULT '{}', 
+	error_code VARCHAR(50), 
+	error_message TEXT, 
+	compliance_tags TEXT DEFAULT '[]', 
+	retention_date DATETIME, 
+	checksum VARCHAR(255), 
+	id VARCHAR NOT NULL, 
+	created_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	updated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	created_by VARCHAR, 
+	updated_by VARCHAR, 
+	is_deleted BOOLEAN NOT NULL, 
+	PRIMARY KEY (id), 
+	UNIQUE (event_id)
+)
+
+
+{"timestamp": "2026-01-06T05:05:45.956461", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "\nCREATE TABLE audit_logs (\n\tevent_type VARCHAR(50) NOT NULL, \n\tevent_id VARCHAR(50) NOT NULL, \n\tcorrelation_id VARCHAR(50) NOT NULL, \n\ttimestamp DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tuser_id VARCHAR, \n\tusername VARCHAR(255), \n\tsession_id VARCHAR(255), \n\tsource_ip VARCHAR(50), \n\tuser_agent TEXT, \n\tsource_service VARCHAR(100), \n\tresource_type VARCHAR(100), \n\tresource_id VARCHAR(255), \n\tresource_name VARCHAR(255), \n\taction VARCHAR(100) NOT NULL, \n\toutcome VARCHAR(20) NOT NULL, \n\tseverity VARCHAR(20) NOT NULL, \n\tmessage TEXT, \n\tdetails TEXT DEFAULT '{}', \n\trequest_data TEXT DEFAULT '{}', \n\tresponse_data TEXT DEFAULT '{}', \n\terror_code VARCHAR(50), \n\terror_message TEXT, \n\tcompliance_tags TEXT DEFAULT '[]', \n\tretention_date DATETIME, \n\tchecksum VARCHAR(255), \n\tid VARCHAR NOT NULL, \n\tcreated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tupdated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tcreated_by VARCHAR, \n\tupdated_by VARCHAR, \n\tis_deleted BOOLEAN NOT NULL, \n\tPRIMARY KEY (id), \n\tUNIQUE (event_id)\n)\n\n", "correlation_id": "49943a0a-dea4-482f-a367-1d37f4945538", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,956 INFO sqlalchemy.engine.Engine [no key 0.00015s] ()
+{"timestamp": "2026-01-06T05:05:45.956542", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00015s] ()", "correlation_id": "06a34d42-5eae-4a50-9b0e-e279970e2ccf", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,957 INFO sqlalchemy.engine.Engine CREATE INDEX ix_audit_logs_correlation_id ON audit_logs (correlation_id)
+{"timestamp": "2026-01-06T05:05:45.957134", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_audit_logs_correlation_id ON audit_logs (correlation_id)", "correlation_id": "fff639fc-bc05-4335-9ae4-d0909f883845", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,957 INFO sqlalchemy.engine.Engine [no key 0.00008s] ()
+{"timestamp": "2026-01-06T05:05:45.957189", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00008s] ()", "correlation_id": "2e6ffe54-911d-4642-8d04-60fda7bbc8c1", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,957 INFO sqlalchemy.engine.Engine CREATE INDEX ix_audit_logs_resource_id ON audit_logs (resource_id)
+{"timestamp": "2026-01-06T05:05:45.957642", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_audit_logs_resource_id ON audit_logs (resource_id)", "correlation_id": "2619d3c8-e9e1-4bb5-b5a5-b2299c07fc09", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,957 INFO sqlalchemy.engine.Engine [no key 0.00008s] ()
+{"timestamp": "2026-01-06T05:05:45.957704", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00008s] ()", "correlation_id": "9d6ba7b1-53ae-40ce-a758-ad586b1c0734", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,958 INFO sqlalchemy.engine.Engine CREATE INDEX ix_audit_logs_action ON audit_logs (action)
+{"timestamp": "2026-01-06T05:05:45.958238", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_audit_logs_action ON audit_logs (action)", "correlation_id": "3360a427-d001-4d8c-99fd-8eaafd0fb772", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,958 INFO sqlalchemy.engine.Engine [no key 0.00009s] ()
+{"timestamp": "2026-01-06T05:05:45.958299", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00009s] ()", "correlation_id": "8cedf1ed-70c8-4b6e-897f-47faa9d2d47c", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,958 INFO sqlalchemy.engine.Engine CREATE INDEX ix_audit_logs_outcome ON audit_logs (outcome)
+{"timestamp": "2026-01-06T05:05:45.958895", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_audit_logs_outcome ON audit_logs (outcome)", "correlation_id": "424ff26c-46e0-463d-875c-de3728e4ec9e", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,958 INFO sqlalchemy.engine.Engine [no key 0.00009s] ()
+{"timestamp": "2026-01-06T05:05:45.958953", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00009s] ()", "correlation_id": "cd4252da-48e6-4f00-817f-b7b78739cecf", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,959 INFO sqlalchemy.engine.Engine CREATE INDEX ix_audit_logs_resource_type ON audit_logs (resource_type)
+{"timestamp": "2026-01-06T05:05:45.959451", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_audit_logs_resource_type ON audit_logs (resource_type)", "correlation_id": "0fb53d61-4d7a-4d45-b007-171ff494c5f7", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,959 INFO sqlalchemy.engine.Engine [no key 0.00009s] ()
+{"timestamp": "2026-01-06T05:05:45.959516", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00009s] ()", "correlation_id": "a1753f5c-5221-4d13-acf8-9c6eccf3e05f", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,959 INFO sqlalchemy.engine.Engine CREATE INDEX ix_audit_logs_timestamp ON audit_logs (timestamp)
+{"timestamp": "2026-01-06T05:05:45.960005", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_audit_logs_timestamp ON audit_logs (timestamp)", "correlation_id": "cee1c36d-223c-413f-b397-ac53b7c7b847", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,960 INFO sqlalchemy.engine.Engine [no key 0.00008s] ()
+{"timestamp": "2026-01-06T05:05:45.960058", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00008s] ()", "correlation_id": "fbf7da8f-56b4-4409-82d6-9c095c197465", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,960 INFO sqlalchemy.engine.Engine CREATE INDEX ix_audit_logs_severity ON audit_logs (severity)
+{"timestamp": "2026-01-06T05:05:45.960515", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_audit_logs_severity ON audit_logs (severity)", "correlation_id": "41c06612-3bc3-405a-9074-e3c55957b7f1", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,960 INFO sqlalchemy.engine.Engine [no key 0.00009s] ()
+{"timestamp": "2026-01-06T05:05:45.960575", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00009s] ()", "correlation_id": "b7db2b5d-b6ed-4672-a81d-dcac4ef174d5", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,961 INFO sqlalchemy.engine.Engine CREATE INDEX ix_audit_logs_user_id ON audit_logs (user_id)
+{"timestamp": "2026-01-06T05:05:45.961075", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_audit_logs_user_id ON audit_logs (user_id)", "correlation_id": "7620b398-77e2-42ad-bd68-b3d99342e958", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,961 INFO sqlalchemy.engine.Engine [no key 0.00010s] ()
+{"timestamp": "2026-01-06T05:05:45.961149", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00010s] ()", "correlation_id": "f6cb4fba-ea99-4913-95a1-fe45604299dc", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,962 INFO sqlalchemy.engine.Engine CREATE INDEX ix_audit_logs_event_type ON audit_logs (event_type)
+{"timestamp": "2026-01-06T05:05:45.962125", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_audit_logs_event_type ON audit_logs (event_type)", "correlation_id": "a4b95683-c2ff-45bc-a996-596ce71838c0", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,962 INFO sqlalchemy.engine.Engine [no key 0.00013s] ()
+{"timestamp": "2026-01-06T05:05:45.962201", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00013s] ()", "correlation_id": "b7c69f8e-4844-461b-9af6-b669dc7eac25", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,963 INFO sqlalchemy.engine.Engine 
+CREATE TABLE llm_models (
+	name VARCHAR(255) NOT NULL, 
+	provider VARCHAR(50) NOT NULL, 
+	api_key VARCHAR(255), 
+	api_base VARCHAR(255), 
+	description TEXT, 
+	is_default BOOLEAN NOT NULL, 
+	config TEXT DEFAULT '{}' NOT NULL, 
+	id VARCHAR NOT NULL, 
+	created_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	updated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	created_by VARCHAR, 
+	updated_by VARCHAR, 
+	is_deleted BOOLEAN NOT NULL, 
+	PRIMARY KEY (id)
+)
+
+
+{"timestamp": "2026-01-06T05:05:45.963225", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "\nCREATE TABLE llm_models (\n\tname VARCHAR(255) NOT NULL, \n\tprovider VARCHAR(50) NOT NULL, \n\tapi_key VARCHAR(255), \n\tapi_base VARCHAR(255), \n\tdescription TEXT, \n\tis_default BOOLEAN NOT NULL, \n\tconfig TEXT DEFAULT '{}' NOT NULL, \n\tid VARCHAR NOT NULL, \n\tcreated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tupdated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tcreated_by VARCHAR, \n\tupdated_by VARCHAR, \n\tis_deleted BOOLEAN NOT NULL, \n\tPRIMARY KEY (id)\n)\n\n", "correlation_id": "b19f6f96-3dcb-4362-9fcf-4bd17a3310b3", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,963 INFO sqlalchemy.engine.Engine [no key 0.00014s] ()
+{"timestamp": "2026-01-06T05:05:45.963302", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00014s] ()", "correlation_id": "14f3b713-676d-4fe1-848a-2082e594182d", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,963 INFO sqlalchemy.engine.Engine CREATE INDEX ix_llm_models_name ON llm_models (name)
+{"timestamp": "2026-01-06T05:05:45.963960", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_llm_models_name ON llm_models (name)", "correlation_id": "150099f9-9d9a-479f-8581-ce684792c661", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,964 INFO sqlalchemy.engine.Engine [no key 0.00013s] ()
+{"timestamp": "2026-01-06T05:05:45.964041", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00013s] ()", "correlation_id": "38827cdb-048f-4df4-b485-33186eb2fd54", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,964 INFO sqlalchemy.engine.Engine CREATE INDEX ix_llm_models_provider ON llm_models (provider)
+{"timestamp": "2026-01-06T05:05:45.964711", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_llm_models_provider ON llm_models (provider)", "correlation_id": "9e3a53ac-fca7-40c7-8605-859e3b20b477", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,964 INFO sqlalchemy.engine.Engine [no key 0.00011s] ()
+{"timestamp": "2026-01-06T05:05:45.964831", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00011s] ()", "correlation_id": "578435b1-ef9d-46dd-a15b-35fd84cdffcb", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,965 INFO sqlalchemy.engine.Engine 
+CREATE TABLE tenants (
+	name VARCHAR(255) NOT NULL, 
+	description TEXT, 
+	resource_limits TEXT DEFAULT '{}' NOT NULL, 
+	is_active BOOLEAN NOT NULL, 
+	id VARCHAR NOT NULL, 
+	created_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	updated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	created_by VARCHAR, 
+	updated_by VARCHAR, 
+	is_deleted BOOLEAN NOT NULL, 
+	PRIMARY KEY (id)
+)
+
+
+{"timestamp": "2026-01-06T05:05:45.965507", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "\nCREATE TABLE tenants (\n\tname VARCHAR(255) NOT NULL, \n\tdescription TEXT, \n\tresource_limits TEXT DEFAULT '{}' NOT NULL, \n\tis_active BOOLEAN NOT NULL, \n\tid VARCHAR NOT NULL, \n\tcreated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tupdated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tcreated_by VARCHAR, \n\tupdated_by VARCHAR, \n\tis_deleted BOOLEAN NOT NULL, \n\tPRIMARY KEY (id)\n)\n\n", "correlation_id": "a236a559-25d8-49d9-82c4-ca751f57ab24", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,965 INFO sqlalchemy.engine.Engine [no key 0.00009s] ()
+{"timestamp": "2026-01-06T05:05:45.965564", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00009s] ()", "correlation_id": "4fa9c33d-c354-4cbc-8399-b426ddfa53b0", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,966 INFO sqlalchemy.engine.Engine CREATE UNIQUE INDEX ix_tenants_name ON tenants (name)
+{"timestamp": "2026-01-06T05:05:45.966050", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE UNIQUE INDEX ix_tenants_name ON tenants (name)", "correlation_id": "db46c072-a130-4d34-9391-635ca82e3ab5", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,966 INFO sqlalchemy.engine.Engine [no key 0.00007s] ()
+{"timestamp": "2026-01-06T05:05:45.966098", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00007s] ()", "correlation_id": "7b357b73-4288-421c-846f-41a473bbfbe5", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,966 INFO sqlalchemy.engine.Engine CREATE INDEX ix_tenants_is_active ON tenants (is_active)
+{"timestamp": "2026-01-06T05:05:45.966640", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_tenants_is_active ON tenants (is_active)", "correlation_id": "10a0c066-6796-44ae-9270-691221e1afcb", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,966 INFO sqlalchemy.engine.Engine [no key 0.00009s] ()
+{"timestamp": "2026-01-06T05:05:45.966699", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00009s] ()", "correlation_id": "17bce1d8-e2ca-452b-b862-8e65fee51e14", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,967 INFO sqlalchemy.engine.Engine 
+CREATE TABLE chains (
+	name VARCHAR(255) NOT NULL, 
+	description TEXT, 
+	status VARCHAR(50) NOT NULL, 
+	version VARCHAR(50) NOT NULL, 
+	category VARCHAR(255), 
+	tags TEXT DEFAULT '[]', 
+	input_schema TEXT DEFAULT '{}', 
+	output_schema TEXT DEFAULT '{}', 
+	execution_count INTEGER NOT NULL, 
+	last_executed_at DATETIME, 
+	metadata TEXT DEFAULT '{}', 
+	id VARCHAR NOT NULL, 
+	created_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	updated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	created_by VARCHAR, 
+	updated_by VARCHAR, 
+	is_deleted BOOLEAN NOT NULL, 
+	PRIMARY KEY (id)
+)
+
+
+{"timestamp": "2026-01-06T05:05:45.967476", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "\nCREATE TABLE chains (\n\tname VARCHAR(255) NOT NULL, \n\tdescription TEXT, \n\tstatus VARCHAR(50) NOT NULL, \n\tversion VARCHAR(50) NOT NULL, \n\tcategory VARCHAR(255), \n\ttags TEXT DEFAULT '[]', \n\tinput_schema TEXT DEFAULT '{}', \n\toutput_schema TEXT DEFAULT '{}', \n\texecution_count INTEGER NOT NULL, \n\tlast_executed_at DATETIME, \n\tmetadata TEXT DEFAULT '{}', \n\tid VARCHAR NOT NULL, \n\tcreated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tupdated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tcreated_by VARCHAR, \n\tupdated_by VARCHAR, \n\tis_deleted BOOLEAN NOT NULL, \n\tPRIMARY KEY (id)\n)\n\n", "correlation_id": "f72f6051-fcce-4fc6-85f0-f1a5c559ab2a", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,967 INFO sqlalchemy.engine.Engine [no key 0.00008s] ()
+{"timestamp": "2026-01-06T05:05:45.967541", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00008s] ()", "correlation_id": "fe91b6bb-f767-4df5-b5a4-8e785ae07e46", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,967 INFO sqlalchemy.engine.Engine CREATE INDEX ix_chains_category ON chains (category)
+{"timestamp": "2026-01-06T05:05:45.968017", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_chains_category ON chains (category)", "correlation_id": "1c840f08-d4b4-4134-bfa1-b8143158372f", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,968 INFO sqlalchemy.engine.Engine [no key 0.00008s] ()
+{"timestamp": "2026-01-06T05:05:45.968073", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00008s] ()", "correlation_id": "4bb3a3e8-0566-4f4f-b506-12ca35aec35c", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,968 INFO sqlalchemy.engine.Engine CREATE INDEX ix_chains_status ON chains (status)
+{"timestamp": "2026-01-06T05:05:45.968584", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_chains_status ON chains (status)", "correlation_id": "08114fe1-a34f-4114-9b97-4dce4b1728e2", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,968 INFO sqlalchemy.engine.Engine [no key 0.00008s] ()
+{"timestamp": "2026-01-06T05:05:45.968638", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00008s] ()", "correlation_id": "55320d64-a73e-45c5-ac4a-43f4b8f918a5", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,969 INFO sqlalchemy.engine.Engine CREATE INDEX ix_chains_name ON chains (name)
+{"timestamp": "2026-01-06T05:05:45.969115", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_chains_name ON chains (name)", "correlation_id": "baad17ce-2a51-4734-985e-40452e00abec", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,969 INFO sqlalchemy.engine.Engine [no key 0.00009s] ()
+{"timestamp": "2026-01-06T05:05:45.969180", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00009s] ()", "correlation_id": "4efdff7d-03a1-4d25-adc0-315815cbd251", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,969 INFO sqlalchemy.engine.Engine 
+CREATE TABLE role_permissions (
+	role_id VARCHAR NOT NULL, 
+	permission_id VARCHAR NOT NULL, 
+	PRIMARY KEY (role_id, permission_id), 
+	FOREIGN KEY(role_id) REFERENCES roles (id), 
+	FOREIGN KEY(permission_id) REFERENCES permissions (id)
+)
+
+
+{"timestamp": "2026-01-06T05:05:45.969919", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "\nCREATE TABLE role_permissions (\n\trole_id VARCHAR NOT NULL, \n\tpermission_id VARCHAR NOT NULL, \n\tPRIMARY KEY (role_id, permission_id), \n\tFOREIGN KEY(role_id) REFERENCES roles (id), \n\tFOREIGN KEY(permission_id) REFERENCES permissions (id)\n)\n\n", "correlation_id": "6de7012b-463a-4f26-98a8-7d159b47257e", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,969 INFO sqlalchemy.engine.Engine [no key 0.00009s] ()
+{"timestamp": "2026-01-06T05:05:45.969977", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00009s] ()", "correlation_id": "ec099a68-67f7-4f35-ad44-2dcec07c99b5", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,970 INFO sqlalchemy.engine.Engine 
+CREATE TABLE user_roles (
+	user_id VARCHAR NOT NULL, 
+	role_id VARCHAR NOT NULL, 
+	PRIMARY KEY (user_id, role_id), 
+	FOREIGN KEY(user_id) REFERENCES users (id), 
+	FOREIGN KEY(role_id) REFERENCES roles (id)
+)
+
+
+{"timestamp": "2026-01-06T05:05:45.970936", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "\nCREATE TABLE user_roles (\n\tuser_id VARCHAR NOT NULL, \n\trole_id VARCHAR NOT NULL, \n\tPRIMARY KEY (user_id, role_id), \n\tFOREIGN KEY(user_id) REFERENCES users (id), \n\tFOREIGN KEY(role_id) REFERENCES roles (id)\n)\n\n", "correlation_id": "fc673c61-58be-451b-b2ad-7158225377c8", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,970 INFO sqlalchemy.engine.Engine [no key 0.00010s] ()
+{"timestamp": "2026-01-06T05:05:45.970996", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00010s] ()", "correlation_id": "001b7475-8b32-4878-8695-bc9bf680f02a", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,972 INFO sqlalchemy.engine.Engine 
+CREATE TABLE agent_deployments (
+	agent_id VARCHAR NOT NULL, 
+	name VARCHAR(255) NOT NULL, 
+	environment VARCHAR(50) NOT NULL, 
+	status VARCHAR(50) NOT NULL, 
+	config TEXT, 
+	resource_limits TEXT, 
+	deployed_at DATETIME, 
+	id VARCHAR NOT NULL, 
+	created_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	updated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	created_by VARCHAR, 
+	updated_by VARCHAR, 
+	is_deleted BOOLEAN NOT NULL, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(agent_id) REFERENCES agents (id)
+)
+
+
+{"timestamp": "2026-01-06T05:05:45.972268", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "\nCREATE TABLE agent_deployments (\n\tagent_id VARCHAR NOT NULL, \n\tname VARCHAR(255) NOT NULL, \n\tenvironment VARCHAR(50) NOT NULL, \n\tstatus VARCHAR(50) NOT NULL, \n\tconfig TEXT, \n\tresource_limits TEXT, \n\tdeployed_at DATETIME, \n\tid VARCHAR NOT NULL, \n\tcreated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tupdated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tcreated_by VARCHAR, \n\tupdated_by VARCHAR, \n\tis_deleted BOOLEAN NOT NULL, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(agent_id) REFERENCES agents (id)\n)\n\n", "correlation_id": "2729e904-c1a6-4c7c-a88d-99935593095c", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,972 INFO sqlalchemy.engine.Engine [no key 0.00011s] ()
+{"timestamp": "2026-01-06T05:05:45.972339", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00011s] ()", "correlation_id": "ff885ffa-d84e-4a82-903a-c4c7dfedffeb", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,972 INFO sqlalchemy.engine.Engine CREATE INDEX ix_agent_deployments_agent_id ON agent_deployments (agent_id)
+{"timestamp": "2026-01-06T05:05:45.973020", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_agent_deployments_agent_id ON agent_deployments (agent_id)", "correlation_id": "60ea99f1-cc04-4304-b6d0-e27e957d520c", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,973 INFO sqlalchemy.engine.Engine [no key 0.00010s] ()
+{"timestamp": "2026-01-06T05:05:45.973083", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00010s] ()", "correlation_id": "4cf6497c-3daa-46a6-817f-839672b66c47", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,973 INFO sqlalchemy.engine.Engine 
+CREATE TABLE agent_memories (
+	agent_id VARCHAR NOT NULL, 
+	session_id VARCHAR(255), 
+	memory_type VARCHAR(50) NOT NULL, 
+	content TEXT NOT NULL, 
+	memory_metadata TEXT, 
+	importance_score FLOAT, 
+	access_count INTEGER NOT NULL, 
+	last_accessed_at DATETIME, 
+	id VARCHAR NOT NULL, 
+	created_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	updated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	created_by VARCHAR, 
+	updated_by VARCHAR, 
+	is_deleted BOOLEAN NOT NULL, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(agent_id) REFERENCES agents (id)
+)
+
+
+{"timestamp": "2026-01-06T05:05:45.973888", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "\nCREATE TABLE agent_memories (\n\tagent_id VARCHAR NOT NULL, \n\tsession_id VARCHAR(255), \n\tmemory_type VARCHAR(50) NOT NULL, \n\tcontent TEXT NOT NULL, \n\tmemory_metadata TEXT, \n\timportance_score FLOAT, \n\taccess_count INTEGER NOT NULL, \n\tlast_accessed_at DATETIME, \n\tid VARCHAR NOT NULL, \n\tcreated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tupdated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tcreated_by VARCHAR, \n\tupdated_by VARCHAR, \n\tis_deleted BOOLEAN NOT NULL, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(agent_id) REFERENCES agents (id)\n)\n\n", "correlation_id": "82f28be0-9046-4401-b872-6422b8fe8f8a", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,973 INFO sqlalchemy.engine.Engine [no key 0.00010s] ()
+{"timestamp": "2026-01-06T05:05:45.973953", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00010s] ()", "correlation_id": "fad610ce-aa25-4355-8a95-d8aae4feb5bc", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,974 INFO sqlalchemy.engine.Engine CREATE INDEX ix_agent_memories_session_id ON agent_memories (session_id)
+{"timestamp": "2026-01-06T05:05:45.974606", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_agent_memories_session_id ON agent_memories (session_id)", "correlation_id": "e2ab1b14-5504-4010-88f4-2a8ea214cdab", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,974 INFO sqlalchemy.engine.Engine [no key 0.00013s] ()
+{"timestamp": "2026-01-06T05:05:45.974685", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00013s] ()", "correlation_id": "4579612f-f3b6-430d-89d8-d53b708a253f", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,975 INFO sqlalchemy.engine.Engine CREATE INDEX ix_agent_memories_agent_id ON agent_memories (agent_id)
+{"timestamp": "2026-01-06T05:05:45.975296", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_agent_memories_agent_id ON agent_memories (agent_id)", "correlation_id": "2964b343-a922-4c74-8353-406beed5cc8e", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,975 INFO sqlalchemy.engine.Engine [no key 0.00011s] ()
+{"timestamp": "2026-01-06T05:05:45.975372", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00011s] ()", "correlation_id": "55adaa39-a4eb-4012-a538-7baf1f36da4b", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,976 INFO sqlalchemy.engine.Engine 
+CREATE TABLE workflow_executions (
+	workflow_id VARCHAR NOT NULL, 
+	execution_name VARCHAR(255), 
+	status VARCHAR(50) NOT NULL, 
+	priority VARCHAR(50) NOT NULL, 
+	started_at DATETIME, 
+	completed_at DATETIME, 
+	duration_seconds INTEGER, 
+	input_data TEXT DEFAULT '{}', 
+	output_data TEXT DEFAULT '{}', 
+	variables TEXT DEFAULT '{}', 
+	current_node_id VARCHAR(255), 
+	completed_nodes TEXT DEFAULT '[]', 
+	active_nodes TEXT DEFAULT '[]', 
+	error_message TEXT, 
+	error_details TEXT DEFAULT '{}', 
+	retry_count INTEGER NOT NULL, 
+	triggered_by VARCHAR, 
+	trigger_type VARCHAR(50), 
+	correlation_id VARCHAR(255), 
+	id VARCHAR NOT NULL, 
+	created_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	updated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	created_by VARCHAR, 
+	updated_by VARCHAR, 
+	is_deleted BOOLEAN NOT NULL, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(workflow_id) REFERENCES workflows (id)
+)
+
+
+{"timestamp": "2026-01-06T05:05:45.976429", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "\nCREATE TABLE workflow_executions (\n\tworkflow_id VARCHAR NOT NULL, \n\texecution_name VARCHAR(255), \n\tstatus VARCHAR(50) NOT NULL, \n\tpriority VARCHAR(50) NOT NULL, \n\tstarted_at DATETIME, \n\tcompleted_at DATETIME, \n\tduration_seconds INTEGER, \n\tinput_data TEXT DEFAULT '{}', \n\toutput_data TEXT DEFAULT '{}', \n\tvariables TEXT DEFAULT '{}', \n\tcurrent_node_id VARCHAR(255), \n\tcompleted_nodes TEXT DEFAULT '[]', \n\tactive_nodes TEXT DEFAULT '[]', \n\terror_message TEXT, \n\terror_details TEXT DEFAULT '{}', \n\tretry_count INTEGER NOT NULL, \n\ttriggered_by VARCHAR, \n\ttrigger_type VARCHAR(50), \n\tcorrelation_id VARCHAR(255), \n\tid VARCHAR NOT NULL, \n\tcreated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tupdated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tcreated_by VARCHAR, \n\tupdated_by VARCHAR, \n\tis_deleted BOOLEAN NOT NULL, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(workflow_id) REFERENCES workflows (id)\n)\n\n", "correlation_id": "925acf95-88a8-469f-ae46-5894b272a760", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,976 INFO sqlalchemy.engine.Engine [no key 0.00011s] ()
+{"timestamp": "2026-01-06T05:05:45.976506", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00011s] ()", "correlation_id": "0e7b097d-cd26-4d55-89fd-9b4938db1f8b", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,977 INFO sqlalchemy.engine.Engine CREATE INDEX ix_workflow_executions_triggered_by ON workflow_executions (triggered_by)
+{"timestamp": "2026-01-06T05:05:45.977160", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_workflow_executions_triggered_by ON workflow_executions (triggered_by)", "correlation_id": "a3d6b9c6-8586-4f9f-b9a5-bb12414f1171", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,977 INFO sqlalchemy.engine.Engine [no key 0.00011s] ()
+{"timestamp": "2026-01-06T05:05:45.977248", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00011s] ()", "correlation_id": "acbd95a1-100a-49a4-ad3f-f687b0052528", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,977 INFO sqlalchemy.engine.Engine CREATE INDEX ix_workflow_executions_started_at ON workflow_executions (started_at)
+{"timestamp": "2026-01-06T05:05:45.977754", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_workflow_executions_started_at ON workflow_executions (started_at)", "correlation_id": "9674d49d-3f52-4bd8-83ec-a85bb6df8b95", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,977 INFO sqlalchemy.engine.Engine [no key 0.00010s] ()
+{"timestamp": "2026-01-06T05:05:45.977830", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00010s] ()", "correlation_id": "ea380c52-e1f6-42f3-8087-a1239e9ccdf7", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,978 INFO sqlalchemy.engine.Engine CREATE INDEX ix_workflow_executions_current_node_id ON workflow_executions (current_node_id)
+{"timestamp": "2026-01-06T05:05:45.978501", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_workflow_executions_current_node_id ON workflow_executions (current_node_id)", "correlation_id": "0c2fd7e7-0bea-41e8-aaae-49ff1696331a", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,978 INFO sqlalchemy.engine.Engine [no key 0.00013s] ()
+{"timestamp": "2026-01-06T05:05:45.978585", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00013s] ()", "correlation_id": "eabcd1a0-80e8-4bb2-b53c-5c22d4be8e1c", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,979 INFO sqlalchemy.engine.Engine CREATE INDEX ix_workflow_executions_workflow_id ON workflow_executions (workflow_id)
+{"timestamp": "2026-01-06T05:05:45.979127", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_workflow_executions_workflow_id ON workflow_executions (workflow_id)", "correlation_id": "0bafe027-0d20-4d13-8ea5-b7fa22e28270", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,979 INFO sqlalchemy.engine.Engine [no key 0.00009s] ()
+{"timestamp": "2026-01-06T05:05:45.979186", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00009s] ()", "correlation_id": "fb494c12-061a-4b7b-a028-fdae96310da1", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,979 INFO sqlalchemy.engine.Engine CREATE INDEX ix_workflow_executions_correlation_id ON workflow_executions (correlation_id)
+{"timestamp": "2026-01-06T05:05:45.979763", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_workflow_executions_correlation_id ON workflow_executions (correlation_id)", "correlation_id": "100d09f5-3b3f-4b10-b51e-10794f0cb7f1", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,979 INFO sqlalchemy.engine.Engine [no key 0.00013s] ()
+{"timestamp": "2026-01-06T05:05:45.979849", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00013s] ()", "correlation_id": "1958c6bb-110b-4570-93d1-30239a2e4f2a", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,980 INFO sqlalchemy.engine.Engine CREATE INDEX ix_workflow_executions_status ON workflow_executions (status)
+{"timestamp": "2026-01-06T05:05:45.980550", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_workflow_executions_status ON workflow_executions (status)", "correlation_id": "91913abc-9028-40c7-b0aa-6773ab089a28", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,980 INFO sqlalchemy.engine.Engine [no key 0.00007s] ()
+{"timestamp": "2026-01-06T05:05:45.980601", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00007s] ()", "correlation_id": "83e2774e-4edd-4d7f-abed-737fcf7cb5e9", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,981 INFO sqlalchemy.engine.Engine 
+CREATE TABLE api_keys (
+	user_id VARCHAR NOT NULL, 
+	name VARCHAR(255) NOT NULL, 
+	description TEXT, 
+	key_hash VARCHAR(255) NOT NULL, 
+	key_prefix VARCHAR(10) NOT NULL, 
+	permissions TEXT DEFAULT '[]', 
+	expires_at DATETIME, 
+	is_active BOOLEAN NOT NULL, 
+	revoked_at DATETIME, 
+	last_used_at DATETIME, 
+	id VARCHAR NOT NULL, 
+	created_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	updated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	created_by VARCHAR, 
+	updated_by VARCHAR, 
+	is_deleted BOOLEAN NOT NULL, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(user_id) REFERENCES users (id)
+)
+
+
+{"timestamp": "2026-01-06T05:05:45.981285", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "\nCREATE TABLE api_keys (\n\tuser_id VARCHAR NOT NULL, \n\tname VARCHAR(255) NOT NULL, \n\tdescription TEXT, \n\tkey_hash VARCHAR(255) NOT NULL, \n\tkey_prefix VARCHAR(10) NOT NULL, \n\tpermissions TEXT DEFAULT '[]', \n\texpires_at DATETIME, \n\tis_active BOOLEAN NOT NULL, \n\trevoked_at DATETIME, \n\tlast_used_at DATETIME, \n\tid VARCHAR NOT NULL, \n\tcreated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tupdated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tcreated_by VARCHAR, \n\tupdated_by VARCHAR, \n\tis_deleted BOOLEAN NOT NULL, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(user_id) REFERENCES users (id)\n)\n\n", "correlation_id": "4a2fc33b-b91f-440c-83d7-d4010fd260c0", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,981 INFO sqlalchemy.engine.Engine [no key 0.00009s] ()
+{"timestamp": "2026-01-06T05:05:45.981347", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00009s] ()", "correlation_id": "17dc2523-189e-4e36-b6e6-f8abd1763c08", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,981 INFO sqlalchemy.engine.Engine CREATE UNIQUE INDEX ix_api_keys_key_hash ON api_keys (key_hash)
+{"timestamp": "2026-01-06T05:05:45.981983", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE UNIQUE INDEX ix_api_keys_key_hash ON api_keys (key_hash)", "correlation_id": "84b4d323-ecc9-4b77-9183-c337515fa279", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,982 INFO sqlalchemy.engine.Engine [no key 0.00008s] ()
+{"timestamp": "2026-01-06T05:05:45.982034", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00008s] ()", "correlation_id": "c483afb9-686e-45b3-860f-5ea9701f0bbb", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,982 INFO sqlalchemy.engine.Engine CREATE INDEX ix_api_keys_user_id ON api_keys (user_id)
+{"timestamp": "2026-01-06T05:05:45.982520", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_api_keys_user_id ON api_keys (user_id)", "correlation_id": "e1163116-ea1c-4a00-b030-dfd384937f02", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,982 INFO sqlalchemy.engine.Engine [no key 0.00010s] ()
+{"timestamp": "2026-01-06T05:05:45.982581", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00010s] ()", "correlation_id": "bd3bce8a-23c9-4df8-a598-515e615beac7", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,983 INFO sqlalchemy.engine.Engine CREATE INDEX ix_api_keys_is_active ON api_keys (is_active)
+{"timestamp": "2026-01-06T05:05:45.983086", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_api_keys_is_active ON api_keys (is_active)", "correlation_id": "1fb3e52e-509a-430c-b1c1-e70a6ec05db0", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,983 INFO sqlalchemy.engine.Engine [no key 0.00013s] ()
+{"timestamp": "2026-01-06T05:05:45.983145", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00013s] ()", "correlation_id": "bc17cba3-2865-46c7-ab1d-cf330dc9a7fe", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,983 INFO sqlalchemy.engine.Engine 
+CREATE TABLE tenant_users (
+	tenant_id VARCHAR NOT NULL, 
+	user_id VARCHAR NOT NULL, 
+	role VARCHAR(50) NOT NULL, 
+	status VARCHAR(50) NOT NULL, 
+	PRIMARY KEY (tenant_id, user_id), 
+	FOREIGN KEY(tenant_id) REFERENCES tenants (id), 
+	FOREIGN KEY(user_id) REFERENCES users (id)
+)
+
+
+{"timestamp": "2026-01-06T05:05:45.983724", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "\nCREATE TABLE tenant_users (\n\ttenant_id VARCHAR NOT NULL, \n\tuser_id VARCHAR NOT NULL, \n\trole VARCHAR(50) NOT NULL, \n\tstatus VARCHAR(50) NOT NULL, \n\tPRIMARY KEY (tenant_id, user_id), \n\tFOREIGN KEY(tenant_id) REFERENCES tenants (id), \n\tFOREIGN KEY(user_id) REFERENCES users (id)\n)\n\n", "correlation_id": "5fa14aeb-5b92-4aea-b28a-1e973af86de8", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,983 INFO sqlalchemy.engine.Engine [no key 0.00011s] ()
+{"timestamp": "2026-01-06T05:05:45.983808", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00011s] ()", "correlation_id": "edb0c5a3-42e5-4ea4-b17c-be141ba04936", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,984 INFO sqlalchemy.engine.Engine CREATE INDEX ix_tenant_users_status ON tenant_users (status)
+{"timestamp": "2026-01-06T05:05:45.984315", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_tenant_users_status ON tenant_users (status)", "correlation_id": "ee8105b6-57cd-4151-ad53-4d28219a8865", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,984 INFO sqlalchemy.engine.Engine [no key 0.00007s] ()
+{"timestamp": "2026-01-06T05:05:45.984364", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00007s] ()", "correlation_id": "02635815-8374-468c-8a1e-46384287fa1a", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,985 INFO sqlalchemy.engine.Engine 
+CREATE TABLE chain_nodes (
+	chain_id VARCHAR NOT NULL, 
+	node_id VARCHAR(255) NOT NULL, 
+	node_type VARCHAR(50) NOT NULL, 
+	agent_id VARCHAR, 
+	label VARCHAR(255) NOT NULL, 
+	position_x FLOAT NOT NULL, 
+	position_y FLOAT NOT NULL, 
+	config TEXT DEFAULT '{}', 
+	order_index INTEGER NOT NULL, 
+	id VARCHAR NOT NULL, 
+	created_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	updated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	created_by VARCHAR, 
+	updated_by VARCHAR, 
+	is_deleted BOOLEAN NOT NULL, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(chain_id) REFERENCES chains (id) ON DELETE CASCADE, 
+	FOREIGN KEY(agent_id) REFERENCES agents (id)
+)
+
+
+{"timestamp": "2026-01-06T05:05:45.985082", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "\nCREATE TABLE chain_nodes (\n\tchain_id VARCHAR NOT NULL, \n\tnode_id VARCHAR(255) NOT NULL, \n\tnode_type VARCHAR(50) NOT NULL, \n\tagent_id VARCHAR, \n\tlabel VARCHAR(255) NOT NULL, \n\tposition_x FLOAT NOT NULL, \n\tposition_y FLOAT NOT NULL, \n\tconfig TEXT DEFAULT '{}', \n\torder_index INTEGER NOT NULL, \n\tid VARCHAR NOT NULL, \n\tcreated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tupdated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tcreated_by VARCHAR, \n\tupdated_by VARCHAR, \n\tis_deleted BOOLEAN NOT NULL, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(chain_id) REFERENCES chains (id) ON DELETE CASCADE, \n\tFOREIGN KEY(agent_id) REFERENCES agents (id)\n)\n\n", "correlation_id": "01d55e9c-611c-4a48-a487-d76a2e2c74c8", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,985 INFO sqlalchemy.engine.Engine [no key 0.00009s] ()
+{"timestamp": "2026-01-06T05:05:45.985145", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00009s] ()", "correlation_id": "54a40b4f-32bf-447a-b0d1-6d54e12249cf", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,985 INFO sqlalchemy.engine.Engine CREATE INDEX ix_chain_nodes_agent_id ON chain_nodes (agent_id)
+{"timestamp": "2026-01-06T05:05:45.985594", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_chain_nodes_agent_id ON chain_nodes (agent_id)", "correlation_id": "4952e3d8-0992-4a42-8e4c-03e6f726102c", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,985 INFO sqlalchemy.engine.Engine [no key 0.00007s] ()
+{"timestamp": "2026-01-06T05:05:45.985643", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00007s] ()", "correlation_id": "67b1eb32-ade0-4e41-9408-99ed74602b29", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,986 INFO sqlalchemy.engine.Engine CREATE UNIQUE INDEX idx_chain_node_unique ON chain_nodes (chain_id, node_id)
+{"timestamp": "2026-01-06T05:05:45.986160", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE UNIQUE INDEX idx_chain_node_unique ON chain_nodes (chain_id, node_id)", "correlation_id": "fb4f49fd-ad42-4bc8-bf00-24a0ac05d256", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,986 INFO sqlalchemy.engine.Engine [no key 0.00008s] ()
+{"timestamp": "2026-01-06T05:05:45.986218", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00008s] ()", "correlation_id": "d1bb7a62-f3b9-42b1-9f7c-5e7fcafdfe42", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,986 INFO sqlalchemy.engine.Engine CREATE INDEX ix_chain_nodes_chain_id ON chain_nodes (chain_id)
+{"timestamp": "2026-01-06T05:05:45.986834", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_chain_nodes_chain_id ON chain_nodes (chain_id)", "correlation_id": "a08403db-947f-4171-a321-316194913b4f", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,986 INFO sqlalchemy.engine.Engine [no key 0.00009s] ()
+{"timestamp": "2026-01-06T05:05:45.986886", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00009s] ()", "correlation_id": "4ee9f19f-56fc-4b6a-9f5d-84d1934d775a", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,987 INFO sqlalchemy.engine.Engine 
+CREATE TABLE chain_edges (
+	chain_id VARCHAR NOT NULL, 
+	edge_id VARCHAR(255) NOT NULL, 
+	source_node_id VARCHAR(255) NOT NULL, 
+	target_node_id VARCHAR(255) NOT NULL, 
+	condition TEXT DEFAULT '{}', 
+	label VARCHAR(255), 
+	metadata TEXT DEFAULT '{}', 
+	id VARCHAR NOT NULL, 
+	created_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	updated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	created_by VARCHAR, 
+	updated_by VARCHAR, 
+	is_deleted BOOLEAN NOT NULL, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(chain_id) REFERENCES chains (id) ON DELETE CASCADE
+)
+
+
+{"timestamp": "2026-01-06T05:05:45.987843", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "\nCREATE TABLE chain_edges (\n\tchain_id VARCHAR NOT NULL, \n\tedge_id VARCHAR(255) NOT NULL, \n\tsource_node_id VARCHAR(255) NOT NULL, \n\ttarget_node_id VARCHAR(255) NOT NULL, \n\tcondition TEXT DEFAULT '{}', \n\tlabel VARCHAR(255), \n\tmetadata TEXT DEFAULT '{}', \n\tid VARCHAR NOT NULL, \n\tcreated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tupdated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tcreated_by VARCHAR, \n\tupdated_by VARCHAR, \n\tis_deleted BOOLEAN NOT NULL, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(chain_id) REFERENCES chains (id) ON DELETE CASCADE\n)\n\n", "correlation_id": "a936a657-f873-4d6d-960b-973540d413af", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,987 INFO sqlalchemy.engine.Engine [no key 0.00010s] ()
+{"timestamp": "2026-01-06T05:05:45.987908", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00010s] ()", "correlation_id": "cdefea3e-9870-47b9-b71b-d1271c182c8f", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,988 INFO sqlalchemy.engine.Engine CREATE INDEX idx_chain_edge_target ON chain_edges (chain_id, target_node_id)
+{"timestamp": "2026-01-06T05:05:45.988528", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX idx_chain_edge_target ON chain_edges (chain_id, target_node_id)", "correlation_id": "9e4a6cd9-832d-436b-bad0-062029ff4b5e", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,988 INFO sqlalchemy.engine.Engine [no key 0.00013s] ()
+{"timestamp": "2026-01-06T05:05:45.988607", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00013s] ()", "correlation_id": "41ad0ed2-be42-430a-9b32-138bf7b73ef0", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,989 INFO sqlalchemy.engine.Engine CREATE INDEX ix_chain_edges_chain_id ON chain_edges (chain_id)
+{"timestamp": "2026-01-06T05:05:45.989108", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_chain_edges_chain_id ON chain_edges (chain_id)", "correlation_id": "dab9e4d2-f77c-44ae-8ba3-6fc5ff3353e7", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,989 INFO sqlalchemy.engine.Engine [no key 0.00009s] ()
+{"timestamp": "2026-01-06T05:05:45.989172", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00009s] ()", "correlation_id": "1cc759bf-f86a-4e00-93b9-1b1e7403aa12", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,989 INFO sqlalchemy.engine.Engine CREATE UNIQUE INDEX idx_chain_edge_unique ON chain_edges (chain_id, edge_id)
+{"timestamp": "2026-01-06T05:05:45.989679", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE UNIQUE INDEX idx_chain_edge_unique ON chain_edges (chain_id, edge_id)", "correlation_id": "e9a017a9-7014-470c-9bb5-6356d1ee12d2", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,989 INFO sqlalchemy.engine.Engine [no key 0.00009s] ()
+{"timestamp": "2026-01-06T05:05:45.989733", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00009s] ()", "correlation_id": "934daa69-46da-470f-9c70-b1733c21d456", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,990 INFO sqlalchemy.engine.Engine CREATE INDEX idx_chain_edge_source ON chain_edges (chain_id, source_node_id)
+{"timestamp": "2026-01-06T05:05:45.990342", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX idx_chain_edge_source ON chain_edges (chain_id, source_node_id)", "correlation_id": "066cf6a9-d4ac-4f80-9a48-e8a5c4e7d534", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,990 INFO sqlalchemy.engine.Engine [no key 0.00014s] ()
+{"timestamp": "2026-01-06T05:05:45.990463", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00014s] ()", "correlation_id": "480c72bb-3f1c-4207-85f0-70603e816123", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,991 INFO sqlalchemy.engine.Engine 
+CREATE TABLE chain_executions (
+	chain_id VARCHAR NOT NULL, 
+	execution_name VARCHAR(255), 
+	status VARCHAR(50) NOT NULL, 
+	input_data TEXT DEFAULT '{}', 
+	output_data TEXT DEFAULT '{}', 
+	variables TEXT DEFAULT '{}', 
+	node_results TEXT DEFAULT '{}', 
+	started_at DATETIME, 
+	completed_at DATETIME, 
+	duration_seconds INTEGER, 
+	current_node_id VARCHAR(255), 
+	completed_nodes TEXT DEFAULT '[]', 
+	active_edges TEXT DEFAULT '[]', 
+	edge_results TEXT DEFAULT '{}', 
+	error_message TEXT, 
+	error_details TEXT DEFAULT '{}', 
+	triggered_by VARCHAR, 
+	correlation_id VARCHAR(255), 
+	id VARCHAR NOT NULL, 
+	created_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	updated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	created_by VARCHAR, 
+	updated_by VARCHAR, 
+	is_deleted BOOLEAN NOT NULL, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(chain_id) REFERENCES chains (id)
+)
+
+
+{"timestamp": "2026-01-06T05:05:45.991622", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "\nCREATE TABLE chain_executions (\n\tchain_id VARCHAR NOT NULL, \n\texecution_name VARCHAR(255), \n\tstatus VARCHAR(50) NOT NULL, \n\tinput_data TEXT DEFAULT '{}', \n\toutput_data TEXT DEFAULT '{}', \n\tvariables TEXT DEFAULT '{}', \n\tnode_results TEXT DEFAULT '{}', \n\tstarted_at DATETIME, \n\tcompleted_at DATETIME, \n\tduration_seconds INTEGER, \n\tcurrent_node_id VARCHAR(255), \n\tcompleted_nodes TEXT DEFAULT '[]', \n\tactive_edges TEXT DEFAULT '[]', \n\tedge_results TEXT DEFAULT '{}', \n\terror_message TEXT, \n\terror_details TEXT DEFAULT '{}', \n\ttriggered_by VARCHAR, \n\tcorrelation_id VARCHAR(255), \n\tid VARCHAR NOT NULL, \n\tcreated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tupdated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tcreated_by VARCHAR, \n\tupdated_by VARCHAR, \n\tis_deleted BOOLEAN NOT NULL, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(chain_id) REFERENCES chains (id)\n)\n\n", "correlation_id": "bcd4d2fd-0cef-490f-afcb-5c3678f1c764", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,991 INFO sqlalchemy.engine.Engine [no key 0.00021s] ()
+{"timestamp": "2026-01-06T05:05:45.991862", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00021s] ()", "correlation_id": "5265abf5-de8e-4d7a-b902-5c6a751af9d7", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,992 INFO sqlalchemy.engine.Engine CREATE INDEX ix_chain_executions_triggered_by ON chain_executions (triggered_by)
+{"timestamp": "2026-01-06T05:05:45.992891", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_chain_executions_triggered_by ON chain_executions (triggered_by)", "correlation_id": "d4cd9aa1-50fe-4086-85d1-b3ceda9eb6f3", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,992 INFO sqlalchemy.engine.Engine [no key 0.00013s] ()
+{"timestamp": "2026-01-06T05:05:45.992977", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00013s] ()", "correlation_id": "9a526e6e-5135-4eb5-8251-36eb9bcac74d", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,993 INFO sqlalchemy.engine.Engine CREATE INDEX ix_chain_executions_chain_id ON chain_executions (chain_id)
+{"timestamp": "2026-01-06T05:05:45.993563", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_chain_executions_chain_id ON chain_executions (chain_id)", "correlation_id": "586b74df-ba5a-430f-91c3-207b3ced6a85", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,993 INFO sqlalchemy.engine.Engine [no key 0.00008s] ()
+{"timestamp": "2026-01-06T05:05:45.993620", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00008s] ()", "correlation_id": "50ceab14-39aa-4a1c-b246-fd01389a6ced", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,994 INFO sqlalchemy.engine.Engine CREATE INDEX ix_chain_executions_current_node_id ON chain_executions (current_node_id)
+{"timestamp": "2026-01-06T05:05:45.994100", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_chain_executions_current_node_id ON chain_executions (current_node_id)", "correlation_id": "4eac5bbb-fa1c-4f05-b7f6-344b88165ea3", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,994 INFO sqlalchemy.engine.Engine [no key 0.00008s] ()
+{"timestamp": "2026-01-06T05:05:45.994156", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00008s] ()", "correlation_id": "3cf10ca9-dd90-4d3c-b854-9465f5361d80", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,994 INFO sqlalchemy.engine.Engine CREATE INDEX ix_chain_executions_correlation_id ON chain_executions (correlation_id)
+{"timestamp": "2026-01-06T05:05:45.994969", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_chain_executions_correlation_id ON chain_executions (correlation_id)", "correlation_id": "9ad1ff09-9d5e-4705-abf6-1882c90ac3a2", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,995 INFO sqlalchemy.engine.Engine [no key 0.00018s] ()
+{"timestamp": "2026-01-06T05:05:45.995082", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00018s] ()", "correlation_id": "dbbe1371-c405-4d63-99a2-24bf6567d940", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,995 INFO sqlalchemy.engine.Engine CREATE INDEX ix_chain_executions_status ON chain_executions (status)
+{"timestamp": "2026-01-06T05:05:45.995876", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_chain_executions_status ON chain_executions (status)", "correlation_id": "abc587ab-b865-49d2-8b3e-376ca6115e58", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,995 INFO sqlalchemy.engine.Engine [no key 0.00012s] ()
+{"timestamp": "2026-01-06T05:05:45.995951", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00012s] ()", "correlation_id": "91dacd8f-31c5-4385-be52-8ecf24d454b0", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,996 INFO sqlalchemy.engine.Engine CREATE INDEX ix_chain_executions_started_at ON chain_executions (started_at)
+{"timestamp": "2026-01-06T05:05:45.996719", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_chain_executions_started_at ON chain_executions (started_at)", "correlation_id": "255f38e1-dc0c-4f18-b4d5-e59c634a0657", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,996 INFO sqlalchemy.engine.Engine [no key 0.00013s] ()
+{"timestamp": "2026-01-06T05:05:45.996801", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00013s] ()", "correlation_id": "b738b11b-c0c1-4eac-bb25-c527f9393100", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,997 INFO sqlalchemy.engine.Engine 
+CREATE TABLE agent_executions (
+	agent_id VARCHAR NOT NULL, 
+	deployment_id VARCHAR, 
+	session_id VARCHAR(255), 
+	input_data TEXT, 
+	output_data TEXT, 
+	status VARCHAR(50) NOT NULL, 
+	error_message TEXT, 
+	tokens_used INTEGER, 
+	execution_time_ms INTEGER, 
+	cost FLOAT, 
+	started_at DATETIME, 
+	completed_at DATETIME, 
+	id VARCHAR NOT NULL, 
+	created_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	updated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	created_by VARCHAR, 
+	updated_by VARCHAR, 
+	is_deleted BOOLEAN NOT NULL, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(agent_id) REFERENCES agents (id), 
+	FOREIGN KEY(deployment_id) REFERENCES agent_deployments (id)
+)
+
+
+{"timestamp": "2026-01-06T05:05:45.997729", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "\nCREATE TABLE agent_executions (\n\tagent_id VARCHAR NOT NULL, \n\tdeployment_id VARCHAR, \n\tsession_id VARCHAR(255), \n\tinput_data TEXT, \n\toutput_data TEXT, \n\tstatus VARCHAR(50) NOT NULL, \n\terror_message TEXT, \n\ttokens_used INTEGER, \n\texecution_time_ms INTEGER, \n\tcost FLOAT, \n\tstarted_at DATETIME, \n\tcompleted_at DATETIME, \n\tid VARCHAR NOT NULL, \n\tcreated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tupdated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tcreated_by VARCHAR, \n\tupdated_by VARCHAR, \n\tis_deleted BOOLEAN NOT NULL, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(agent_id) REFERENCES agents (id), \n\tFOREIGN KEY(deployment_id) REFERENCES agent_deployments (id)\n)\n\n", "correlation_id": "ea4a6b9f-e0c2-4f38-adc7-91e5a9361d4d", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,997 INFO sqlalchemy.engine.Engine [no key 0.00011s] ()
+{"timestamp": "2026-01-06T05:05:45.997796", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00011s] ()", "correlation_id": "37376bb6-40b6-4494-85ef-31ce08b73eda", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,998 INFO sqlalchemy.engine.Engine CREATE INDEX ix_agent_executions_session_id ON agent_executions (session_id)
+{"timestamp": "2026-01-06T05:05:45.998455", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_agent_executions_session_id ON agent_executions (session_id)", "correlation_id": "c08d62ee-511b-4b38-a751-e6bf8e77806e", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,998 INFO sqlalchemy.engine.Engine [no key 0.00014s] ()
+{"timestamp": "2026-01-06T05:05:45.998537", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00014s] ()", "correlation_id": "b242667d-e1c1-4bd9-8ab6-336ea32331ee", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,998 INFO sqlalchemy.engine.Engine CREATE INDEX ix_agent_executions_deployment_id ON agent_executions (deployment_id)
+{"timestamp": "2026-01-06T05:05:45.999023", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_agent_executions_deployment_id ON agent_executions (deployment_id)", "correlation_id": "85b63a87-eebf-46f1-af8f-cdcb31165ba0", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,999 INFO sqlalchemy.engine.Engine [no key 0.00008s] ()
+{"timestamp": "2026-01-06T05:05:45.999079", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00008s] ()", "correlation_id": "0c5dcbb7-9afb-4937-8a1b-d8afe4ac4e4e", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,999 INFO sqlalchemy.engine.Engine CREATE INDEX ix_agent_executions_agent_id ON agent_executions (agent_id)
+{"timestamp": "2026-01-06T05:05:45.999530", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_agent_executions_agent_id ON agent_executions (agent_id)", "correlation_id": "d32577ba-bef3-4d4c-9f14-21c574f3cf52", "service": "ai-agent-framework"}
+2026-01-06 05:05:45,999 INFO sqlalchemy.engine.Engine [no key 0.00008s] ()
+{"timestamp": "2026-01-06T05:05:45.999593", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00008s] ()", "correlation_id": "ed98e197-3916-496e-a059-353625e63a1f", "service": "ai-agent-framework"}
+2026-01-06 05:05:46,000 INFO sqlalchemy.engine.Engine 
+CREATE TABLE execution_logs (
+	execution_id VARCHAR NOT NULL, 
+	node_id VARCHAR(255) NOT NULL, 
+	event_type VARCHAR(50) NOT NULL, 
+	message TEXT NOT NULL, 
+	level VARCHAR(20) NOT NULL, 
+	timestamp DATETIME NOT NULL, 
+	input_data TEXT, 
+	output_data TEXT, 
+	variables TEXT, 
+	agent_id VARCHAR, 
+	tool_name VARCHAR(255), 
+	error_details TEXT, 
+	duration_ms INTEGER, 
+	id VARCHAR NOT NULL, 
+	created_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	updated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	created_by VARCHAR, 
+	updated_by VARCHAR, 
+	is_deleted BOOLEAN NOT NULL, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(execution_id) REFERENCES workflow_executions (id)
+)
+
+
+{"timestamp": "2026-01-06T05:05:46.000296", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "\nCREATE TABLE execution_logs (\n\texecution_id VARCHAR NOT NULL, \n\tnode_id VARCHAR(255) NOT NULL, \n\tevent_type VARCHAR(50) NOT NULL, \n\tmessage TEXT NOT NULL, \n\tlevel VARCHAR(20) NOT NULL, \n\ttimestamp DATETIME NOT NULL, \n\tinput_data TEXT, \n\toutput_data TEXT, \n\tvariables TEXT, \n\tagent_id VARCHAR, \n\ttool_name VARCHAR(255), \n\terror_details TEXT, \n\tduration_ms INTEGER, \n\tid VARCHAR NOT NULL, \n\tcreated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tupdated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tcreated_by VARCHAR, \n\tupdated_by VARCHAR, \n\tis_deleted BOOLEAN NOT NULL, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(execution_id) REFERENCES workflow_executions (id)\n)\n\n", "correlation_id": "c8c21b1e-cfae-474c-8805-8a5babfa0653", "service": "ai-agent-framework"}
+2026-01-06 05:05:46,000 INFO sqlalchemy.engine.Engine [no key 0.00009s] ()
+{"timestamp": "2026-01-06T05:05:46.000360", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00009s] ()", "correlation_id": "e07a9704-4cdf-42e1-860d-31c2a04b22b7", "service": "ai-agent-framework"}
+2026-01-06 05:05:46,000 INFO sqlalchemy.engine.Engine CREATE INDEX ix_execution_logs_execution_id ON execution_logs (execution_id)
+{"timestamp": "2026-01-06T05:05:46.000951", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_execution_logs_execution_id ON execution_logs (execution_id)", "correlation_id": "55dc5621-821e-4315-866c-98682506eb74", "service": "ai-agent-framework"}
+2026-01-06 05:05:46,000 INFO sqlalchemy.engine.Engine [no key 0.00007s] ()
+{"timestamp": "2026-01-06T05:05:46.001004", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00007s] ()", "correlation_id": "55aa3403-8292-4196-bb09-2070e8011c49", "service": "ai-agent-framework"}
+2026-01-06 05:05:46,001 INFO sqlalchemy.engine.Engine 
+CREATE TABLE chain_execution_logs (
+	execution_id VARCHAR NOT NULL, 
+	node_id VARCHAR(255), 
+	event_type VARCHAR(50) NOT NULL, 
+	message TEXT NOT NULL, 
+	level VARCHAR(20) NOT NULL, 
+	timestamp DATETIME NOT NULL, 
+	metadata TEXT DEFAULT '{}', 
+	id VARCHAR NOT NULL, 
+	created_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	updated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, 
+	created_by VARCHAR, 
+	updated_by VARCHAR, 
+	is_deleted BOOLEAN NOT NULL, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(execution_id) REFERENCES chain_executions (id) ON DELETE CASCADE
+)
+
+
+{"timestamp": "2026-01-06T05:05:46.001694", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "\nCREATE TABLE chain_execution_logs (\n\texecution_id VARCHAR NOT NULL, \n\tnode_id VARCHAR(255), \n\tevent_type VARCHAR(50) NOT NULL, \n\tmessage TEXT NOT NULL, \n\tlevel VARCHAR(20) NOT NULL, \n\ttimestamp DATETIME NOT NULL, \n\tmetadata TEXT DEFAULT '{}', \n\tid VARCHAR NOT NULL, \n\tcreated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tupdated_at DATETIME DEFAULT (CURRENT_TIMESTAMP) NOT NULL, \n\tcreated_by VARCHAR, \n\tupdated_by VARCHAR, \n\tis_deleted BOOLEAN NOT NULL, \n\tPRIMARY KEY (id), \n\tFOREIGN KEY(execution_id) REFERENCES chain_executions (id) ON DELETE CASCADE\n)\n\n", "correlation_id": "99b3bb4c-bbfd-4dda-8dd4-999200b86f52", "service": "ai-agent-framework"}
+2026-01-06 05:05:46,001 INFO sqlalchemy.engine.Engine [no key 0.00009s] ()
+{"timestamp": "2026-01-06T05:05:46.001761", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00009s] ()", "correlation_id": "29ab87fb-0aa4-477b-8936-4a14ba493639", "service": "ai-agent-framework"}
+2026-01-06 05:05:46,002 INFO sqlalchemy.engine.Engine CREATE INDEX ix_chain_execution_logs_timestamp ON chain_execution_logs (timestamp)
+{"timestamp": "2026-01-06T05:05:46.002276", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_chain_execution_logs_timestamp ON chain_execution_logs (timestamp)", "correlation_id": "368aeecd-8140-4a97-80cc-9928aaacf7a2", "service": "ai-agent-framework"}
+2026-01-06 05:05:46,002 INFO sqlalchemy.engine.Engine [no key 0.00008s] ()
+{"timestamp": "2026-01-06T05:05:46.002336", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00008s] ()", "correlation_id": "4ce41872-86db-4f93-af0d-9a64d4107f08", "service": "ai-agent-framework"}
+2026-01-06 05:05:46,002 INFO sqlalchemy.engine.Engine CREATE INDEX ix_chain_execution_logs_execution_id ON chain_execution_logs (execution_id)
+{"timestamp": "2026-01-06T05:05:46.002786", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "CREATE INDEX ix_chain_execution_logs_execution_id ON chain_execution_logs (execution_id)", "correlation_id": "2d94d202-3520-4b9e-bd0f-433fc96a780e", "service": "ai-agent-framework"}
+2026-01-06 05:05:46,002 INFO sqlalchemy.engine.Engine [no key 0.00009s] ()
+{"timestamp": "2026-01-06T05:05:46.002839", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "[no key 0.00009s] ()", "correlation_id": "7a3cef86-b35b-4571-9708-fb65d4e41086", "service": "ai-agent-framework"}
+2026-01-06 05:05:46,003 INFO sqlalchemy.engine.Engine COMMIT
+{"timestamp": "2026-01-06T05:05:46.003521", "level": "INFO", "logger": "sqlalchemy.engine.Engine", "message": "COMMIT", "correlation_id": "21103b99-78b6-4e55-9b06-8fe8d737f6c0", "service": "ai-agent-framework"}
+=============================== warnings summary ===============================
+../usr/local/lib/python3.11/site-packages/pydantic/_internal/_config.py:268: 14 warnings
+  /usr/local/lib/python3.11/site-packages/pydantic/_internal/_config.py:268: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.5/migration/
+    warnings.warn(DEPRECATION_MESSAGE, DeprecationWarning)
+
+../usr/local/lib/python3.11/site-packages/passlib/utils/__init__.py:854
+  /usr/local/lib/python3.11/site-packages/passlib/utils/__init__.py:854: DeprecationWarning: 'crypt' is deprecated and slated for removal in Python 3.13
+    from crypt import crypt as _crypt
+
+shared/schemas/auth.py:22
+  /app/shared/schemas/auth.py:22: PydanticDeprecatedSince20: Pydantic V1 style `@validator` validators are deprecated. You should migrate to Pydantic V2 style `@field_validator` validators, see the migration guide for more details. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.5/migration/
+    @validator('password')
+
+shared/schemas/auth.py:73
+  /app/shared/schemas/auth.py:73: PydanticDeprecatedSince20: Pydantic V1 style `@validator` validators are deprecated. You should migrate to Pydantic V2 style `@field_validator` validators, see the migration guide for more details. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.5/migration/
+    @validator('new_password')
+
+shared/schemas/auth.py:95
+  /app/shared/schemas/auth.py:95: PydanticDeprecatedSince20: Pydantic V1 style `@validator` validators are deprecated. You should migrate to Pydantic V2 style `@field_validator` validators, see the migration guide for more details. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.5/migration/
+    @validator('new_password')
+
+../usr/local/lib/python3.11/site-packages/pydantic/_internal/_fields.py:149
+  /usr/local/lib/python3.11/site-packages/pydantic/_internal/_fields.py:149: UserWarning: Field "model_id" has conflict with protected namespace "model_".
+  
+  You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+ERROR tests/integration/test_chain_api_auth.py::test_execute_chain_auth
+======================== 19 warnings, 1 error in 0.44s =========================

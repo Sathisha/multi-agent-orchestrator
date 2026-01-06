@@ -1,0 +1,229 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: ai-agent-framework-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ai_agent_framework}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Note: Local init script might not be present in consumer environment if they only have compose file
+      # You might want to bake this into a custom postgres image or assume default behavior
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d ai_agent_framework" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ai-agent-network
+    restart: always
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: ai-agent-framework-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ai-agent-network
+    restart: always
+
+  # Keycloak Identity Management
+  keycloak:
+    image: quay.io/keycloak/keycloak:22.0
+    container_name: ai-agent-framework-keycloak
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: ${POSTGRES_USER:-postgres}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: start-dev
+    networks:
+      - ai-agent-network
+    restart: always
+
+  # Kong API Gateway
+  kong:
+    image: kong:3.4
+    container_name: ai-agent-framework-kong
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/declarative/kong.yml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+    ports:
+      - "8000:8000" # Proxy port
+      - "8002:8001" # Admin API port
+    volumes:
+      # Requires the consumer to have this file locally or mount it from another source
+      - ./infrastructure/docker/kong/kong.yml:/kong/declarative/kong.yml
+    networks:
+      - ai-agent-network
+    restart: always
+
+  # Backend API Service
+  backend:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-sathisha}/multi-agent-orchestrator-backend:latest
+    container_name: ai-agent-framework-backend
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-ai_agent_framework}
+      - DATABASE_ASYNC_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-ai_agent_framework}
+      - REDIS_URL=redis://redis:6379/0
+      - CHROMA_DB_PATH=/app/data/chroma
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - LOG_LEVEL=INFO
+      - RECREATE_DB=false
+      - ENABLE_MIGRATIONS=true
+      - MEMORY_EMBEDDING_PROVIDER=${MEMORY_EMBEDDING_PROVIDER:-ollama}
+      - MEMORY_EMBEDDING_MODEL=${MEMORY_EMBEDDING_MODEL:-nomic-embed-text}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
+      - MEMORY_VECTOR_DB_PATH=/app/data/chroma
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma_data:/app/data/chroma
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - ai-agent-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+
+  # Frontend Application
+  frontend:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-sathisha}/multi-agent-orchestrator-frontend:latest
+    container_name: ai-agent-framework-frontend
+    ports:
+      - "3000:80"
+    networks:
+      - ai-agent-network
+    restart: unless-stopped
+
+  # Ollama for local LLM models
+  ollama:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-sathisha}/multi-agent-orchestrator-ollama:latest
+    container_name: ai-agent-framework-ollama
+    ports:
+      - "11434:11434"
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_KEEP_ALIVE=24h
+      - OLLAMA_NUM_PARALLEL=4
+      - OLLAMA_MAX_LOADED_MODELS=4
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - ai-agent-network
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 4G
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+    healthcheck:
+      test: [ "CMD", "ollama", "list" ]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # Prometheus Monitoring
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: ai-agent-framework-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infrastructure/docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - ai-agent-network
+    restart: always
+
+  # Apache Superset for Visualization
+  superset:
+    image: apache/superset:3.0.0
+    container_name: ai-agent-framework-superset
+    ports:
+      - "8088:8088"
+    environment:
+      - SUPERSET_SECRET_KEY=${SUPERSET_SECRET_KEY:-your-secret-key-here}
+      - SUPERSET_CONFIG_PATH=/app/superset_config.py
+    volumes:
+      - ./infrastructure/docker/superset/superset_config.py:/app/superset_config.py
+      - superset_data:/app/superset_home
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - ai-agent-network
+    restart: always
+    command: >
+      bash -c "
+        superset db upgrade &&
+        superset fab create-admin --username admin --firstname Admin --lastname User --email admin@example.com --password admin &&
+        superset init &&
+        superset run -h 0.0.0.0 -p 8088 --with-threads --reload --debugger
+      "
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  superset_data:
+  chroma_data:
+  ollama_data:
+
+
+networks:
+  ai-agent-network:
+    driver: bridge

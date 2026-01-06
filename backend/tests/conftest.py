@@ -80,7 +80,11 @@ postgresql.UUID = StringyUUID
 from main import app
 from shared.database.connection import Base, get_async_db
 from shared.config.settings import Settings
+from shared.database.connection import Base, get_async_db
+from shared.config.settings import Settings
 from shared.services.auth import get_current_user
+from shared.api.auth import get_current_user_or_api_key
+from shared.models.user import User
 from shared.models.user import User
 from uuid import uuid4
 from contextlib import asynccontextmanager
@@ -163,6 +167,7 @@ def test_client(async_engine, async_session):
 
     app.dependency_overrides[get_async_db] = override_get_async_db
     app.dependency_overrides[get_current_user] = override_get_current_user
+    app.dependency_overrides[get_current_user_or_api_key] = override_get_current_user
     
     with patch("shared.middleware.audit.get_database_session", side_effect=mock_get_db_session):
         with TestClient(app) as client:
@@ -194,6 +199,7 @@ async def async_client(async_engine, async_session):
 
     app.dependency_overrides[get_async_db] = override_get_async_db
     app.dependency_overrides[get_current_user] = override_get_current_user
+    app.dependency_overrides[get_current_user_or_api_key] = override_get_current_user
     
     with patch("shared.middleware.audit.get_database_session", side_effect=mock_get_db_session):
         async with AsyncClient(app=app, base_url="http://testserver") as client:

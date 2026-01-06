@@ -741,6 +741,58 @@ class MonitoringService:
                 "tools": {"total": 0, "available": 0},
                 "workflows": {"total": 0, "active": 0, "completed": 0}
             }
+    
+    async def get_metrics_history(self, metric_name: str, start_time: int, end_time: int, step: str = "30s") -> List[Dict[str, Any]]:
+        """
+        Query Prometheus for historical metric data
+        
+        Args:
+            metric_name: Name of the Prometheus metric
+            start_time: Start timestamp (unix epoch)
+            end_time: End timestamp (unix epoch)
+            step: Query resolution step
+        """
+        import httpx
+        
+        # Map internal metric names to Prometheus query names
+        metric_map = {
+            'cpu_usage': 'system_cpu_usage_percent',
+            'memory_usage': 'system_memory_usage_percent',
+            'active_agents': 'active_agents_gauge'
+        }
+        
+        query = metric_map.get(metric_name, metric_name)
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    'http://prometheus:9090/api/v1/query_range',
+                    params={
+                        'query': query,
+                        'start': start_time,
+                        'end': end_time,
+                        'step': step
+                    },
+                    timeout=10.0
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if data['status'] == 'success' and data['data']['result']:
+                        # Extract values from the first result series
+                        # Prometheus returns [timestamp, value]
+                        values = data['data']['result'][0]['values']
+                        return [
+                            {'timestamp': int(v[0]), 'value': float(v[1])}
+                            for v in values
+                        ]
+                        
+            return []
+            
+        except Exception as e:
+            self.logger.error(f"Error querying Prometheus history: {e}")
+            return []
+
 
 
 # Global monitoring service instance

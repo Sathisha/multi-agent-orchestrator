@@ -1,0 +1,10 @@
+# Environment files
+.env
+
+# Docker volumes
+volumes/
+
+# Backup files
+*.sql
+*.tar.gz
+*.backup

@@ -1,5 +1,18 @@
-import React, { useState, useEffect } from 'react'
-import { Box, Typography, Card, CardContent, Grid, LinearProgress, Chip, CircularProgress } from '@mui/material'
+import React, { useMemo } from 'react';
+import {
+  Box,
+  Typography,
+  Card,
+  CardContent,
+  Grid,
+  LinearProgress,
+  Chip,
+  CircularProgress,
+  useTheme,
+  Alert,
+  IconButton,
+  Tooltip,
+} from '@mui/material';
 import {
   Timeline as MetricsIcon,
   BugReport as LogsIcon,
@@ -11,325 +24,442 @@ import {
   Warning as WarningIcon,
   Error as ErrorIcon,
   Build as ToolsIcon,
-  AccountTree as WorkflowIcon
-} from '@mui/icons-material'
-import { useQuery } from 'react-query'
-import { getHealthStatus, getPerformanceSummary, getAlerts, getDashboardStats, getMetricsHistory } from '../api/monitoring'
-import { getAgents } from '../api/agents'
-import MetricChart from '../components/charts/MetricChart'
+  AccountTree as WorkflowIcon,
+  Refresh as RefreshIcon,
+  Dns as DatabaseIcon,
+  Cached as CacheIcon,
+  Language as NetworkIcon,
+  SmartToy as RobotIcon,
+} from '@mui/icons-material';
+import { useQuery } from 'react-query';
+import {
+  getHealthStatus,
+  getPerformanceSummary,
+  getAlerts,
+  getDashboardStats,
+  getMetricsHistory,
+  Alert as AlertType,
+} from '../api/monitoring';
+import MetricChart from '../components/charts/MetricChart';
+
+const POLLING_INTERVAL = 30000; // 30 seconds
+
+// --- Helper Components ---
+
+const StatusChip = ({ status }: { status: string }) => {
+  const theme = useTheme();
+  let color = theme.palette.text.secondary;
+  let bgcolor = theme.palette.action.disabledBackground;
+
+  const normalizedStatus = status.toLowerCase();
+
+  if (normalizedStatus === 'healthy' || normalizedStatus === 'good' || normalizedStatus === 'up') {
+    color = theme.palette.success.main;
+    bgcolor = theme.palette.success.light + '20'; // Transparent background
+  } else if (normalizedStatus === 'degraded' || normalizedStatus === 'warning') {
+    color = theme.palette.warning.main;
+    bgcolor = theme.palette.warning.light + '20';
+  } else if (normalizedStatus === 'unhealthy' || normalizedStatus === 'error' || normalizedStatus === 'down' || normalizedStatus === 'critical') {
+    color = theme.palette.error.main;
+    bgcolor = theme.palette.error.light + '20';
+  }
+
+  return (
+    <Chip
+      label={status.toUpperCase()}
+      size="small"
+      sx={{
+        color: color,
+        bgcolor: bgcolor,
+        fontWeight: 'bold',
+        fontSize: '0.7rem',
+        height: 20,
+      }}
+    />
+  );
+};
+
+const ResourceCard = ({
+  title,
+  value,
+  unit,
+  icon: Icon,
+  color,
+}: {
+  title: string;
+  value: number;
+  unit: string;
+  icon: any;
+  color: string;
+}) => {
+  const theme = useTheme();
+
+  return (
+    <Card sx={{ height: '100%', position: 'relative', overflow: 'visible' }}>
+      <CardContent>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+          <Box>
+            <Typography variant="overline" color="text.secondary">
+              {title}
+            </Typography>
+            <Typography variant="h4" sx={{ fontWeight: 'bold', my: 0.5 }}>
+              {value.toFixed(1)}
+              <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 0.5 }}>
+                {unit}
+              </Typography>
+            </Typography>
+          </Box>
+          <Box
+            sx={{
+              p: 1,
+              borderRadius: 2,
+              bgcolor: `${color}20`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Icon sx={{ color: color }} />
+          </Box>
+        </Box>
+        <LinearProgress
+          variant="determinate"
+          value={Math.min(value, 100)} // Ensure we don't exceed 100 for visual
+          sx={{
+            height: 6,
+            borderRadius: 3,
+            bgcolor: theme.palette.action.hover,
+            '& .MuiLinearProgress-bar': {
+              bgcolor: color,
+            },
+          }}
+        />
+      </CardContent>
+    </Card>
+  );
+};
 
 const MonitoringWorkspace: React.FC = () => {
-  // Poll data every 30 seconds
-  const { data: health, isLoading: healthLoading } = useQuery('health-status', getHealthStatus, {
-    refetchInterval: 30000
-  })
-  const { data: performance, isLoading: perfLoading } = useQuery('performance-summary', getPerformanceSummary, {
-    refetchInterval: 30000
-  })
+  const theme = useTheme();
+
+  // --- Data Fetching ---
+
+  const { data: health, isLoading: healthLoading, refetch: refetchHealth } = useQuery(
+    'health-status',
+    getHealthStatus,
+    { refetchInterval: POLLING_INTERVAL }
+  );
+
+  const { data: performance, isLoading: perfLoading } = useQuery(
+    'performance-summary',
+    getPerformanceSummary,
+    { refetchInterval: POLLING_INTERVAL }
+  );
+
   const { data: alertsData } = useQuery('active-alerts', getAlerts, {
-    refetchInterval: 30000
-  })
+    refetchInterval: POLLING_INTERVAL,
+  });
+
   const { data: dashboardStats } = useQuery('dashboard-stats', getDashboardStats, {
-    refetchInterval: 30000
-  })
+    refetchInterval: POLLING_INTERVAL,
+  });
 
   // History Metrics
-  const { data: cpuHistory, isLoading: cpuLoading } = useQuery(
+  const { data: cpuHistory, isLoading: cpuHistoryLoading } = useQuery(
     ['metrics-history', 'cpu_usage'],
     () => getMetricsHistory('cpu_usage'),
     { refetchInterval: 60000 }
-  )
-  const { data: memHistory, isLoading: memLoading } = useQuery(
+  );
+  const { data: memHistory, isLoading: memHistoryLoading } = useQuery(
     ['metrics-history', 'memory_usage'],
     () => getMetricsHistory('memory_usage'),
     { refetchInterval: 60000 }
-  )
-  const { data: agentsHistory, isLoading: agentsLoading } = useQuery(
+  );
+  const { data: agentsHistory, isLoading: agentsHistoryLoading } = useQuery(
     ['metrics-history', 'active_agents'],
     () => getMetricsHistory('active_agents'),
     { refetchInterval: 60000 }
-  )
+  );
 
-  const systemResources = health?.health_checks?.system_resources?.details || {}
+  const systemResources = health?.health_checks?.system_resources?.details || {};
 
-  const systemMetrics = [
-    { name: 'CPU Usage', value: systemResources.cpu_percent || 0, unit: '%', status: getMetricStatus(systemResources.cpu_percent || 0, 80), icon: PerformanceIcon },
-    { name: 'Memory Usage', value: systemResources.memory_percent || 0, unit: '%', status: getMetricStatus(systemResources.memory_percent || 0, 85), icon: MemoryIcon },
-    { name: 'Disk Usage', value: systemResources.disk_percent || 0, unit: '%', status: getMetricStatus(systemResources.disk_percent || 0, 90), icon: StorageIcon },
-    { name: 'Active Agents', value: dashboardStats?.agents?.active || 0, unit: '', status: 'good', icon: MetricsIcon },
-  ]
+  // --- Alert Management ---
+  const [dismissedAlerts, setDismissedAlerts] = React.useState<Set<string>>(new Set());
 
-  function getMetricStatus(value: number, threshold: number) {
-    if (value > threshold) return 'error'
-    if (value > threshold * 0.8) return 'warning'
-    return 'good'
-  }
+  // Deduplicate alerts - show only unique messages from recent alerts
+  const deduplicatedAlerts = React.useMemo(() => {
+    if (!alertsData?.alerts) return [];
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'good':
-      case 'healthy':
-        return '#4ec9b0'
-      case 'warning':
-      case 'degraded':
-        return '#ffcc02'
-      case 'error':
-      case 'unhealthy':
-        return '#f48771'
-      default:
-        return '#969696'
+    const seen = new Map<string, AlertType>();
+
+    return alertsData.alerts
+      .filter(alert => {
+        // Skip dismissed alerts
+        const alertKey = `${alert.message}-${alert.timestamp}`;
+        if (dismissedAlerts.has(alertKey)) return false;
+
+        // Check if we've seen this message before
+        if (seen.has(alert.message)) {
+          return false; // Hide duplicates
+        }
+
+        seen.set(alert.message, alert);
+        return true;
+      })
+      .slice(0, 5); // Show max 5 alerts
+  }, [alertsData, dismissedAlerts]);
+
+  // Auto-dismiss alerts after 60 seconds
+  React.useEffect(() => {
+    if (deduplicatedAlerts.length === 0) return;
+
+    const timer = setTimeout(() => {
+      setDismissedAlerts(prev => {
+        const newSet = new Set(prev);
+        deduplicatedAlerts.forEach(alert => {
+          newSet.add(`${alert.message}-${alert.timestamp}`);
+        });
+        return newSet;
+      });
+    }, 60000); // 60 seconds
+
+    return () => clearTimeout(timer);
+  }, [deduplicatedAlerts]);
+
+  // --- Derived State ---
+
+  const metrics = [
+    {
+      title: 'CPU Usage',
+      value: systemResources.cpu_percent || 0,
+      unit: '%',
+      icon: PerformanceIcon,
+      color: theme.palette.info.main,
+    },
+    {
+      title: 'Memory Usage',
+      value: systemResources.memory_percent || 0,
+      unit: '%',
+      icon: MemoryIcon,
+      color: theme.palette.secondary.main,
+    },
+    {
+      title: 'Disk Usage',
+      value: systemResources.disk_percent || 0,
+      unit: '%',
+      icon: StorageIcon,
+      color: theme.palette.warning.main,
+    },
+    {
+      title: 'Active Agents',
+      value: dashboardStats?.agents?.active || 0,
+      unit: '',
+      icon: RobotIcon,
+      color: theme.palette.success.main,
     }
-  }
+  ];
+
+  const overallStatus = health?.overall_status || 'unknown';
 
   if (healthLoading || perfLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
         <CircularProgress />
       </Box>
-    )
+    );
   }
 
   return (
     <Box sx={{ p: 3, height: '100%', overflow: 'auto' }}>
-      {/* Header */}
-      <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+
+      {/* Header Section */}
+      <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Box>
-          <Typography variant="h4" sx={{ color: '#cccccc', mb: 1 }}>
-            System Monitoring
+          <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 1 }}>
+            System Monitor
           </Typography>
-          <Typography variant="body2" sx={{ color: '#969696' }}>
-            Monitor system health, performance, and agent activities
+          <Typography variant="body1" color="text.secondary">
+            Real-time insight into system performance and health.
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <Box sx={{ textAlign: 'right', mr: 2 }}>
-            <Typography variant="caption" sx={{ color: '#969696', display: 'block' }}>
-              Overall Status
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <Tooltip title="Refresh Data">
+            <IconButton onClick={() => refetchHealth()}>
+              <RefreshIcon />
+            </IconButton>
+          </Tooltip>
+          <Chip
+            icon={overallStatus === 'healthy' ? <HealthyIcon /> : <WarningIcon />}
+            label={`System Status: ${overallStatus.toUpperCase()}`}
+            color={overallStatus === 'healthy' ? 'success' : 'error'}
+            variant="outlined"
+            sx={{ fontWeight: 'bold' }}
+          />
+        </Box>
+      </Box>
+
+      {/* Alerts Section - Only active if there are alerts */}
+      {deduplicatedAlerts.length > 0 && (
+        <Box sx={{ mb: 4 }}>
+          {deduplicatedAlerts.map((alert: AlertType) => (
+            <Alert
+              key={`${alert.message}-${alert.timestamp}`}
+              severity={alert.severity as any}
+              sx={{ mb: 1 }}
+              onClose={() => {
+                const alertKey = `${alert.message}-${alert.timestamp}`;
+                setDismissedAlerts(prev => new Set(prev).add(alertKey));
+              }}
+              action={
+                <Typography variant="caption" sx={{ mr: 2 }}>
+                  {new Date(alert.timestamp).toLocaleTimeString()}
+                </Typography>
+              }
+            >
+              {alert.message}
+            </Alert>
+          ))}
+          {alertsData?.alerts && alertsData.alerts.length > deduplicatedAlerts.length && (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', ml: 2, mt: 1 }}>
+              ({alertsData.alerts.length - deduplicatedAlerts.length} duplicate alerts hidden)
             </Typography>
-            <Typography variant="subtitle2" sx={{ color: getStatusColor(health?.overall_status || '') }}>
-              {(health?.overall_status || 'Unknown').toUpperCase()}
-            </Typography>
-          </Box>
-          {health?.overall_status === 'healthy' ? (
-            <HealthyIcon sx={{ color: '#4ec9b0', fontSize: 32 }} />
-          ) : health?.overall_status === 'degraded' ? (
-            <WarningIcon sx={{ color: '#ffcc02', fontSize: 32 }} />
-          ) : (
-            <ErrorIcon sx={{ color: '#f48771', fontSize: 32 }} />
           )}
         </Box>
-      </Box>
+      )}
 
-      {/* System Health Overview */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h6" sx={{ color: '#cccccc', mb: 2 }}>
-          System Health
-        </Typography>
-        <Grid container spacing={2}>
-          {systemMetrics.map((metric, index) => {
-            const Icon = metric.icon
-            return (
-              <Grid item xs={12} sm={6} md={3} key={index}>
-                <Card
-                  sx={{
-                    backgroundColor: '#252526',
-                    border: '1px solid #2d2d30',
-                    '&:hover': {
-                      backgroundColor: '#2a2d2e',
-                    },
-                  }}
-                >
-                  <CardContent>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                      <Icon sx={{ color: getStatusColor(metric.status), mr: 1 }} />
-                      <Typography variant="subtitle2" sx={{ color: '#cccccc' }}>
-                        {metric.name}
-                      </Typography>
-                    </Box>
-                    <Typography variant="h4" sx={{ color: '#cccccc', mb: 1 }}>
-                      {metric.value}{metric.unit}
-                    </Typography>
-                    {metric.unit === '%' && (
-                      <LinearProgress
-                        variant="determinate"
-                        value={metric.value}
-                        sx={{
-                          height: 4,
-                          borderRadius: 2,
-                          backgroundColor: '#2d2d30',
-                          '& .MuiLinearProgress-bar': {
-                            backgroundColor: getStatusColor(metric.status),
-                          },
-                        }}
-                      />
-                    )}
-                  </CardContent>
-                </Card>
-              </Grid>
-            )
-          })}
-        </Grid>
-      </Box>
-
-      {/* Real-time Metrics */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h6" sx={{ color: '#cccccc', mb: 2 }}>
-          Real-time Metrics
-        </Typography>
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={4}>
-            <MetricChart
-              title="CPU Usage"
-              data={cpuHistory || []}
-              color="#4ec9b0"
-              unit="%"
-              loading={cpuLoading}
-            />
+      {/* Key Resources Grid */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        {metrics.map((metric, index) => (
+          <Grid item xs={12} sm={6} md={3} key={index}>
+            <ResourceCard {...metric} />
           </Grid>
-          <Grid item xs={12} md={4}>
-            <MetricChart
-              title="Memory Usage"
-              data={memHistory || []}
-              color="#569cd6"
-              unit="MB" // Using Memory Bytes converted to meaningful unit in chart or passing raw? Backend sends bytes usually. 
-              // Wait, backend query for memory is 'process_resident_memory_bytes'. 
-              // Let's assume bytes, but the chart formatter might need adjustment or we adjust here.
-              // Actually for simplicity let's stick to the raw value or assume the backend sends % if we changed query. 
-              // I used 'process_resident_memory_bytes' in backend. So unit is Bytes.
-              // MetricChart might need better formatting for bytes, but let's stick to simple number for now or update MetricChart to handle bytes.
-              // Re-reading backend: 'avg(rate(process_cpu_seconds_total[1m])) * 100' -> Percent.
-              // 'process_resident_memory_bytes' -> Bytes.
-              loading={memLoading}
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <MetricChart
-              title="Active Agents"
-              data={agentsHistory || []}
-              color="#ffcc02"
-              unit=""
-              loading={agentsLoading}
-            />
-          </Grid>
-        </Grid>
-      </Box>
+        ))}
+      </Grid>
 
-      {/* Component Status */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h6" sx={{ color: '#cccccc', mb: 2 }}>
-          Component Status
-        </Typography>
-        <Grid container spacing={2}>
-          {/* Detailed Health Checks */}
-          <Grid item xs={12} md={6}>
-            <Card
-              sx={{
-                backgroundColor: '#252526',
-                border: '1px solid #2d2d30',
-                height: 300,
-              }}
-            >
-              <CardContent>
-                <Typography variant="subtitle1" sx={{ color: '#cccccc', mb: 2 }}>
-                  Health Check Details
-                </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                  {health && Object.entries(health.health_checks).map(([name, check]) => (
-                    <Box key={name} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: getStatusColor(check.status), mr: 2 }} />
-                        <Typography variant="body2" sx={{ color: '#cccccc', textTransform: 'capitalize' }}>
-                          {name.replace('_', ' ')}
-                        </Typography>
-                      </Box>
-                      <Box sx={{ textAlign: 'right' }}>
-                        <Typography variant="caption" sx={{ color: '#969696', display: 'block' }}>
-                          {check.duration_ms.toFixed(1)}ms
-                        </Typography>
-                        <Chip label={check.status} size="small" sx={{ height: 16, fontSize: '9px', bgcolor: getStatusColor(check.status), color: '#000' }} />
-                      </Box>
-                    </Box>
-                  ))}
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
+      {/* Main Content Grid */}
+      <Grid container spacing={3}>
 
-          {/* Agent/Tool/Workflow Stats */}
-          <Grid item xs={12} md={6}>
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <Card sx={{ backgroundColor: '#252526', border: '1px solid #2d2d30' }}>
-                  <CardContent>
-                    <Typography variant="subtitle1" sx={{ color: '#cccccc', mb: 2 }}>
-                      Component Statistics
-                    </Typography>
-                    <Grid container spacing={2}>
-                      {/* Agents */}
-                      <Grid item xs={4}>
-                        <Box sx={{ textAlign: 'center', p: 1, border: '1px solid #3e3e42', borderRadius: 1 }}>
-                          <MetricsIcon sx={{ color: '#4ec9b0', mb: 1 }} />
-                          <Typography variant="h4" sx={{ color: '#cccccc' }}>{dashboardStats?.agents?.total || 0}</Typography>
-                          <Typography variant="caption" sx={{ color: '#969696' }}>Total Agents</Typography>
-                          <Typography variant="caption" sx={{ color: '#4ec9b0', display: 'block' }}>{dashboardStats?.agents?.active || 0} Active</Typography>
-                        </Box>
-                      </Grid>
-                      {/* Tools */}
-                      <Grid item xs={4}>
-                        <Box sx={{ textAlign: 'center', p: 1, border: '1px solid #3e3e42', borderRadius: 1 }}>
-                          <ToolsIcon sx={{ color: '#569cd6', mb: 1 }} />
-                          <Typography variant="h4" sx={{ color: '#cccccc' }}>{dashboardStats?.tools?.total || 0}</Typography>
-                          <Typography variant="caption" sx={{ color: '#969696' }}>Available Tools</Typography>
-                        </Box>
-                      </Grid>
-                      {/* Workflows */}
-                      <Grid item xs={4}>
-                        <Box sx={{ textAlign: 'center', p: 1, border: '1px solid #3e3e42', borderRadius: 1 }}>
-                          <WorkflowIcon sx={{ color: '#ffcc02', mb: 1 }} />
-                          <Typography variant="h4" sx={{ color: '#cccccc' }}>{dashboardStats?.workflows?.total || 0}</Typography>
-                          <Typography variant="caption" sx={{ color: '#969696' }}>Total Workflows</Typography>
-                          <Typography variant="caption" sx={{ color: '#ffcc02', display: 'block' }}>{dashboardStats?.workflows?.active || 0} Active</Typography>
-                        </Box>
-                      </Grid>
-                    </Grid>
-                  </CardContent>
-                </Card>
-              </Grid>
-
-              {/* Active Alerts (Mini) */}
-              <Grid item xs={12}>
-                <Card sx={{ backgroundColor: '#252526', border: '1px solid #2d2d30', minHeight: 140 }}>
-                  <CardContent>
-                    <Typography variant="subtitle1" sx={{ color: '#cccccc', mb: 1 }}>
-                      Active Alerts
-                    </Typography>
-                    {alertsData?.alerts && alertsData.alerts.length > 0 ? (
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                        {alertsData.alerts.slice(0, 2).map((alert, index) => (
-                          <Box key={index} sx={{ p: 1, bgcolor: '#1e1e1e', borderRadius: 1, borderLeft: `3px solid ${alert.severity === 'critical' ? '#f48771' : '#ffcc02'}` }}>
-                            <Typography variant="body2" sx={{ color: '#cccccc', fontSize: '12px' }}>
-                              {alert.message}
-                            </Typography>
-                          </Box>
-                        ))}
-                      </Box>
-                    ) : (
-                      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 2 }}>
-                        <HealthyIcon sx={{ color: '#4ec9b020', fontSize: 32, mb: 1 }} />
-                        <Typography variant="caption" sx={{ color: '#969696' }}>
-                          No active alerts
-                        </Typography>
-                      </Box>
-                    )}
-                  </CardContent>
-                </Card>
-              </Grid>
+        {/* Left Column: Charts */}
+        <Grid item xs={12} lg={8}>
+          <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
+            Performance Trends
+          </Typography>
+          <Grid container spacing={3}>
+            <Grid item xs={12}>
+              <MetricChart
+                title="CPU Load History"
+                data={cpuHistory || []}
+                color={theme.palette.info.main}
+                unit="%"
+                loading={cpuHistoryLoading}
+                height={250}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <MetricChart
+                title="Memory Usage History"
+                data={memHistory || []}
+                color={theme.palette.secondary.main}
+                unit="%" // Assuming the backend now returns % or we treat it as unitless value if unknown
+                loading={memHistoryLoading}
+                height={250}
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <MetricChart
+                title="Active Agents History"
+                data={agentsHistory || []}
+                color={theme.palette.success.main}
+                unit=""
+                loading={agentsHistoryLoading}
+                height={250}
+              />
             </Grid>
           </Grid>
         </Grid>
-      </Box>
-    </Box>
-  )
-}
 
-export default MonitoringWorkspace
+        {/* Right Column: Detailed Health & Status */}
+        <Grid item xs={12} lg={4}>
+          <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
+            Component Status
+          </Typography>
+
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+
+            {/* Database Health */}
+            <Card variant="outlined">
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                  <DatabaseIcon sx={{ mr: 1, color: theme.palette.primary.main }} />
+                  <Typography variant="subtitle1" fontWeight="bold">Database</Typography>
+                  <Box sx={{ flexGrow: 1 }} />
+                  <StatusChip status={health?.health_checks?.database?.status || 'Unknown'} />
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body2" color="text.secondary">Pool Size</Typography>
+                  <Typography variant="body2" fontWeight="medium">
+                    {health?.health_checks?.database?.details?.pool_size || '-'}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body2" color="text.secondary">Active Connections</Typography>
+                  <Typography variant="body2" fontWeight="medium">
+                    {health?.health_checks?.database?.details?.checked_out_connections || '-'}
+                  </Typography>
+                </Box>
+              </CardContent>
+            </Card>
+
+            {/* Redis Health */}
+            <Card variant="outlined">
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                  <CacheIcon sx={{ mr: 1, color: theme.palette.error.main }} />
+                  <Typography variant="subtitle1" fontWeight="bold">Cache (Redis)</Typography>
+                  <Box sx={{ flexGrow: 1 }} />
+                  <StatusChip status={health?.health_checks?.redis?.status || 'Unknown'} />
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body2" color="text.secondary">Memory Used</Typography>
+                  <Typography variant="body2" fontWeight="medium">
+                    {health?.health_checks?.redis?.details?.used_memory_human || '-'}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body2" color="text.secondary">Connected Clients</Typography>
+                  <Typography variant="body2" fontWeight="medium">
+                    {health?.health_checks?.redis?.details?.connected_clients || '-'}
+                  </Typography>
+                </Box>
+              </CardContent>
+            </Card>
+
+            {/* External Services */}
+            <Card variant="outlined">
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                  <NetworkIcon sx={{ mr: 1, color: theme.palette.warning.main }} />
+                  <Typography variant="subtitle1" fontWeight="bold">Services</Typography>
+                  <Box sx={{ flexGrow: 1 }} />
+                  <StatusChip status={health?.health_checks?.external_services?.status || 'Unknown'} />
+                </Box>
+                {health?.health_checks?.external_services?.details &&
+                  Object.entries(health.health_checks.external_services.details).map(([service, status]: [string, any]) => (
+                    <Box key={service} sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                      <Typography variant="body2" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
+                        {service}
+                      </Typography>
+                      <StatusChip status={status ? 'UP' : 'DOWN'} />
+                    </Box>
+                  ))
+                }
+              </CardContent>
+            </Card>
+          </Box>
+        </Grid>
+      </Grid>
+    </Box>
+  );
+};
+
+export default MonitoringWorkspace;

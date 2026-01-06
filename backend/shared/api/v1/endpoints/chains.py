@@ -21,6 +21,7 @@ from shared.schemas.chain import (
     ChainValidationResult, ChainExecutionStatusResponse,
     ChainNodeResponse, ChainEdgeResponse, ChainNodeSchema
 )
+from shared.api.auth import get_current_user_or_api_key, get_current_user
 from shared.services.chain_orchestrator import (
     ChainOrchestratorService,
     ChainValidationError,
@@ -509,7 +510,9 @@ async def execute_chain(
     request: ChainExecuteRequest,
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_async_db),
-    orchestrator: ChainOrchestratorService = Depends(get_chain_orchestrator_service)
+    orchestrator: ChainOrchestratorService = Depends(get_chain_orchestrator_service),
+    # Secure endpoint: requires User (Token) or System (API Key)
+    current_user_or_key = Depends(get_current_user_or_api_key)
 ):
     """
     Execute a chain.

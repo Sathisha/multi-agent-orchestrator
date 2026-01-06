@@ -1,5 +1,14 @@
 #!/bin/bash
+# Custom entrypoint for Ollama Docker image
+# This script uses Ollama (https://github.com/ollama/ollama)
+# Ollama is licensed under the MIT License - Copyright (c) Ollama
+#
+# Auto-downloaded models and their licenses:
+# - nomic-embed-text: Apache License 2.0
+# - tinyllama: Apache License 2.0
+# - phi: MIT License
 set -e
+
 
 # Start Ollama server in the background
 ollama serve &

@@ -9,6 +9,8 @@ import WorkflowDetailWorkspace from './workspaces/WorkflowDetailWorkspace'
 import ChainWorkspace from './workspaces/ChainWorkspace'
 import ChainDetailWorkspace from './workspaces/ChainDetailWorkspace'
 import LLMModelsWorkspace from './workspaces/LLMModelsWorkspace'
+import VisionTestWorkspace from './workspaces/VisionTestWorkspace'
+import UserManagementWorkspace from './workspaces/UserManagementWorkspace'
 import LoginPage from './components/auth/LoginPage'
 import ProtectedRoute from './routes/ProtectedRoute'
 
@@ -31,6 +33,8 @@ function App() {
           <Route path="/tools" element={<ToolsWorkspace />} />
           <Route path="/monitoring" element={<MonitoringWorkspace />} />
           <Route path="/models" element={<LLMModelsWorkspace />} />
+          <Route path="/vision-test" element={<VisionTestWorkspace />} />
+          <Route path="/users" element={<UserManagementWorkspace />} />
         </Route>
       </Route>
 

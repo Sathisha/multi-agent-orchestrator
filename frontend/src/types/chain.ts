@@ -173,6 +173,8 @@ export interface ChainExecution {
     duration_seconds?: number
     current_node_id?: string
     completed_nodes: string[]
+    active_edges?: string[]
+    edge_results?: Record<string, any>
     error_message?: string
     error_details?: Record<string, any>
     correlation_id?: string

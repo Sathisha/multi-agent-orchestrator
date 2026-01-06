@@ -1,4 +1,9 @@
+# Custom Ollama Docker Image
+# Extends the official Ollama image (https://github.com/ollama/ollama)
+# Ollama is licensed under the MIT License - Copyright (c) Ollama
+# See deployment/LICENSES/OLLAMA-LICENSE for full license text
 FROM ollama/ollama:latest
+
 
 # Copy the entrypoint script
 COPY entrypoint.sh /entrypoint.sh

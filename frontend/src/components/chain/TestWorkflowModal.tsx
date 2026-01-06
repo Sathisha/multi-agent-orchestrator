@@ -30,7 +30,7 @@ import {
 import { Node, Edge } from 'reactflow';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 
-import { executeChain, getExecutionStatus, getExecutionLogs, cancelExecution } from '../../api/chains';
+import { executeChain, getExecution, getExecutionLogs, cancelExecution } from '../../api/chains';
 import { Chain, ChainExecutionStatusResponse, ChainExecutionLog, ChainExecution } from '../../types/chain';
 import ChainCanvas from './ChainCanvas';
 
@@ -133,10 +133,10 @@ const TestWorkflowModal: React.FC<TestWorkflowModalProps> = ({ open, onClose, ch
         }
     );
 
-    // Poll Status
-    const { data: status } = useQuery<ChainExecutionStatusResponse>(
-        ['executionStatus', executionId],
-        () => getExecutionStatus(executionId!),
+    // Poll Execution Details (Full object)
+    const { data: status } = useQuery<ChainExecution>(
+        ['executionDetails', executionId],
+        () => getExecution(executionId!),
         {
             enabled: !!executionId,
             refetchInterval: (data) => {
@@ -162,29 +162,50 @@ const TestWorkflowModal: React.FC<TestWorkflowModalProps> = ({ open, onClose, ch
         }
     );
 
-    const updateVisuals = (statusData: ChainExecutionStatusResponse) => {
+    const updateVisuals = (statusData: ChainExecution) => {
         // Update Nodes
         setNodes((currentNodes) => currentNodes.map(node => {
             let nodeStatus = 'pending';
             if (statusData.current_node_id === node.id) nodeStatus = 'running';
-            else if (statusData.completed_nodes.includes(node.id)) nodeStatus = 'completed';
-            else if (statusData.node_states && statusData.node_states[node.id]) {
-                nodeStatus = statusData.node_states[node.id].toLowerCase();
+            else if (statusData.completed_nodes?.includes(node.id)) nodeStatus = 'completed';
+
+            // Check status from node_results if available (more reliable for completed)
+            if (statusData.node_results && statusData.node_results[node.id]) {
+                // If it has a result, it's completed (unless failed status elsewhere?)
             }
+
             // Handle failures
             if (statusData.status === 'failed' && nodeStatus === 'running') nodeStatus = 'failed';
 
+            // Get output
+            const output = statusData.node_results ? statusData.node_results[node.id] : null;
+
             return {
                 ...node,
-                data: { ...node.data, status: nodeStatus }
+                data: {
+                    ...node.data,
+                    status: nodeStatus,
+                    output: output
+                }
             };
         }));
 
         // Update Edges
         setEdges((currentEdges) => currentEdges.map(edge => {
             const isActive = statusData.active_edges?.includes(edge.id);
+
+            // Determine label from edge results
+            let edgeLabel = edge.label;
+            if (statusData.edge_results && statusData.edge_results[edge.id]) {
+                const result = statusData.edge_results[edge.id];
+                if (result.met !== undefined) {
+                    edgeLabel = result.met ? "True" : "False";
+                }
+            }
+
             return {
                 ...edge,
+                label: edgeLabel,
                 animated: isActive,
                 style: isActive
                     ? { stroke: '#4caf50', strokeWidth: 3 }

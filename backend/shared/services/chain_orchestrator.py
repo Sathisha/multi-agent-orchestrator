@@ -15,7 +15,7 @@ from shared.models.chain import (
     Chain, ChainNode, ChainEdge, ChainExecution, ChainExecutionLog,
     ChainStatus, ChainNodeType, ChainExecutionStatus
 )
-from shared.database.connection import get_database_session
+from shared.database.connection import get_database_session, AsyncSessionLocal
 from shared.models.agent import Agent
 from shared.schemas.chain import ChainValidationResult
 from shared.services.base import BaseService
@@ -547,45 +547,47 @@ class ChainOrchestratorService(BaseService):
         
         async def process_node_task(node_id: str):
             """Execute a single node."""
-            node = node_map[node_id]
-            node_states[node_id] = "RUNNING"
-            
-            # Log Start
-            await self._log_execution_event(
-                session, execution.id, node_id, "node_started",
-                f"Starting execution of node {node.label}", "INFO"
-            )
-            
-            try:
-                # Prepare Input
-                # Note: We pass active_edges to ensure we only aggregate from active paths
-                node_input = self._prepare_node_input(node, context, incoming_edges_map, active_edges)
+            # Create a dedicated session for this task to allow parallel execution
+            async with AsyncSessionLocal() as task_session:
+                node = node_map[node_id]
+                node_states[node_id] = "RUNNING"
                 
-                # Execute Logic
-                node_output = await self._execute_node(session, node, node_input, context)
-                
-                # Store Output
-                context['node_outputs'][node_id] = node_output
-                execution.node_results[node_id] = node_output
-                execution.completed_nodes.append(node_id)
-                # await session.commit() # Batch commit in main loop? Or here? 
-                # Commit here to update progress safely
-                
-                # Log Success
+                # Log Start
                 await self._log_execution_event(
-                    session, execution.id, node_id, "node_completed",
-                    f"Node {node.label} completed", "INFO", output_data=node_output
+                    task_session, execution.id, node_id, "node_started",
+                    f"Starting execution of node {node.label}", "INFO"
                 )
                 
-                return node_id, "COMPLETED", node_output
-                
-            except Exception as e:
-                logger.error(f"Error executing node {node_id}: {e}", exc_info=True)
-                await self._log_execution_event(
-                    session, execution.id, node_id, "node_failed",
-                    f"Node {node.label} failed: {str(e)}", "ERROR", error_message=str(e)
-                )
-                return node_id, "FAILED", None
+                try:
+                    # Prepare Input
+                    # Note: We pass active_edges to ensure we only aggregate from active paths
+                    node_input = self._prepare_node_input(node, context, incoming_edges_map, active_edges)
+                    
+                    # Execute Logic
+                    # We pass the task_session to ensure isolation
+                    node_output = await self._execute_node(task_session, node, node_input, context)
+                    
+                    # Store Output
+                    # context is shared, but dict updates are atomic in GIL/asyncio usually safe enough here
+                    context['node_outputs'][node_id] = node_output
+                    execution.node_results[node_id] = node_output
+                    execution.completed_nodes.append(node_id)
+                    
+                    # Log Success
+                    await self._log_execution_event(
+                        task_session, execution.id, node_id, "node_completed",
+                        f"Node {node.label} completed", "INFO", output_data=node_output
+                    )
+                    
+                    return node_id, "COMPLETED", node_output
+                    
+                except Exception as e:
+                    logger.error(f"Error executing node {node_id}: {e}", exc_info=True)
+                    await self._log_execution_event(
+                        task_session, execution.id, node_id, "node_failed",
+                        f"Node {node.label} failed: {str(e)}", "ERROR", error_message=str(e)
+                    )
+                    return node_id, "FAILED", None
         
         # 4. Execution Loop
         while ready_queue or running_tasks:
@@ -900,7 +902,11 @@ class ChainOrchestratorService(BaseService):
         # Execute agent
         logger.info(f"Executing agent {agent.name} (node {node.node_id})")
         
-        execution_result = await self.agent_executor.execute_agent(
+        # Always create a new executor with the CURRENT session to support parallelism
+        # self.agent_executor might hold a shared/stale session
+        local_agent_executor = AgentExecutorService(session)
+        
+        execution_result = await local_agent_executor.execute_agent(
             agent_id=str(agent.id),
             input_data=input_data,
             config=node.config or {}

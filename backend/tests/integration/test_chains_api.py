@@ -90,10 +90,12 @@ class TestChainsAPI:
     async def test_list_chains(self, test_client):
         # Create a couple of chains
         payload1 = await self.create_valid_chain_payload()
-        test_client.post("/api/v1/chains", json=payload1)
+        res1 = test_client.post("/api/v1/chains", json=payload1)
+        assert res1.status_code == 201
         
         payload2 = await self.create_valid_chain_payload()
-        test_client.post("/api/v1/chains", json=payload2)
+        res2 = test_client.post("/api/v1/chains", json=payload2)
+        assert res2.status_code == 201
 
         response = test_client.get("/api/v1/chains")
         assert response.status_code == 200

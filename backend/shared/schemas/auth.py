@@ -3,6 +3,7 @@ Authentication Pydantic Schemas
 
 This module defines Pydantic models for authentication-related API requests and responses.
 """
+from __future__ import annotations
 
 from datetime import datetime
 from typing import Optional, List
@@ -46,6 +47,40 @@ class UserUpdate(BaseModel):
     """Schema for updating user profile."""
     full_name: Optional[str] = Field(None, min_length=1, max_length=255, description="User full name")
     avatar_url: Optional[str] = Field(None, description="User avatar URL")
+
+
+class UserCreate(BaseModel):
+    """Schema for admin user creation."""
+    email: EmailStr = Field(..., description="User email address")
+    password: str = Field(..., min_length=8, description="User password (minimum 8 characters)")
+    full_name: str = Field(..., min_length=1, max_length=255, description="User full name")
+    status: Optional[str] = Field("active", description="User status (active, inactive, suspended)")
+    role_ids: Optional[List[UUID]] = Field(default_factory=list, description="List of role IDs to assign")
+    
+    @validator('password')
+    def validate_password(cls, v):
+        """Validate password strength."""
+        if len(v) < 8:
+            raise ValueError('Password must be at least 8 characters long')
+        
+        # Basic password requirements
+        has_upper = any(c.isupper() for c in v)
+        has_lower = any(c.islower() for c in v)
+        has_digit = any(c.isdigit() for c in v)
+        
+        if not (has_upper and has_lower and has_digit):
+            raise ValueError('Password must contain at least one uppercase letter, one lowercase letter, and one digit')
+        
+        return v
+
+
+class UserUpdateAdmin(BaseModel):
+    """Schema for admin user updates."""
+    full_name: Optional[str] = Field(None, min_length=1, max_length=255, description="User full name")
+    email: Optional[EmailStr] = Field(None, description="User email address")
+    status: Optional[str] = Field(None, description="User status (active, inactive, suspended)")
+    is_active: Optional[bool] = Field(None, description="User active flag")
+    role_ids: Optional[List[UUID]] = Field(None, description="List of role IDs to assign")
 
 
 # Token Schemas
@@ -109,33 +144,6 @@ class PasswordReset(BaseModel):
         return v
 
 
-# User Response Schemas
-
-class UserResponse(BaseModel):
-    """Schema for user API responses."""
-    id: UUID
-    email: str
-    full_name: str
-    avatar_url: Optional[str] = None
-    # is_active: bool # Check step 733. Yes.
-    is_active: bool
-    is_system_admin: bool
-    created_at: datetime
-    updated_at: datetime
-    last_login_at: Optional[datetime] = None
-    
-    class Config:
-        from_attributes = True
-
-
-class UserListResponse(BaseModel):
-    """Schema for paginated user list responses."""
-    users: List[UserResponse]
-    total_count: int
-    skip: int
-    limit: int
-
-
 # Role and Permission Schemas
 
 class PermissionResponse(BaseModel):
@@ -160,6 +168,54 @@ class RoleResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+
+# User Response Schemas
+
+class UserResponse(BaseModel):
+    """Schema for user API responses."""
+    id: UUID
+    email: str
+    full_name: str
+    avatar_url: Optional[str] = None
+    # is_active: bool # Check step 733. Yes.
+    is_active: bool
+    is_system_admin: bool
+    created_at: datetime
+    updated_at: datetime
+    last_login_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+
+
+class UserDetailResponse(BaseModel):
+    """Schema for detailed user API responses including roles."""
+    id: UUID
+    email: str
+    username: str
+    full_name: str
+    avatar_url: Optional[str] = None
+    status: str
+    is_active: bool
+    is_system_admin: bool
+    created_at: datetime
+    updated_at: datetime
+    last_login_at: Optional[datetime] = None
+    roles: List['RoleResponse'] = Field(default_factory=list, description="User's assigned roles")
+    
+    class Config:
+        from_attributes = True
+
+
+class UserListResponse(BaseModel):
+    """Schema for paginated user list responses."""
+    users: List[UserResponse]
+    total_count: int
+    skip: int
+    limit: int
+
+
 
 
 class RoleCreate(BaseModel):

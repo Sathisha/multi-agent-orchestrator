@@ -107,10 +107,13 @@ class OllamaProvider(BaseLLMProvider):
             # Convert messages to Ollama format
             ollama_messages = []
             for msg in request.messages:
-                ollama_messages.append({
+                message_dict = {
                     "role": msg.role,
                     "content": msg.content
-                })
+                }
+                if msg.images:
+                    message_dict["images"] = msg.images
+                ollama_messages.append(message_dict)
             
             # Prepare request payload
             payload = {
@@ -207,10 +210,13 @@ class OllamaProvider(BaseLLMProvider):
             # Convert messages to Ollama format
             ollama_messages = []
             for msg in request.messages:
-                ollama_messages.append({
+                message_dict = {
                     "role": msg.role,
                     "content": msg.content
-                })
+                }
+                if msg.images:
+                    message_dict["images"] = msg.images
+                ollama_messages.append(message_dict)
             
             # Prepare request payload
             payload = {

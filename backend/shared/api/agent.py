@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from ..database.connection import get_async_db
 from ..services.agent import AgentService, AgentDeploymentService, AgentExecutionService, AgentMemoryService
 from ..models.agent import Agent, AgentType, AgentStatus, AgentDeployment, AgentExecution, AgentMemory
+from ..middleware.permissions import require_permission
 
 router = APIRouter(prefix="/api/v1/agents", tags=["agents"])
 
@@ -145,7 +146,7 @@ class AgentStatisticsResponse(BaseModel):
 async def create_agent(
     request: AgentCreateRequest,
     session: AsyncSession = Depends(get_async_db),
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "00000000-0000-0000-0000-000000000000"})
+    current_user = Depends(require_permission("agent.create"))
 ):
     """Create a new agent"""
     service = AgentService(session)
@@ -176,7 +177,8 @@ async def list_agents(
     tags: Optional[str] = None,
     limit: int = 100,
     offset: int = 0,
-    session: AsyncSession = Depends(get_async_db)
+    session: AsyncSession = Depends(get_async_db),
+    current_user = Depends(require_permission("agent.view"))
 ):
     """List agents"""
     service = AgentService(session)
@@ -198,7 +200,8 @@ async def list_agents(
 @router.get("/{agent_id}", response_model=AgentResponse)
 async def get_agent(
     agent_id: UUID,
-    session: AsyncSession = Depends(get_async_db)
+    session: AsyncSession = Depends(get_async_db),
+    current_user = Depends(require_permission("agent.view"))
 ):
     """Get agent by ID"""
     service = AgentService(session)
@@ -215,7 +218,7 @@ async def update_agent(
     agent_id: UUID,
     request: AgentUpdateRequest,
     session: AsyncSession = Depends(get_async_db),
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "00000000-0000-0000-0000-000000000000"})
+    current_user = Depends(require_permission("agent.manage"))
 ):
     """Update agent"""
     service = AgentService(session)
@@ -276,7 +279,7 @@ async def deactivate_agent(
 async def delete_agent(
     agent_id: UUID,
     session: AsyncSession = Depends(get_async_db),
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "00000000-0000-0000-0000-000000000000"})
+    current_user = Depends(require_permission("agent.manage"))
 ):
     """Delete agent"""
     service = AgentService(session)
@@ -362,7 +365,7 @@ async def execute_agent(
     agent_id: UUID,
     request: AgentExecutionRequest,
     session: AsyncSession = Depends(get_async_db),
-    current_user: Dict[str, Any] = Depends(lambda: {"user_id": "00000000-0000-0000-0000-000000000000"})
+    current_user = Depends(require_permission("agent.execute"))
 ):
     """Execute agent"""
     service = AgentExecutionService(session)

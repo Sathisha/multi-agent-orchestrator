@@ -2,7 +2,8 @@ import os
 from datetime import datetime
 from typing import List, Dict, Any
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, status
+import base64
+from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.database.connection import get_async_db
@@ -49,7 +50,7 @@ import asyncio
 import uuid
 from fastapi import BackgroundTasks
 
-async def run_test_bg_task(job_id: str, test_request: LLMModelTestRequest, db_session_maker, ollama_service):
+async def run_test_bg_task(job_id: str, test_request: LLMModelTestRequest, db_session_maker, ollama_service, images: List[str] = None):
     """Background task to run the LLM test."""
     TEST_JOBS[job_id]["status"] = "running"
     
@@ -123,7 +124,11 @@ async def run_test_bg_task(job_id: str, test_request: LLMModelTestRequest, db_se
             messages = []
             if test_request.system_prompt:
                  messages.append(LLMMessage(role="system", content=test_request.system_prompt))
-            messages.append(LLMMessage(role="user", content=test_request.prompt))
+            
+            user_msg = LLMMessage(role="user", content=test_request.prompt)
+            if images:
+                user_msg.images = images
+            messages.append(user_msg)
 
             request = LLMRequest(
                 messages=messages,
@@ -163,6 +168,49 @@ async def test_llm_model(
         test_request, 
         AsyncSessionLocal, 
         ollama_service
+    )
+    
+    return {"job_id": job_id, "status": "pending"}
+
+
+@router.post("/test-vision", response_model=Dict[str, str])
+async def test_vision_model(
+    model_id: str = Form(...),
+    prompt: str = Form(...),
+    system_prompt: str = Form(None),
+    image: UploadFile = File(...),
+    background_tasks: BackgroundTasks = None,
+    ollama_service: OllamaService = Depends(get_ollama_service),
+):
+    """Start a background vision test for a specific LLM model."""
+    # Read and encode image
+    contents = await image.read()
+    encoded_image = base64.b64encode(contents).decode("utf-8")
+    
+    # Create test request object
+    try:
+        model_uuid = UUID(model_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid model_id format")
+        
+    test_request = LLMModelTestRequest(
+        model_id=model_uuid,
+        prompt=prompt,
+        system_prompt=system_prompt
+    )
+    
+    job_id = str(uuid.uuid4())
+    TEST_JOBS[job_id] = {"status": "pending", "created_at": str(datetime.now())}
+    
+    from shared.database.connection import AsyncSessionLocal
+    
+    background_tasks.add_task(
+        run_test_bg_task, 
+        job_id, 
+        test_request, 
+        AsyncSessionLocal, 
+        ollama_service,
+        [encoded_image]
     )
     
     return {"job_id": job_id, "status": "pending"}

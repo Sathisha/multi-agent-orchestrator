@@ -4,15 +4,21 @@ export interface User {
     id: string
     email: string
     full_name?: string
-    username?: string // Optional if backend doesn't enforce it
+    username?: string
     firstName?: string
     lastName?: string
-    isActive?: boolean // CamelCase vs snake_case depends on UserResponse?
-    // Backend UserResponse (Step 783) returns UserResponse.from_orm(user).
-    // Usually API returns snake_case unless configured otherwise.
-    // I will assume snake_case from Pydantic default.
+    isActive?: boolean
     is_active?: boolean
     is_system_admin?: boolean
+    roles?: Array<{
+        id: string
+        name: string
+        permissions?: Array<{
+            id: string
+            name: string
+            description?: string
+        }>
+    }>
 }
 
 export interface LoginRequest {
