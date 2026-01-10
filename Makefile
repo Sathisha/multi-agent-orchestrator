@@ -1,7 +1,15 @@
 # AI Agent Framework - Simplified Makefile
 # Essential commands for development, testing, and deployment
 
-.PHONY: help dev-build dev-deploy prod-deploy docker-publish test clean logs shell
+# ============================================================================
+# VARIABLES
+# ============================================================================
+GITHUB_REPOSITORY_OWNER ?= sathisha
+
+.PHONY: help dev-build dev-deploy prod-deploy docker-publish test clean logs shell build
+
+# Alias for dev-build
+build: dev-build
 
 # ============================================================================
 # HELP
@@ -112,11 +120,9 @@ docker-publish:
 	@echo "📦 Building Docker images for publishing..."
 	@docker build -t ghcr.io/$(GITHUB_REPOSITORY_OWNER)/multi-agent-orchestrator-backend:latest ./backend
 	@docker build -t ghcr.io/$(GITHUB_REPOSITORY_OWNER)/multi-agent-orchestrator-frontend:latest ./frontend
-	@docker build -t ghcr.io/$(GITHUB_REPOSITORY_OWNER)/multi-agent-orchestrator-ollama:latest ./infrastructure/docker/ollama
 	@echo "📤 Pushing images to GitHub Container Registry..."
 	@docker push ghcr.io/$(GITHUB_REPOSITORY_OWNER)/multi-agent-orchestrator-backend:latest
 	@docker push ghcr.io/$(GITHUB_REPOSITORY_OWNER)/multi-agent-orchestrator-frontend:latest
-	@docker push ghcr.io/$(GITHUB_REPOSITORY_OWNER)/multi-agent-orchestrator-ollama:latest
 	@echo "✅ Images published!"
 
 # ============================================================================

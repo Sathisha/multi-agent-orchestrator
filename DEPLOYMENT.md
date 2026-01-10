@@ -109,6 +109,11 @@ For private repositories, deployment servers will need to authenticate:
 docker login ghcr.io -u USERNAME -p GITHUB_PAT
 ```
 
+**Required PAT Scopes:**
+- `write:packages` (to upload images)
+- `read:packages` (to download images)
+- `delete:packages` (optional, to remove old images)
+
 ## Production Considerations
 
 ### Security

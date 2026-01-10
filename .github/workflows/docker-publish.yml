@@ -40,10 +40,6 @@ jobs:
             context: ./frontend
             dockerfile: Dockerfile
             image_suffix: -frontend
-          - service: ollama
-            context: ./infrastructure/docker/ollama
-            dockerfile: Dockerfile.ollama
-            image_suffix: -ollama
 
     steps:
       - name: Checkout repository

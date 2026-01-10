@@ -137,7 +137,7 @@ services:
 
   # Ollama for local LLM models
   ollama:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-sathisha}/multi-agent-orchestrator-ollama:latest
+    image: ollama/ollama:latest
     container_name: ai-agent-framework-ollama
     ports:
       - "11434:11434"
@@ -167,6 +167,9 @@ services:
       retries: 5
       start_period: 30s
     restart: unless-stopped
+    # Auto-pull models on startup
+    entrypoint: >
+      /bin/bash -c " /bin/ollama serve & pid=$! echo 'Waiting for Ollama...' while ! ollama list > /dev/null 2>&1; do sleep 1; done echo 'Pulling default models...' ollama pull nomic-embed-text ollama pull tinyllama wait $pid "
 
   # Prometheus Monitoring
   prometheus:
