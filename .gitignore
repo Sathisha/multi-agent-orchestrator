@@ -71,7 +71,7 @@ lerna-debug.log*
 *.sqlite3
 
 # Docker
-.dockerignore
+# .dockerignore (tracked)
 
 # Logs
 logs

@@ -60,9 +60,9 @@ dev-deploy: dev-build
 # Deploy using pre-built images from GitHub Container Registry
 prod-deploy:
 	@echo "🚀 Pulling latest images from GHCR..."
-	@docker-compose -f docker-compose.prod.yml pull
+	@docker-compose -f deployment/docker-compose.prod.yml pull
 	@echo "🚀 Starting production services..."
-	@docker-compose -f docker-compose.prod.yml up -d
+	@docker-compose -f deployment/docker-compose.prod.yml up -d
 	@echo "✅ Production deployment complete!"
 	@echo ""
 	@echo "📍 Access points:"
@@ -74,13 +74,13 @@ prod-deploy:
 # Stop production deployment
 prod-stop:
 	@echo "🛑 Stopping production services..."
-	@docker-compose -f docker-compose.prod.yml down
+	@docker-compose -f deployment/docker-compose.prod.yml down
 
 # Update production to latest images
 prod-update:
 	@echo "🔄 Updating to latest images..."
-	@docker-compose -f docker-compose.prod.yml pull
-	@docker-compose -f docker-compose.prod.yml up -d
+	@docker-compose -f deployment/docker-compose.prod.yml pull
+	@docker-compose -f deployment/docker-compose.prod.yml up -d
 	@echo "✅ Update complete!"
 
 # ============================================================================
@@ -135,7 +135,7 @@ shell:
 clean:
 	@echo "🧹 Cleaning up..."
 	@docker-compose down -v
-	@docker-compose -f docker-compose.prod.yml down -v
+	@docker-compose -f deployment/docker-compose.prod.yml down -v
 	@docker system prune -f
 	@echo "✅ Cleanup complete!"
 

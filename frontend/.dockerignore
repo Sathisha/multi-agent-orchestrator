@@ -1,0 +1,13 @@
+node_modules
+dist
+.git
+.gitignore
+.env
+.env.*
+*.log
+coverage
+cypress/videos
+cypress/screenshots
+.vscode
+Dockerfile*
+README.md
