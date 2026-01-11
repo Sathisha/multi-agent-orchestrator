@@ -1,9 +1,13 @@
-"""Google Gemini LLM provider implementation."""
+"""Google Gemini LLM provider implementation using official google-genai SDK."""
 
 import time
 from typing import Dict, List, Optional, Any, AsyncGenerator
-import httpx
-import json
+
+try:
+    from google import genai
+    from google.genai import types
+except ImportError:
+    raise ImportError("google-genai package is required. Install with: pip install google-genai")
 
 from .base import (
     BaseLLMProvider,
@@ -11,7 +15,6 @@ from .base import (
     LLMRequest,
     LLMResponse,
     LLMUsage,
-    LLMMessage,
     LLMError,
     LLMAuthenticationError,
     LLMRateLimitError,
@@ -22,7 +25,6 @@ from .base import (
 class GoogleConfig(LLMProviderConfig):
     """Google Gemini-specific configuration."""
     
-    base_url: str = "https://generativelanguage.googleapis.com/v1beta"
     max_tokens_per_minute: int = 60000
     requests_per_minute: int = 60
     
@@ -33,12 +35,13 @@ class GoogleConfig(LLMProviderConfig):
 
 
 class GoogleProvider(BaseLLMProvider):
-    """Google Gemini LLM provider implementation."""
+    """Google Gemini LLM provider implementation via official SDK."""
     
     # Token pricing per 1M tokens (approximate)
     TOKEN_PRICING = {
         "gemini-1.5-pro": {"input": 1.25, "output": 5.00},
         "gemini-1.5-flash": {"input": 0.075, "output": 0.30},
+        "gemini-2.0-flash": {"input": 0.075, "output": 0.30},
         "gemini-pro": {"input": 0.50, "output": 1.50},
     }
     
@@ -56,331 +59,273 @@ class GoogleProvider(BaseLLMProvider):
                 error_code="MISSING_API_KEY"
             )
         
-        # Initialize HTTP client
-        self._client = httpx.AsyncClient(
-            base_url=self.config.base_url,
-            timeout=self.config.timeout
-        )
+        # Create client - API key can be passed or set via GEMINI_API_KEY env var
+        self._client = genai.Client(api_key=self.api_key)
     
     async def initialize(self) -> None:
         """Initialize Google provider."""
         try:
-            # Test connection by listing models
-            models = await self.get_available_models()
-            self.logger.info(f"Google provider initialized successfully with {len(models)} models")
-            
+            # Test connectivity by listing models
+            await self.get_available_models()
+            self.logger.info("Google GenAI SDK provider initialized successfully")
         except Exception as e:
-            raise self._handle_error(e, "Failed to initialize Google provider")
+            self.logger.warning(f"Google initialization check failed (non-blocking): {e}")
     
     async def validate_credentials(self) -> bool:
         """Validate Google credentials."""
         try:
-            await self.ensure_initialized()
-            # Try to list models as a credential test
             await self.get_available_models()
             return True
         except Exception as e:
             self.logger.error(f"Google credential validation failed: {e}")
             return False
     
+    async def health_check(self) -> Dict[str, Any]:
+        """Check Google Gemini provider health status."""
+        try:
+            models = await self.get_available_models()
+            return {
+                "status": "healthy",
+                "provider": self.provider_type.value,
+                "available_models": len(models),
+                "message": "Google Gemini API is accessible"
+            }
+        except LLMAuthenticationError as e:
+            return {
+                "status": "unhealthy",
+                "provider": self.provider_type.value,
+                "error": "Authentication failed",
+                "message": str(e)
+            }
+        except Exception as e:
+            return {
+                "status": "unhealthy",
+                "provider": self.provider_type.value,
+                "error": "Connection or API error",
+                "message": str(e)
+            }
+    
     async def get_available_models(self) -> List[str]:
         """Get list of available Google models."""
         try:
-            # Make API request to list models
-            response = await self._client.get(
-                "/models",
-                params={"key": self.api_key}
-            )
+            # List models using new SDK - this returns an iterator
+            models_response = self._client.models.list()
             
-            if response.status_code == 401:
+            available_models = []
+            for model in models_response:
+                # Model has .name attribute like "models/gemini-1.5-pro"
+                model_name = model.name.replace("models/", "")
+                available_models.append(model_name)
+            
+            return sorted(available_models)
+            
+        except Exception as e:
+            error_str = str(e)
+            if "401" in error_str or "403" in error_str or "Unauthorized" in error_str:
                 raise LLMAuthenticationError(
-                    message="Invalid Google API key",
+                    message=f"Authentication failed: {e}",
                     provider=self.provider_type.value
                 )
-            
-            response.raise_for_status()
-            data = response.json()
-            
-            # Extract model names that support generateContent
-            models = []
-            for model in data.get("models", []):
-                if "generateContent" in model.get("supportedGenerationMethods", []):
-                    # Extract model name (remove "models/" prefix)
-                    model_name = model.get("name", "").replace("models/", "")
-                    models.append(model_name)
-            
-            return sorted(models)
-            
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 401:
-                raise LLMAuthenticationError(
-                    message="Invalid Google API key",
-                    provider=self.provider_type.value,
-                    original_error=e
-                )
-            elif e.response.status_code == 429:
-                raise LLMRateLimitError(
-                    message="Google rate limit exceeded",
-                    provider=self.provider_type.value,
-                    original_error=e
-                )
-            raise self._handle_error(e, "Failed to get available models")
-        except Exception as e:
             raise self._handle_error(e, "Failed to get available models")
     
     async def generate_response(self, request: LLMRequest) -> LLMResponse:
-        """Generate response from Google Gemini."""
+        """Generate response from Google Gemini using SDK."""
         start_time = time.time()
         
         try:
-            await self.ensure_initialized()
+            model_name = self._resolve_model_name(request.model)
             
-            # Convert messages to Google format
+            # Build content from messages
             contents = []
             system_instruction = None
             
             for msg in request.messages:
                 if msg.role == "system":
-                    # Google uses systemInstruction separately
-                    system_instruction = {"parts": [{"text": msg.content}]}
-                else:
-                    # Map role (assistant -> model)
-                    role = "model" if msg.role == "assistant" else "user"
-                    contents.append({
-                        "role": role,
-                        "parts": [{"text": msg.content}]
-                    })
+                    system_instruction = msg.content
+                elif msg.role == "user":
+                    contents.append(types.Content(role="user", parts=[types.Part(text=msg.content)]))
+                elif msg.role == "assistant":
+                    contents.append(types.Content(role="model", parts=[types.Part(text=msg.content)]))
             
-            # Prepare request body
-            body = {
-                "contents": contents,
-                "generationConfig": {
-                    "temperature": request.temperature,
-                    "maxOutputTokens": request.max_tokens,
-                }
-            }
-            
-            if system_instruction:
-                body["systemInstruction"] = system_instruction
-            
-            # Make request
-            model_name = request.model
-            if not model_name.startswith("models/"):
-                model_name = f"models/{model_name}"
-            
-            response = await self._client.post(
-                f"/{model_name}:generateContent",
-                params={"key": self.api_key},
-                json=body,
-                headers={"Content-Type": "application/json"}
+            # Build config
+            config = types.GenerateContentConfig(
+                temperature=request.temperature,
+                max_output_tokens=request.max_tokens,
+                system_instruction=system_instruction if system_instruction else None
             )
             
-            if response.status_code == 401:
-                raise LLMAuthenticationError(
-                    message="Invalid Google API key",
-                    provider=self.provider_type.value
+            self.logger.info(f"[Google SDK] Generating with model {model_name}")
+            
+            # Generate content using new SDK
+            response = self._client.models.generate_content(
+                model=model_name,
+                contents=contents,
+                config=config
+            )
+            
+            # Extract content - response.text is the easiest way
+            if not response.text:
+                # Check for safety blocks or other issues
+                if hasattr(response, 'candidates') and response.candidates:
+                    candidate = response.candidates[0]
+                    if hasattr(candidate, 'finish_reason'):
+                        finish_reason = str(candidate.finish_reason)
+                        if 'SAFETY' in finish_reason:
+                            raise LLMError(
+                                message=f"Content blocked due to safety: {finish_reason}",
+                                provider=self.provider_type.value,
+                                error_code="SAFETY_BLOCK"
+                            )
+                
+                raise LLMError(
+                    message="No text content in response",
+                    provider=self.provider_type.value,
+                    error_code="NO_CONTENT"
                 )
             
-            response.raise_for_status()
-            response_time_ms = int((time.time() - start_time) * 1000)
-            
-            data = response.json()
-            
-            # Extract response content
-            content = ""
-            if "candidates" in data and len(data["candidates"]) > 0:
-                candidate = data["candidates"][0]
-                if "content" in candidate and "parts" in candidate["content"]:
-                    parts = candidate["content"]["parts"]
-                    content = "".join([part.get("text", "") for part in parts])
+            content = response.text
             
             # Extract usage metadata
-            usage_metadata = data.get("usageMetadata", {})
-            prompt_tokens = usage_metadata.get("promptTokenCount", 0)
-            completion_tokens = usage_metadata.get("candidatesTokenCount", 0)
-            total_tokens = usage_metadata.get("totalTokenCount", 0)
+            prompt_tokens = 0
+            completion_tokens = 0
+            total_tokens = 0
+            
+            if hasattr(response, 'usage_metadata'):
+                usage = response.usage_metadata
+                prompt_tokens = getattr(usage, 'prompt_token_count', 0)
+                completion_tokens = getattr(usage, 'candidates_token_count', 0)
+                total_tokens = getattr(usage, 'total_token_count', 0)
             
             # Calculate cost
             cost = self._calculate_cost(request.model, prompt_tokens, completion_tokens)
             
-            # Create usage object
-            usage = LLMUsage(
+            llm_usage = LLMUsage(
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
                 total_tokens=total_tokens,
                 cost=cost
             )
             
+            response_time_ms = int((time.time() - start_time) * 1000)
+            
             # Get finish reason
-            finish_reason = "unknown"
-            if "candidates" in data and len(data["candidates"]) > 0:
-                finish_reason = data["candidates"][0].get("finishReason", "unknown").lower()
+            finish_reason = "stop"
+            if hasattr(response, 'candidates') and response.candidates:
+                candidate = response.candidates[0]
+                if hasattr(candidate, 'finish_reason'):
+                    finish_reason = str(candidate.finish_reason).lower()
             
             return LLMResponse(
                 content=content,
                 model=request.model,
-                usage=usage,
+                usage=llm_usage,
                 finish_reason=finish_reason,
                 response_time_ms=response_time_ms,
-                provider=self.provider_type.value,
-                metadata={
-                    "model_version": data.get("modelVersion"),
-                    "safety_ratings": data.get("candidates", [{}])[0].get("safetyRatings", [])
-                }
+                provider=self.provider_type.value
             )
             
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 401:
-                raise LLMAuthenticationError(
-                    message="Google authentication failed",
-                    provider=self.provider_type.value,
-                    original_error=e
-                )
-            elif e.response.status_code == 429:
-                raise LLMRateLimitError(
-                    message="Google rate limit exceeded",
-                    provider=self.provider_type.value,
-                    original_error=e
-                )
-            raise self._handle_error(e, "Failed to generate response")
         except Exception as e:
-            raise self._handle_error(e, "Failed to generate response")
+            if isinstance(e, LLMError):
+                raise
+            
+            error_msg = str(e)
+            
+            # Map SDK exceptions to our error types
+            if "API key" in error_msg or "401" in error_msg or "403" in error_msg:
+                raise LLMAuthenticationError(
+                    message=f"Authentication failed: {error_msg}",
+                    provider=self.provider_type.value
+                )
+            elif "429" in error_msg or "quota" in error_msg.lower():
+                raise LLMRateLimitError(
+                    message=f"Rate limit exceeded: {error_msg}",
+                    provider=self.provider_type.value
+                )
+            elif "not found" in error_msg.lower() or "invalid" in error_msg.lower():
+                from .base import LLMValidationError
+                raise LLMValidationError(
+                    message=f"Invalid model or request: {error_msg}",
+                    provider=self.provider_type.value
+                )
+            else:
+                raise self._handle_error(e, "Failed to generate response")
     
     async def stream_response(self, request: LLMRequest) -> AsyncGenerator[str, None]:
-        """Stream response from Google Gemini."""
+        """Stream response from Google Gemini using SDK."""
         try:
-            await self.ensure_initialized()
+            model_name = self._resolve_model_name(request.model)
             
-            # Convert messages to Google format
+            # Build content from messages
             contents = []
             system_instruction = None
             
             for msg in request.messages:
                 if msg.role == "system":
-                    system_instruction = {"parts": [{"text": msg.content}]}
-                else:
-                    role = "model" if msg.role == "assistant" else "user"
-                    contents.append({
-                        "role": role,
-                        "parts": [{"text": msg.content}]
-                    })
+                    system_instruction = msg.content
+                elif msg.role == "user":
+                    contents.append(types.Content(role="user", parts=[types.Part(text=msg.content)]))
+                elif msg.role == "assistant":
+                    contents.append(types.Content(role="model", parts=[types.Part(text=msg.content)]))
             
-            # Prepare request body
-            body = {
-                "contents": contents,
-                "generationConfig": {
-                    "temperature": request.temperature,
-                    "maxOutputTokens": request.max_tokens,
-                }
-            }
+            # Build config
+            config = types.GenerateContentConfig(
+                temperature=request.temperature,
+                max_output_tokens=request.max_tokens,
+                system_instruction=system_instruction if system_instruction else None
+            )
             
-            if system_instruction:
-                body["systemInstruction"] = system_instruction
+            self.logger.info(f"[Google SDK] Streaming from model {model_name}")
             
-            # Make streaming request
-            model_name = request.model
-            if not model_name.startswith("models/"):
-                model_name = f"models/{model_name}"
-            
-            async with self._client.stream(
-                "POST",
-                f"/{model_name}:streamGenerateContent",
-                params={"key": self.api_key, "alt": "sse"},
-                json=body,
-                headers={"Content-Type": "application/json"}
-            ) as response:
-                response.raise_for_status()
-                
-                async for line in response.aiter_lines():
-                    if line.startswith("data: "):
-                        try:
-                            chunk_data = json.loads(line[6:])
-                            if "candidates" in chunk_data and len(chunk_data["candidates"]) > 0:
-                                candidate = chunk_data["candidates"][0]
-                                if "content" in candidate and "parts" in candidate["content"]:
-                                    for part in candidate["content"]["parts"]:
-                                        if "text" in part:
-                                            yield part["text"]
-                        except json.JSONDecodeError:
-                            continue
-                        
+            # Stream content
+            for chunk in self._client.models.generate_content_stream(
+                model=model_name,
+                contents=contents,
+                config=config
+            ):
+                if chunk.text:
+                    yield chunk.text
+                    
         except Exception as e:
+            if isinstance(e, LLMError):
+                raise
             raise self._handle_error(e, "Failed to stream response")
     
-    async def health_check(self) -> Dict[str, Any]:
-        """Check Google health status."""
-        try:
-            start_time = time.time()
-            models = await self.get_available_models()
-            response_time = time.time() - start_time
+    def _resolve_model_name(self, model: str) -> str:
+        """Resolve generic model names to specific IDs."""
+        model_lower = model.lower()
+        
+        if model_lower == "gemini":
+            return "gemini-2.0-flash-exp"
+        
+        if model.startswith("models/"):
+            return model.replace("models/", "")
             
-            return {
-                "status": "healthy",
-                "response_time_ms": int(response_time * 1000),
-                "available_models": len(models),
-                "models": models[:5]  # First 5 models
-            }
-            
-        except Exception as e:
-            return {
-                "status": "unhealthy",
-                "error": str(e)
-            }
+        return model
     
     async def estimate_cost(self, request: LLMRequest) -> Optional[float]:
-        """Estimate request cost based on token usage."""
+        """Estimate request cost."""
         try:
-            # Estimate input tokens
             input_text = " ".join([msg.content for msg in request.messages])
-            estimated_input_tokens = len(input_text) // 4  # Rough estimation
-            
-            # Estimate output tokens (use max_tokens as upper bound)
+            estimated_input_tokens = len(input_text) // 4
             estimated_output_tokens = request.max_tokens
-            
-            # Calculate cost
             return self._calculate_cost(request.model, estimated_input_tokens, estimated_output_tokens)
-            
         except Exception:
             return None
-    
+            
     def _calculate_cost(self, model: str, prompt_tokens: int, completion_tokens: int) -> Optional[float]:
-        """Calculate actual cost based on usage."""
         try:
-            model_key = self._get_model_pricing_key(model)
-            if model_key not in self.TOKEN_PRICING:
+            simple_name = self._resolve_model_name(model) 
+            pricing = None
+            for key in self.TOKEN_PRICING:
+                if key in simple_name:
+                    pricing = self.TOKEN_PRICING[key]
+                    break
+            
+            if not pricing:
                 return None
             
-            pricing = self.TOKEN_PRICING[model_key]
-            
-            # Calculate cost (pricing is per 1M tokens)
             input_cost = (prompt_tokens / 1_000_000) * pricing["input"]
             output_cost = (completion_tokens / 1_000_000) * pricing["output"]
-            
             return input_cost + output_cost
-            
         except Exception:
             return None
-    
-    def _get_model_pricing_key(self, model: str) -> str:
-        """Get pricing key for model."""
-        # Remove "models/" prefix if present
-        model = model.replace("models/", "")
-        
-        # Map model names to pricing keys
-        if "gemini-1.5-pro" in model:
-            return "gemini-1.5-pro"
-        elif "gemini-1.5-flash" in model:
-            return "gemini-1.5-flash"
-        elif "gemini-pro" in model:
-            return "gemini-pro"
-        else:
-            return model  # Return as-is if no mapping found
-    
-    async def __aenter__(self):
-        """Async context manager entry."""
-        return self
-    
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Async context manager exit."""
-        if self._client:
-            await self._client.aclose()

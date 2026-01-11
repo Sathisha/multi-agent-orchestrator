@@ -32,6 +32,7 @@ class LLMProvider(str, Enum):
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     VERTEX_AI = "vertex_ai"
+    GOOGLE = "google"
     OLLAMA = "ollama"
     HUGGINGFACE = "huggingface"
 
@@ -42,6 +43,9 @@ class AgentConfig(BaseModel):
     model: str
     temperature: float = 0.7
     max_tokens: int = 1000
+    top_p: Optional[float] = None  # Nucleus sampling parameter (0.0-1.0)
+    top_k: Optional[int] = None  # Top-k sampling parameter
+    stop_sequences: Optional[List[str]] = None  # Stop sequences for generation
     system_prompt: Optional[str] = None
     tools: List[str] = []
     llm_provider: Optional[LLMProvider] = None

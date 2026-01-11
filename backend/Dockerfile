@@ -19,8 +19,10 @@ FROM base as dependencies
 # Copy requirements first (separate layer for caching)
 COPY requirements.txt .
 
-# Install Python dependencies with optimizations
+# Install CPU-only PyTorch first to avoid pulling CUDA dependencies (saves ~6GB)
+# This is sufficient since the backend delegates all GPU work to Ollama/external APIs
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu && \
     pip install --no-cache-dir -r requirements.txt && \
     pip cache purge
 
@@ -48,4 +50,4 @@ RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh && \
 
 # Run the application with database initialization
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-CMD ["python", "main.py"]s
+CMD ["python", "main.py"]

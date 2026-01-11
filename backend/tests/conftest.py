@@ -82,8 +82,8 @@ from shared.database.connection import Base, get_async_db
 from shared.config.settings import Settings
 from shared.database.connection import Base, get_async_db
 from shared.config.settings import Settings
-from shared.services.auth import get_current_user
-from shared.api.auth import get_current_user_or_api_key
+from shared.services.auth import get_current_user as get_current_user_service
+from shared.api.auth import get_current_user_or_api_key, get_current_user
 from shared.models.user import User
 from shared.models.user import User
 from uuid import uuid4
@@ -155,7 +155,7 @@ def test_client(async_engine, async_session):
     async def override_get_current_user():
         return User(
             id=uuid4(),
-            email="test@example.com",
+            email="admin@example.com",
             username="testuser",
             is_active=True
         )
@@ -167,6 +167,7 @@ def test_client(async_engine, async_session):
 
     app.dependency_overrides[get_async_db] = override_get_async_db
     app.dependency_overrides[get_current_user] = override_get_current_user
+    app.dependency_overrides[get_current_user_service] = override_get_current_user
     app.dependency_overrides[get_current_user_or_api_key] = override_get_current_user
     
     with patch("shared.middleware.audit.get_database_session", side_effect=mock_get_db_session):
@@ -187,7 +188,7 @@ async def async_client(async_engine, async_session):
     async def override_get_current_user():
         return User(
             id=uuid4(),
-            email="test@example.com",
+            email="admin@example.com",
             username="testuser",
             is_active=True
         )
@@ -199,6 +200,7 @@ async def async_client(async_engine, async_session):
 
     app.dependency_overrides[get_async_db] = override_get_async_db
     app.dependency_overrides[get_current_user] = override_get_current_user
+    app.dependency_overrides[get_current_user_service] = override_get_current_user
     app.dependency_overrides[get_current_user_or_api_key] = override_get_current_user
     
     with patch("shared.middleware.audit.get_database_session", side_effect=mock_get_db_session):
@@ -223,7 +225,8 @@ async def mock_db_init(async_engine):
          patch("shared.services.agent_state_manager.global_state_manager.start_global_monitoring", new_callable=AsyncMock), \
          patch("shared.services.agent_state_manager.global_state_manager.stop_global_monitoring", new_callable=AsyncMock), \
          patch("shared.database.connection.AsyncSessionLocal", side_effect=session_factory), \
-         patch("shared.services.agent_executor.AsyncSessionLocal", side_effect=session_factory):
+         patch("shared.services.agent_executor.AsyncSessionLocal", side_effect=session_factory), \
+         patch("shared.services.audit.AuditService.log_event", new_callable=AsyncMock):
         yield mock_db
 
 
@@ -325,12 +328,14 @@ def mock_zeebe_client():
 async def reset_workflow_service():
     """Reset the workflow orchestrator service singleton before each test."""
     try:
-        from shared.api.workflow_orchestrator import _workflow_orchestrator_instance
-        # We can't easily reset a global var in another module without importing it.
-        # But if get_workflow_orchestrator_service checks if it's None...
-        # We can try to set it to None if we can import the module.
         import shared.api.workflow_orchestrator
         shared.api.workflow_orchestrator._workflow_orchestrator_instance = None
+    except (ImportError, AttributeError):
+        pass
+
+    try:
+        import shared.api.v1.endpoints.chains
+        shared.api.v1.endpoints.chains._chain_orchestrator_instance = None
     except (ImportError, AttributeError):
         pass
     yield

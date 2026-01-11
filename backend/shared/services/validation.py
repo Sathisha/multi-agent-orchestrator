@@ -85,9 +85,14 @@ class ValidationService:
         """Validate data against a JSON schema."""
         try:
             import jsonschema
-            jsonschema.validate(data, schema)
-            return True
-        except (jsonschema.ValidationError, jsonschema.SchemaError):
+            try:
+                jsonschema.validate(data, schema)
+                return True
+            except (jsonschema.ValidationError, jsonschema.SchemaError):
+                return False
+        except ImportError:
+            # If jsonschema is not installed, log warning and return True (allow)
+            # or return False (strict). For now, strict but safe.
             return False
     
     @staticmethod

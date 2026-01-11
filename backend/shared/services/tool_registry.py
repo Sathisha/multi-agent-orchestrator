@@ -263,7 +263,7 @@ class ToolRegistryService(BaseService):
             
             try:
                 if tool.input_schema:
-                    await self.validation_service.validate_json_schema(inputs, tool.input_schema)
+                    self.validation_service.validate_json_schema(inputs, tool.input_schema)
                 
                 if tool.tool_type == ToolType.CUSTOM:
                     outputs = await self._execute_custom_tool(tool, inputs, context, timeout_override)

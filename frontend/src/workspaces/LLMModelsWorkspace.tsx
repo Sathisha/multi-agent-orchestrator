@@ -245,7 +245,11 @@ const ModelDialog: React.FC<ModelDialogProps> = ({ open, onClose, onSubmit, mode
     }
 
     const handleSubmit = () => {
-        onSubmit(formData);
+        const submissionData = { ...formData };
+        if (submissionData.api_key === '') {
+            delete submissionData.api_key;
+        }
+        onSubmit(submissionData);
         onClose();
     };
 
@@ -290,6 +294,7 @@ const ModelTestDialog: React.FC<ModelTestDialogProps> = ({ open, onClose, model 
     const [testResponse, setTestResponse] = useState<string>('');
     const [testingLoading, setTestingLoading] = useState(false);
     const [jobId, setJobId] = useState<string | null>(null);
+    const [startTime, setStartTime] = useState<number | null>(null);
 
     React.useEffect(() => {
         if (open) {
@@ -298,13 +303,24 @@ const ModelTestDialog: React.FC<ModelTestDialogProps> = ({ open, onClose, model 
             setTestResponse('');
             setJobId(null);
             setTestingLoading(false);
+            setStartTime(null);
         }
     }, [open, model]);
 
     React.useEffect(() => {
         let pollInterval: NodeJS.Timeout | null = null;
-        if (jobId && testingLoading) {
+        if (jobId && testingLoading && startTime) {
             pollInterval = setInterval(async () => {
+                // Check for 60-second timeout
+                const elapsed = (Date.now() - startTime) / 1000;
+                if (elapsed >= 60) {
+                    setTestResponse(`Error: Test timed out after 60 seconds. The model may be slow, overloaded, or experiencing issues.`);
+                    setTestingLoading(false);
+                    setJobId(null);
+                    if (pollInterval) clearInterval(pollInterval);
+                    return;
+                }
+
                 try {
                     const statusData = await getTestStatus(jobId);
                     if (statusData.status === 'completed') {
@@ -313,35 +329,39 @@ const ModelTestDialog: React.FC<ModelTestDialogProps> = ({ open, onClose, model 
                         setJobId(null);
                         if (pollInterval) clearInterval(pollInterval);
                     } else if (statusData.status === 'failed') {
-                        setTestResponse(`Error: ${statusData.error}`);
+                        // Improve error message formatting
+                        const errorMsg = statusData.error || 'Unknown error occurred';
+                        setTestResponse(`Error: ${errorMsg}`);
                         setTestingLoading(false);
                         setJobId(null);
                         if (pollInterval) clearInterval(pollInterval);
                     }
                 } catch (error) {
                     console.error("Polling error", error);
-                    setTestResponse("Error: Failed to get test status. The test might have timed out or the server restarted.");
+                    setTestResponse("Error: Failed to get test status. The test might have timed out or the server may have restarted.");
                     setTestingLoading(false);
                     setJobId(null);
                     if (pollInterval) clearInterval(pollInterval);
                 }
-            }, 2000);
+            }, 5000); // Changed from 2000ms to 5000ms (5 seconds)
         }
         return () => {
             if (pollInterval) clearInterval(pollInterval);
         }
-    }, [jobId, testingLoading]);
+    }, [jobId, testingLoading, startTime]);
 
     const handleTestModel = async () => {
         setTestingLoading(true);
         setTestResponse('');
         setJobId(null);
+        setStartTime(Date.now()); // Track start time for timeout
         try {
             const response = await testLLMModel(model.id, prompt, systemPrompt);
             setJobId(response.job_id);
         } catch (error: any) {
             setTestingLoading(false);
-            setTestResponse(`Error: ${error.response?.data?.detail || error.message}`);
+            const errorMsg = error.response?.data?.detail || error.message || 'Unknown error';
+            setTestResponse(`Error: ${errorMsg}`);
         }
     };
 
@@ -377,9 +397,26 @@ const ModelTestDialog: React.FC<ModelTestDialogProps> = ({ open, onClose, model 
                     Send Test Request
                 </Button>
                 {testResponse && (
-                    <Box sx={{ mt: 2, p: 2, border: '1px solid #ccc', borderRadius: '4px', bgcolor: '#f5f5f5' }}>
-                        <Typography variant="h6">Model Response:</Typography>
-                        <Typography sx={{ whiteSpace: 'pre-wrap' }}>{testResponse}</Typography>
+                    <Box sx={{
+                        mt: 2,
+                        p: 3,
+                        border: '2px solid #1976d2',
+                        borderRadius: '8px',
+                        bgcolor: '#ffffff',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                    }}>
+                        <Typography variant="h6" sx={{ mb: 2, color: '#1976d2', fontWeight: 600 }}>
+                            Model Response:
+                        </Typography>
+                        <Typography sx={{
+                            whiteSpace: 'pre-wrap',
+                            color: '#000000',
+                            fontSize: '0.95rem',
+                            lineHeight: 1.6,
+                            fontFamily: 'monospace'
+                        }}>
+                            {testResponse}
+                        </Typography>
                     </Box>
                 )}
             </DialogContent>

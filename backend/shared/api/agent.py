@@ -1,6 +1,10 @@
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from uuid import UUID
+import json
+import logging
+import re
+
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, Field
@@ -141,6 +145,18 @@ class AgentStatisticsResponse(BaseModel):
     total_memory_size_bytes: int
 
 
+class PromptRefinementRequest(BaseModel):
+    original_prompt: str = Field(..., min_length=1)
+    agent_type: Optional[str] = None
+    llm_model_id: Optional[UUID] = None
+
+
+class PromptRefinementResponse(BaseModel):
+    refined_prompt: str
+    improvements: List[str]
+    confidence: float = Field(..., ge=0.0, le=1.0)
+
+
 # Agent CRUD endpoints
 @router.post("", response_model=AgentResponse, status_code=status.HTTP_201_CREATED)
 async def create_agent(
@@ -162,7 +178,7 @@ async def create_agent(
             available_tools=request.available_tools,
             capabilities=request.capabilities,
             tags=request.tags,
-            created_by=current_user["user_id"]
+            created_by=str(current_user.id)
         )
         
         return agent
@@ -234,7 +250,7 @@ async def update_agent(
         available_tools=request.available_tools,
         capabilities=request.capabilities,
         tags=request.tags,
-        updated_by=current_user["user_id"]
+        updated_by=str(current_user.id)
     )
     
     if not agent:
@@ -376,7 +392,7 @@ async def execute_agent(
             input_data=request.input_data,
             deployment_id=str(request.deployment_id) if request.deployment_id else None,
             session_id=request.session_id,
-            created_by=current_user["user_id"]
+            created_by=str(current_user.id)
         )
         
         return execution
@@ -469,3 +485,105 @@ async def get_memory(
         raise HTTPException(status_code=404, detail="Memory not found")
     
     return memory
+
+
+logger = logging.getLogger(__name__)
+
+
+@router.post("/refine-prompt", response_model=PromptRefinementResponse)
+async def refine_agent_prompt(
+    request: PromptRefinementRequest,
+    session: AsyncSession = Depends(get_async_db)
+):
+    """Refine an agent's system prompt using AI for better clarity and effectiveness."""
+    from ..services.llm_service import LLMService
+    from ..services.llm_model import LLMModelService
+    from ..models.agent import AgentConfig, LLMProvider
+    
+    try:
+        llm_service = LLMService()
+        model_config = None
+        credentials = {}
+        
+        # Get LLM model if specified
+        if request.llm_model_id:
+            model_service = LLMModelService(session)
+            llm_model = await model_service.get_llm_model(str(request.llm_model_id))
+            
+            if llm_model:
+                model_config = AgentConfig(
+                    name="prompt_refiner",
+                    model=llm_model.name,
+                    temperature=0.3,
+                    max_tokens=1500,
+                    llm_provider=llm_model.provider
+                )
+                if llm_model.api_key:
+                    credentials["api_key"] = llm_model.api_key
+                if llm_model.api_base:
+                    credentials["base_url"] = llm_model.api_base
+        
+        # Fallback config
+        if not model_config:
+            model_config = AgentConfig(
+                name="prompt_refiner",
+                model="tin yllama",
+                temperature=0.3,
+                max_tokens=1500,
+                llm_provider=LLMProvider.OLLAMA
+            )
+        
+        # Refinement prompt
+        system_prompt = """You are an expert at crafting effective system prompts for AI agents.
+Refine prompts to be clear, specific, well-structured, and follow best practices.
+
+Output ONLY valid JSON in this format:
+{
+  "refined_prompt": "the improved prompt",
+  "improvements": ["improvement 1", "improvement 2"],
+  "confidence": 0.8
+}"""
+        
+        user_msg = f"""Original prompt: "{request.original_prompt}"
+Agent type: {request.agent_type or 'general'}
+
+Please refine this prompt. Output only JSON."""
+        
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_msg}
+        ]
+        
+        response = await llm_service.generate_response(messages, model_config, credentials=credentials or None)
+        content = response.content.strip()
+        
+        # Clean markdown code blocks
+        if content.startswith("```"):
+            content = re.sub(r'^```[a-z]*\n?', '', content, flags=re.MULTILINE)
+            content = re.sub(r'\n?```$', '', content, flags=re.MULTILINE).strip()
+        
+        # Parse JSON
+        try:
+            result = json.loads(content)
+        except json.JSONDecodeError:
+            match = re.search(r'(\{.*\})', content, re.DOTALL)
+            result = json.loads(match.group(1)) if match else {
+                "refused_prompt": request.original_prompt,
+                "improvements": ["Unable to parse LLM response"],
+                "confidence": 0.5
+            }
+        
+        return PromptRefinementResponse(
+            refined_prompt=result.get("refined_prompt", request.original_prompt),
+            improvements=result.get("improvements", []),
+            confidence=min(max(result.get("confidence", 0.7), 0.0), 1.0)
+        )
+        
+    except Exception as e:
+        logger.error(f"Prompt refinement failed: {e}", exc_info=True)
+        # Return original prompt on error
+        return PromptRefinementResponse(
+            refined_prompt=request.original_prompt,
+            improvements=[f"Refinement failed: {str(e)}"],
+            confidence=0.0
+        )

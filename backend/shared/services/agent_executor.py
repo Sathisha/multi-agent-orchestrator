@@ -383,30 +383,124 @@ class AgentExecutorService(BaseService):
 
             logger.debug(f"[EXEC-LOGIC] Preparing messages for execution {context.execution_id}")
             
+            # Create agent config from agent.config dict
+            from ..models.agent import AgentConfig, LLMProvider
+            
+            raw_provider = agent.config.get("llm_provider", "ollama")
+            # Defensive check: if frontend for some reason sent "unknown", fallback to "ollama"
+            if raw_provider == "unknown":
+                raw_provider = "ollama"
+                
+            agent_config = AgentConfig(
+                name=agent.name,
+                model=agent.config.get("model_name", "llama3.2:latest"),
+                temperature=agent.config.get("temperature", 0.7),
+                max_tokens=agent.config.get("max_tokens", 2000),
+                llm_provider=raw_provider
+            )
+
+            # Fetch LLM Model for credentials (always do this if possible)
+            custom_creds = None
+            try:
+                from ..services.llm_model import LLMModelService
+                model_service = LLMModelService(self.session)
+                llm_models = await model_service.list_llm_models()
+                
+                logger.info(f"[EXEC-LOGIC] Looking for model with provider='{raw_provider}' and name='{agent_config.model}'")
+                logger.info(f"[EXEC-LOGIC] Available models: {[(m.provider, m.name, m.id) for m in llm_models]}")
+                
+                # Find matching model by provider and name (case-insensitive provider comparison)
+                target_model = next((m for m in llm_models 
+                                   if m.provider.lower() == raw_provider.lower() 
+                                   and m.name == agent_config.model), None)
+                
+                if target_model:
+                    logger.info(f"[EXEC-LOGIC] Found matching model: {target_model.name} (provider: {target_model.provider}, id: {target_model.id})")
+                    custom_creds = {}
+                    if target_model.api_key:
+                        custom_creds["api_key"] = target_model.api_key
+                        logger.info(f"[EXEC-LOGIC] Using API key from model {target_model.id}")
+                    if target_model.api_base:
+                        custom_creds["base_url"] = target_model.api_base
+                    
+                    # Handle specific credential keys for different providers
+                    if raw_provider.lower() == "openai" and target_model.api_key:
+                        custom_creds = {"api_key": target_model.api_key}
+                        if target_model.api_base:
+                            custom_creds["base_url"] = target_model.api_base
+                    elif raw_provider.lower() == "anthropic" and target_model.api_key:
+                        custom_creds = {"api_key": target_model.api_key}
+                    elif raw_provider.lower() == "google" and target_model.api_key:
+                        custom_creds = {"api_key": target_model.api_key}
+                        logger.info(f"[EXEC-LOGIC] Set Google API key from model")
+                        if target_model.api_base:
+                            custom_creds["base_url"] = target_model.api_base
+                    elif raw_provider.lower() == "azure-openai" and target_model.api_key:
+                        custom_creds = {
+                            "api_key": target_model.api_key,
+                            "endpoint": target_model.api_base,
+                            "api_version": "2023-05-15"
+                        }
+                else:
+                    logger.warning(f"[EXEC-LOGIC] No matching model found for provider='{raw_provider}' name='{agent_config.model}'. Available: {[(m.provider, m.name) for m in llm_models]}")
+            except Exception as e:
+                logger.error(f"[EXEC-LOGIC] Failed to fetch model credentials: {e}", exc_info=True)
+
+            # Check if agent has tools configured
+            available_tools = agent.available_tools or []
+            tool_executions = []
+            
+            if available_tools:
+                logger.info(f"[EXEC-LOGIC] Agent has {len(available_tools)} tools available")
+                try:
+                    from ..services.tool_executor import ToolExecutorService
+                    tool_executor = ToolExecutorService(self.session, llm_service=self.llm_service)
+                    
+                    # Analyze input and execute tools if needed
+                    user_input_str = str(context.input_data.get("message", context.input_data))
+                    tool_executions = await tool_executor.analyze_and_execute_tools(
+                        user_input=user_input_str,
+                        available_tools=available_tools,
+                        agent_id=context.agent_id,
+                        agent_config=agent_config,
+                        credentials=custom_creds
+                    )
+                    
+                    if tool_executions:
+                        logger.info(f"[EXEC-LOGIC] Executed {len(tool_executions)} tool(s)")
+                except Exception as e:
+                    logger.error(f"[EXEC-LOGIC] Tool execution failed: {e}", exc_info=True)
+                    # Continue without tools if they fail
+            
             # Prepare messages
             system_prompt = agent.system_prompt or "You are a helpful assistant."
             if memory_context:
                 system_prompt += f"\nContext from memory: {', '.join(memory_context)}"
             
+            # Add tool results to context if available
+            if tool_executions:
+                from ..services.tool_executor import ToolExecutorService
+                # Reuse the existing tool_executor if possible or just call formatting
+                tool_executor_fmt = ToolExecutorService(self.session)
+                tool_context = tool_executor_fmt.format_tool_results_for_context(tool_executions)
+                system_prompt += tool_context
+            
+            # Extract user message - if it's a dict with 'message', use that
+            user_input = context.input_data
+            if isinstance(user_input, dict) and "message" in user_input:
+                user_content = str(user_input["message"])
+            else:
+                user_content = str(user_input)
+
             messages = [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": str(context.input_data)}
+                {"role": "user", "content": user_content}
             ]
-            
-            # Create agent config from agent.config dict
-            from ..models.agent import AgentConfig
-            agent_config = AgentConfig(
-                name=agent.name,
-                model=agent.config.get("model_name", "llama3"),
-                temperature=agent.config.get("temperature", 0.7),
-                max_tokens=agent.config.get("max_tokens", 2000),
-                llm_provider=agent.config.get("llm_provider", "ollama")
-            )
             
             logger.info(f"[EXEC-LOGIC] Calling LLM service for execution {context.execution_id} (timeout: {context.timeout_seconds}s)")
             
             llm_response = await asyncio.wait_for(
-                self.llm_service.generate_response(messages, agent_config, stream=False),
+                self.llm_service.generate_response(messages, agent_config, stream=False, credentials=custom_creds),
                 timeout=context.timeout_seconds
             )
             logger.info(f"[EXEC-LOGIC] LLM response received for execution {context.execution_id}")
@@ -496,7 +590,7 @@ class AgentExecutorService(BaseService):
             system_prompt += f"\nContext: {memory_context}"
         return {
             "provider": agent.config.get("llm_provider", "ollama"),
-            "model": agent.config.get("model_name", "llama3"),
+            "model": agent.config.get("model_name", "llama3.2:latest"),
             "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": str(context.input_data)}],
             "stream": False
         }

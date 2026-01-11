@@ -150,11 +150,32 @@ async def test_llm_providers():
             from shared.services.llm_providers.azure_openai_provider import AzureOpenAIConfig
             
             azure_config = AzureOpenAIConfig()
-            print(f"✓ Azure OpenAI config created: {openai_config.provider_type}")
+            print(f"✓ Azure OpenAI config created: {azure_config.provider_type}")
             print(f"  API version: {azure_config.api_version}")
             
         except Exception as e:
             print(f"✗ Azure OpenAI config failed: {e}")
+            
+        # Test Google Gemini provider configuration
+        print("\nTesting Google Gemini Provider Configuration...")
+        try:
+            from shared.services.llm_providers.google_provider import GoogleConfig
+            
+            google_config = GoogleConfig()
+            print(f"✓ Google config created: {google_config.provider_type}")
+            print(f"  Base URL: {google_config.base_url}")
+            
+            # Test model listing (with dummy key)
+            from shared.services.llm_providers.google_provider import GoogleProvider
+            dummy_creds = {"api_key": "dummy_key"}
+            try:
+                google_provider = GoogleProvider(google_config, dummy_creds)
+                print("✓ Google provider instance created")
+            except Exception as e:
+                print(f"⚠ Google provider creation failed (expected): {e}")
+                
+        except Exception as e:
+            print(f"✗ Google config failed: {e}")
         
         # Test error handling
         print("\nTesting Error Handling...")

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Agent Orchestrator API - Swagger UI</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.10.5/swagger-ui.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        .topbar {
+            display: none;
+        }
+
+        .swagger-ui .info {
+            margin: 50px 0;
+        }
+
+        .swagger-ui .scheme-container {
+            background: #fafafa;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, .15);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="swagger-ui"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.10.5/swagger-ui-bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.10.5/swagger-ui-standalone-preset.js"></script>
+    <script>
+        window.onload = function () {
+            // Determine the URL for the OpenAPI spec
+            const currentUrl = window.location.href;
+            const baseUrl = currentUrl.substring(0, currentUrl.lastIndexOf('/'));
+            const specUrl = baseUrl + '/openapi.json';
+
+            window.ui = SwaggerUIBundle({
+                url: specUrl,
+                dom_id: '#swagger-ui',
+                deepLinking: true,
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIStandalonePreset
+                ],
+                plugins: [
+                    SwaggerUIBundle.plugins.DownloadUrl
+                ],
+                layout: "StandaloneLayout",
+                defaultModelsExpandDepth: 1,
+                defaultModelExpandDepth: 1,
+                docExpansion: "list",
+                filter: true,
+                showExtensions: true,
+                showCommonExtensions: true,
+                persistAuthorization: true,
+                tryItOutEnabled: true,
+                requestSnippetsEnabled: true,
+                syntaxHighlight: {
+                    activate: true,
+                    theme: "monokai"
+                }
+            });
+        }
+    </script>
+</body>
+
+</html>

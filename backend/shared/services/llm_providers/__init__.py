@@ -7,6 +7,7 @@ from .base import (
     LLMError, 
     LLMProviderType, 
     LLMMessage,
+    LLMUsage,
     LLMConnectionError,
     LLMRateLimitError,
     LLMAuthenticationError,

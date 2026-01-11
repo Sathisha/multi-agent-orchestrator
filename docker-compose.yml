@@ -1,18 +1,35 @@
 services:
+  # Fluentd Logging Service
+  fluentd:
+    image: fluent/fluentd:v1.16-debian-1
+    container_name: ai-agent-framework-fluentd
+    user: root
+    volumes:
+      - ./infrastructure/docker/fluentd/fluent.conf:/fluentd/etc/fluent.conf
+      - ./logs:/fluentd/log
+    ports:
+      - "24224:24224"
+      - "24224:24224/udp"
+    networks:
+      - ai-agent-network
+    restart: always
+
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
     container_name: ai-agent-framework-postgres
     environment:
-      POSTGRES_DB: ai_agent_framework
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-ai_agent_framework}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_HOST_AUTH_METHOD: trust
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./infrastructure/docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+      # Note: Local init script might not be present in consumer environment if they only have compose file
+      # You might want to bake this into a custom postgres image or assume default behavior
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres -d ai_agent_framework" ]
       interval: 10s
@@ -20,6 +37,13 @@ services:
       retries: 5
     networks:
       - ai-agent-network
+    restart: always
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: "localhost:24224"
+        tag: "docker.{{.Name}}"
+        fluentd-async: "true"
 
   # Redis Cache
   redis:
@@ -37,20 +61,27 @@ services:
       retries: 5
     networks:
       - ai-agent-network
+    restart: always
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: "localhost:24224"
+        tag: "docker.{{.Name}}"
+        fluentd-async: "true"
 
   # Keycloak Identity Management
   keycloak:
     image: quay.io/keycloak/keycloak:22.0
     container_name: ai-agent-framework-keycloak
     environment:
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
-      KC_DB_USERNAME: postgres
-      KC_DB_PASSWORD: postgres
-      KC_HOSTNAME_STRICT: false
-      KC_HTTP_ENABLED: true
+      KC_DB_USERNAME: ${POSTGRES_USER:-postgres}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
     ports:
       - "8080:8080"
     depends_on:
@@ -59,6 +90,13 @@ services:
     command: start-dev
     networks:
       - ai-agent-network
+    restart: always
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: "localhost:24224"
+        tag: "docker.{{.Name}}"
+        fluentd-async: "true"
 
   # Kong API Gateway
   kong:
@@ -76,37 +114,46 @@ services:
       - "8000:8000" # Proxy port
       - "8002:8001" # Admin API port
     volumes:
+      # Requires the consumer to have this file locally or mount it from another source
       - ./infrastructure/docker/kong/kong.yml:/kong/declarative/kong.yml
     networks:
       - ai-agent-network
+    restart: always
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: "localhost:24224"
+        tag: "docker.{{.Name}}"
+        fluentd-async: "true"
 
   # Backend API Service
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    image: multi-agent-orchestrator-backend:local
     container_name: ai-agent-framework-backend
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/ai_agent_framework
-      - DATABASE_ASYNC_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/ai_agent_framework
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-ai_agent_framework}
+      - DATABASE_ASYNC_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-ai_agent_framework}
       - REDIS_URL=redis://redis:6379/0
       - CHROMA_DB_PATH=/app/data/chroma
-      - ENVIRONMENT=development
-      - DEBUG=true
+      - ENVIRONMENT=production
+      - DEBUG=false
       - LOG_LEVEL=INFO
-      - RECREATE_DB=false # Set to true to recreate database on startup
-      - ENABLE_MIGRATIONS=false # Set to true to enable Alembic migrations
-      - MEMORY_EMBEDDING_PROVIDER=ollama
-      - MEMORY_EMBEDDING_MODEL=nomic-embed-text
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-not-required-for-ollama}
+      - RECREATE_DB=false
+      - ENABLE_MIGRATIONS=true
+      - MEMORY_EMBEDDING_PROVIDER=${MEMORY_EMBEDDING_PROVIDER:-ollama}
+      - MEMORY_EMBEDDING_MODEL=${MEMORY_EMBEDDING_MODEL:-nomic-embed-text}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://ollama:11434}
       - MEMORY_VECTOR_DB_PATH=/app/data/chroma
+      - FORCE_SEEDING=${FORCE_SEEDING:-true}
     ports:
       - "8001:8000"
     volumes:
       - ./backend:/app
       - chroma_data:/app/data/chroma
-      - /app/__pycache__ # Exclude pycache from volume mount
     depends_on:
       postgres:
         condition: service_healthy
@@ -115,12 +162,12 @@ services:
     networks:
       - ai-agent-network
     restart: unless-stopped
-    healthcheck:
-      test: [ "CMD-SHELL", "curl -f http://localhost:8000/health || exit 1" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: "localhost:24224"
+        tag: "docker.{{.Name}}"
+        fluentd-async: "true"
     deploy:
       resources:
         reservations:
@@ -134,14 +181,19 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    image: multi-agent-orchestrator-frontend:local
     container_name: ai-agent-framework-frontend
     ports:
       - "3000:80"
-    environment:
-      - NODE_ENV=production
     networks:
       - ai-agent-network
     restart: unless-stopped
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: "localhost:24224"
+        tag: "docker.{{.Name}}"
+        fluentd-async: "true"
 
   # Ollama for local LLM models
   ollama:
@@ -175,9 +227,25 @@ services:
       retries: 5
       start_period: 30s
     restart: unless-stopped
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: "localhost:24224"
+        tag: "docker.{{.Name}}"
+        fluentd-async: "true"
     # Auto-pull models on startup
-    entrypoint: >
-      /bin/bash -c " /bin/ollama serve & pid=$! echo 'Waiting for Ollama...' while ! ollama list > /dev/null 2>&1; do sleep 1; done echo 'Pulling default models...' ollama pull nomic-embed-text ollama pull tinyllama wait $pid "
+    entrypoint: |
+      /bin/bash -c "
+      /bin/ollama serve &
+      pid=\$!;
+      sleep 5;
+      echo 'Waiting for Ollama to be ready...';
+      while ! ollama list > /dev/null 2>&1; do sleep 1; done;
+      echo 'Pulling default models...';
+      ollama pull nomic-embed-text;
+      ollama pull tinyllama;
+      wait \$pid
+      "
 
   # Prometheus Monitoring
   prometheus:
@@ -196,6 +264,13 @@ services:
       - '--web.enable-lifecycle'
     networks:
       - ai-agent-network
+    restart: always
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: "localhost:24224"
+        tag: "docker.{{.Name}}"
+        fluentd-async: "true"
 
   # Apache Superset for Visualization
   superset:
@@ -204,7 +279,7 @@ services:
     ports:
       - "8088:8088"
     environment:
-      - SUPERSET_SECRET_KEY=your-secret-key-here
+      - SUPERSET_SECRET_KEY=${SUPERSET_SECRET_KEY:-your-secret-key-here}
       - SUPERSET_CONFIG_PATH=/app/superset_config.py
     volumes:
       - ./infrastructure/docker/superset/superset_config.py:/app/superset_config.py
@@ -216,6 +291,13 @@ services:
         condition: service_healthy
     networks:
       - ai-agent-network
+    restart: always
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: "localhost:24224"
+        tag: "docker.{{.Name}}"
+        fluentd-async: "true"
     command: >
       bash -c "
         superset db upgrade &&
@@ -228,7 +310,6 @@ volumes:
   postgres_data:
   redis_data:
   prometheus_data:
-
   superset_data:
   chroma_data:
   ollama_data:

@@ -421,3 +421,20 @@ certs/dev/
 db-backups/local/
 
 myenv
+backend_logs.txt
+logs_*.txt
+temp_prompt_endpoint.txt
+backend/verify_gemini_rest.py
+*.txt
+!README.md
+!PROJECT_TODO.md
+!3p-dependencies.md
+!GEMINI.md
+!CONTRIBUTING.md
+!LICENSE
+!SECURITY.md
+!API.md
+backend/reports/
+backend/broken_tests/
+staged_files_list.staged
+git_status_output.txt

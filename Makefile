@@ -1,15 +1,12 @@
 # AI Agent Framework - Simplified Makefile
-# Essential commands for development, testing, and deployment
+# Essential commands for building, deploying, and testing
 
 # ============================================================================
 # VARIABLES
 # ============================================================================
 GITHUB_REPOSITORY_OWNER ?= sathisha
 
-.PHONY: help dev-build dev-deploy prod-deploy docker-publish test clean logs shell build
-
-# Alias for dev-build
-build: dev-build
+.PHONY: help build deploy stop clean test logs shell docker-publish
 
 # ============================================================================
 # HELP
@@ -18,77 +15,77 @@ help:
 	@echo "AI Agent Framework - Essential Commands"
 	@echo "========================================="
 	@echo ""
-	@echo "🏗️  Local Development:"
-	@echo "  dev-build        - Build all Docker images locally"
-	@echo "  dev-deploy       - Deploy locally (build + start all services)"
-	@echo "  logs             - View backend logs"
-	@echo "  shell            - Open shell in backend container"
+	@echo "🏗️  Build & Deploy:"
+	@echo "  build            - Build all Docker images locally"
+	@echo "  deploy           - Deploy application (pull images from GHCR or build locally)"
+	@echo "  stop             - Stop all running services"
 	@echo "  clean            - Stop and remove all containers/volumes"
 	@echo ""
 	@echo "🧪 Testing:"
 	@echo "  test             - Run all tests with coverage"
 	@echo "  test-quick       - Run quick tests (no slow tests)"
+	@echo "  test-tools       - Run tool integration tests"
+	@echo "  test-e2e         - Run end-to-end tests"
 	@echo ""
-	@echo "🚀 Production:"
-	@echo "  prod-deploy      - Deploy using production images from GHCR"
-	@echo "  prod-stop        - Stop production deployment"
+	@echo "📚 Documentation:"
+	@echo "  api-docs         - Export OpenAPI specification"
+	@echo "  api-docs-serve   - Serve API docs locally"
+	@echo ""
+	@echo "🔧 Utilities:"
+	@echo "  logs             - View backend logs"
+	@echo "  shell            - Open shell in backend container"
 	@echo ""
 	@echo "📦 CI/CD:"
 	@echo "  docker-publish   - Build and push images to GHCR (manual trigger)"
 	@echo ""
 
 # ============================================================================
-# LOCAL DEVELOPMENT - Full Build & Deploy
+# BUILD & DEPLOY
 # ============================================================================
 
-# Build all Docker images
-dev-build:
+# Build all Docker images locally
+build:
 	@echo "🔨 Building all Docker images..."
 	@docker-compose build
 	@echo "✅ Build complete!"
 
-# Full local development deployment
-dev-deploy: dev-build
+# Deploy application
+deploy:
 	@echo "🚀 Starting all services..."
-	@docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
-	@echo "✅ Development environment ready!"
+	@docker-compose up -d
+	@echo "✅ Deployment complete!"
 	@echo ""
 	@echo "📍 Access points:"
-	@echo "  - Frontend:  http://localhost:3000"
-	@echo "  - Backend:   http://localhost:8000"
-	@echo "  - API Docs:  http://localhost:8000/docs"
-	@echo "  - Superset:  http://localhost:8088 (admin/admin)"
+	@echo "  - Frontend:   http://localhost:3000"
+	@echo "  - Backend:    http://localhost:8001"
+	@echo "  - API Docs:   http://localhost:8001/docs"
+	@echo "  - Superset:   http://localhost:8088 (admin/admin)"
 	@echo "  - Prometheus: http://localhost:9090"
 	@echo ""
 
-# ============================================================================
-# PRODUCTION DEPLOYMENT - Pull & Deploy
-# ============================================================================
+# Stop all services
+stop:
+	@echo "🛑 Stopping all services..."
+	@docker-compose down
 
-# Deploy using pre-built images from GitHub Container Registry
-prod-deploy:
+# Clean up everything
+clean:
+	@echo "🧹 Cleaning up..."
+	@docker-compose down -v
+	@docker system prune -f
+	@if exist logs powershell -Command "Remove-Item -Path logs\* -Include *.log -Recurse -Force -ErrorAction SilentlyContinue"
+	@echo "✅ Cleanup complete!"
+
+# Pull latest images from GHCR
+pull:
 	@echo "🚀 Pulling latest images from GHCR..."
-	@docker-compose -f deployment/docker-compose.prod.yml pull
-	@echo "🚀 Starting production services..."
-	@docker-compose -f deployment/docker-compose.prod.yml up -d
-	@echo "✅ Production deployment complete!"
-	@echo ""
-	@echo "📍 Access points:"
-	@echo "  - Frontend:  http://localhost:3000"
-	@echo "  - Backend:   http://localhost:8001"
-	@echo "  - API Docs:  http://localhost:8001/docs"
-	@echo ""
+	@docker-compose pull
+	@echo "✅ Images pulled!"
 
-# Stop production deployment
-prod-stop:
-	@echo "🛑 Stopping production services..."
-	@docker-compose -f deployment/docker-compose.prod.yml down
-
-# Update production to latest images
-prod-update:
+# Update to latest images and restart
+update: pull
 	@echo "🔄 Updating to latest images..."
-	@docker-compose -f deployment/docker-compose.prod.yml pull
-	@docker-compose -f deployment/docker-compose.prod.yml up -d
+	@docker-compose up -d
 	@echo "✅ Update complete!"
 
 # ============================================================================
@@ -109,6 +106,36 @@ test-quick:
 	@echo "🧪 Running quick tests..."
 	@docker-compose exec -T backend pytest tests/ -v -m 'not slow' --cov=shared --cov-report=term-missing
 	@echo "✅ Quick tests completed!"
+
+# Run tool-specific tests
+test-tools:
+	@echo "🧪 Running tool integration tests..."
+	@docker-compose exec -T backend bash -c "export PYTHONPATH=/app:/app/backend && pytest tests/integration/test_tool_execution.py tests/integration/test_agent_with_tools.py -v"
+	@echo "✅ Tool tests completed!"
+
+# Run end-to-end tests
+test-e2e:
+	@echo "🧪 Running end-to-end tests..."
+	@docker-compose exec -T backend bash -c "export PYTHONPATH=/app:/app/backend && pytest tests/e2e/ -v"
+	@echo "✅ E2E tests completed!"
+
+# ============================================================================
+# API DOCUMENTATION
+# ============================================================================
+
+# Export OpenAPI specification
+api-docs:
+	@echo "📚 Exporting OpenAPI specification..."
+	@if not exist "docs\\api" mkdir docs\\api
+	@powershell -Command "Invoke-WebRequest -Uri 'http://localhost:8001/openapi.json' -OutFile 'docs\\api\\openapi.json'"
+	@echo "✅ OpenAPI spec exported to docs/api/openapi.json"
+
+# Serve API docs locally
+api-docs-serve:
+	@echo "📚 Starting local documentation server..."
+	@echo "📍 Open http://localhost:8080 in your browser"
+	@echo "📍 Swagger UI: http://localhost:8080/api/swagger-ui.html"
+	@cd docs && python -m http.server 8080
 
 # ============================================================================
 # CI/CD - Docker Publishing
@@ -136,15 +163,8 @@ logs:
 # Open shell in backend container
 shell:
 	@docker-compose exec backend /bin/bash
-
-# Clean up everything
-clean:
-	@echo "🧹 Cleaning up..."
-	@docker-compose down -v
-	@docker-compose -f deployment/docker-compose.prod.yml down -v
-	@docker system prune -f
-	@echo "✅ Cleanup complete!"
-
-# Stop development services
-stop:
-	@docker-compose down
+# Register built-in tools (web search, Wikipedia, etc.)
+setup-tools:
+	@echo "🔧 Registering built-in tools..."
+	@docker-compose exec -T backend bash -c "export PYTHONPATH=/app && python scripts/register_builtin_tools.py"
+	@echo "✅ Tools registered! Use 'curl http://localhost:8001/api/v1/tools' to see them"

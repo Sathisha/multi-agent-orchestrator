@@ -15,7 +15,7 @@ from shared.models.chain import (
     Chain, ChainNode, ChainEdge, ChainExecution, ChainExecutionLog,
     ChainStatus, ChainNodeType, ChainExecutionStatus
 )
-from shared.database.connection import get_database_session, AsyncSessionLocal
+from shared.database.connection import get_database_session
 from shared.models.agent import Agent
 from shared.schemas.chain import ChainValidationResult
 from shared.services.base import BaseService
@@ -45,7 +45,8 @@ class ChainOrchestratorService(BaseService):
         self,
         agent_executor_service=None,
         memory_manager_service=None,
-        guardrails_service=None
+        guardrails_service=None,
+        session_maker=None
     ):
         """
         Initialize chain orchestrator service.
@@ -54,12 +55,23 @@ class ChainOrchestratorService(BaseService):
             agent_executor_service: Service for executing agents
             memory_manager_service: Service for managing memory
             guardrails_service: Service for guardrails
+            session_maker: Session maker to use for parallel tasks
         """
+        # ChainOrchestrator handles multiple entities, not a single model
         self.agent_executor = agent_executor_service
         self.memory_manager = memory_manager_service
         self.guardrails = guardrails_service
+        self._session_maker = session_maker
         
         logger.info("Chain orchestrator service initialized")
+
+    @property
+    def session_maker(self):
+        """Get the session maker, defaulting to the one from connection module."""
+        if self._session_maker:
+            return self._session_maker
+        from shared.database.connection import AsyncSessionLocal
+        return AsyncSessionLocal
     
     async def validate_chain(
         self, 
@@ -548,7 +560,8 @@ class ChainOrchestratorService(BaseService):
         async def process_node_task(node_id: str):
             """Execute a single node."""
             # Create a dedicated session for this task to allow parallel execution
-            async with AsyncSessionLocal() as task_session:
+            # Use the session_maker to ensure we use the same DB as the main loop (Real DB or Test DB)
+            async with self.session_maker() as task_session:
                 node = node_map[node_id]
                 node_states[node_id] = "RUNNING"
                 
@@ -579,6 +592,7 @@ class ChainOrchestratorService(BaseService):
                         f"Node {node.label} completed", "INFO", output_data=node_output
                     )
                     
+                    await task_session.commit()
                     return node_id, "COMPLETED", node_output
                     
                 except Exception as e:
@@ -587,6 +601,7 @@ class ChainOrchestratorService(BaseService):
                         task_session, execution.id, node_id, "node_failed",
                         f"Node {node.label} failed: {str(e)}", "ERROR", error_message=str(e)
                     )
+                    await task_session.commit()
                     return node_id, "FAILED", None
         
         # 4. Execution Loop

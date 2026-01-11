@@ -10,6 +10,10 @@ from shared.database.connection import get_async_db
 from shared.schemas.llm_model import LLMModelCreate, LLMModelResponse, LLMModelUpdate, LLMModelTestRequest
 from shared.services.llm_model import LLMModelService
 from shared.services.ollama_service import OllamaService, get_ollama_service
+from shared.services.llm_providers.base import LLMError
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/llm-models", tags=["llm-models"])
 
@@ -46,106 +50,155 @@ async def discover_ollama_models(
 # In-memory job store for test results (transient)
 TEST_JOBS: Dict[str, Dict[str, Any]] = {}
 
+# Job cleanup settings
+MAX_JOB_AGE_SECONDS = 300  # 5 minutes
+
+def cleanup_old_jobs():
+    """Remove jobs older than MAX_JOB_AGE_SECONDS."""
+    from datetime import datetime, timedelta
+    cutoff_time = datetime.now() - timedelta(seconds=MAX_JOB_AGE_SECONDS)
+    
+    jobs_to_remove = []
+    for job_id, job_data in TEST_JOBS.items():
+        try:
+            created_str = job_data.get("created_at", "")
+            if created_str:
+                created_time = datetime.fromisoformat(created_str)
+                if created_time < cutoff_time:
+                    jobs_to_remove.append(job_id)
+        except Exception:
+            pass
+    
+    for job_id in jobs_to_remove:
+        del TEST_JOBS[job_id]
+    
+    if jobs_to_remove:
+        logger.info(f"Cleaned up {len(jobs_to_remove)} old test jobs")
+
 import asyncio
 import uuid
 from fastapi import BackgroundTasks
 
 async def run_test_bg_task(job_id: str, test_request: LLMModelTestRequest, db_session_maker, ollama_service, images: List[str] = None):
-    """Background task to run the LLM test."""
+    """Background task to run the LLM test with 60-second timeout."""
     TEST_JOBS[job_id]["status"] = "running"
     
     # Create a new session for the background task
     async with db_session_maker() as session:
         try:
-            model_service = LLMModelService(session)
-            llm_model = await model_service.get_llm_model(test_request.model_id)
+            # Wrap the entire test execution in a timeout
+            async with asyncio.timeout(60):  # 60-second timeout
+                model_service = LLMModelService(session)
+                llm_model = await model_service.get_llm_model(test_request.model_id)
 
-            if not llm_model:
-                TEST_JOBS[job_id]["status"] = "failed"
-                TEST_JOBS[job_id]["error"] = "LLM model not found"
-                return
+                if not llm_model:
+                    TEST_JOBS[job_id]["status"] = "failed"
+                    TEST_JOBS[job_id]["error"] = "LLM model not found"
+                    return
 
-            # Generic provider handling using LLMProviderFactory
-            from shared.services.llm_providers import (
-                LLMProviderFactory, 
-                CredentialManager, 
-                LLMProviderType, 
-                LLMRequest, 
-                LLMMessage
-            )
+                # Generic provider handling using LLMProviderFactory
+                from shared.services.llm_providers import (
+                    LLMProviderFactory, 
+                    CredentialManager, 
+                    LLMProviderType, 
+                    LLMRequest, 
+                    LLMMessage
+                )
 
-            # Determine provider type
-            provider_type_str = llm_model.provider.lower()
-            try:
-                provider_enum = LLMProviderType(provider_type_str)
-            except ValueError:
-                TEST_JOBS[job_id]["status"] = "failed"
-                TEST_JOBS[job_id]["error"] = f"Unsupported LLM provider: {llm_model.provider}"
-                return
+                # Determine provider type
+                provider_type_str = llm_model.provider.lower()
+                logger.info(f"[EXEC-BG] Provider type: {provider_type_str}")
+                try:
+                    provider_enum = LLMProviderType(provider_type_str)
+                except ValueError:
+                    TEST_JOBS[job_id]["status"] = "failed"
+                    TEST_JOBS[job_id]["error"] = f"Unsupported LLM provider: {llm_model.provider}"
+                    return
 
-            # Setup temporary Credential Manager
-            cred_manager = CredentialManager()
-            
-            creds = {}
-            if provider_enum == LLMProviderType.OPENAI:
-                 creds = {"api_key": llm_model.api_key}
-                 if llm_model.api_base:
-                     creds["base_url"] = llm_model.api_base
-            elif provider_enum == LLMProviderType.ANTHROPIC:
-                 creds = {"api_key": llm_model.api_key}
-            elif provider_enum == LLMProviderType.OLLAMA:
-                 # Handle Ollama connection - prioritize internal networking if available
-                 base_url = llm_model.api_base
-                 env_ollama_url = os.environ.get("OLLAMA_BASE_URL")
-                 
-                 # If we are in Docker and the DB says localhost, switch to the internal service
-                 if base_url and ("localhost" in base_url or "127.0.0.1" in base_url) and env_ollama_url:
-                     base_url = env_ollama_url
-                 
-                 # Fallback to env var or default if not in DB
-                 if not base_url:
-                     base_url = env_ollama_url or "http://ollama:11434"
+                # Setup temporary Credential Manager
+                cred_manager = CredentialManager()
+                logger.info("[EXEC-BG] Setting up credentials...")
+                
+                creds = {}
+                if provider_enum == LLMProviderType.OPENAI:
+                     creds = {"api_key": llm_model.api_key}
+                     if llm_model.api_base:
+                         creds["base_url"] = llm_model.api_base
+                elif provider_enum == LLMProviderType.ANTHROPIC:
+                     creds = {"api_key": llm_model.api_key}
+                elif provider_enum == LLMProviderType.OLLAMA:
+                     # Handle Ollama connection - prioritize internal networking if available
+                     base_url = llm_model.api_base
+                     env_ollama_url = os.environ.get("OLLAMA_BASE_URL")
                      
-                 creds = {"base_url": base_url}
-            elif provider_enum == LLMProviderType.AZURE_OPENAI:
-                 creds = {
-                     "api_key": llm_model.api_key,
-                     "endpoint": llm_model.api_base,
-                     "api_version": "2023-05-15"
-                 }
-            
-            await cred_manager.store_credentials(provider_enum, creds)
-            
-            # Create Factory & Provider
-            factory = LLMProviderFactory(cred_manager)
-            provider = await factory.get_or_create_provider(provider_enum)
-            
-            # Create Request
-            messages = []
-            if test_request.system_prompt:
-                 messages.append(LLMMessage(role="system", content=test_request.system_prompt))
-            
-            user_msg = LLMMessage(role="user", content=test_request.prompt)
-            if images:
-                user_msg.images = images
-            messages.append(user_msg)
+                     # If we are in Docker and the DB says localhost, switch to the internal service
+                     if base_url and ("localhost" in base_url or "127.0.0.1" in base_url) and env_ollama_url:
+                         base_url = env_ollama_url
+                     
+                     # Fallback to env var or default if not in DB
+                     if not base_url:
+                         base_url = env_ollama_url or "http://ollama:11434"
+                         
+                     creds = {"base_url": base_url}
+                elif provider_enum == LLMProviderType.AZURE_OPENAI:
+                     creds = {
+                         "api_key": llm_model.api_key,
+                         "endpoint": llm_model.api_base,
+                         "api_version": "2023-05-15"
+                     }
+                elif provider_enum == LLMProviderType.GOOGLE:
+                     logger.info("[EXEC-BG] Configuring Google credentials...")
+                     creds = {"api_key": llm_model.api_key}
+                     if llm_model.api_base:
+                         creds["base_url"] = llm_model.api_base
+                
+                await cred_manager.store_credentials(provider_enum, creds)
+                
+                # Create Factory & Provider
+                logger.info("[EXEC-BG] Creating provider instance...")
+                factory = LLMProviderFactory(cred_manager)
+                provider = await factory.get_or_create_provider(provider_enum)
+                
+                # Create Request
+                messages = []
+                if test_request.system_prompt:
+                     messages.append(LLMMessage(role="system", content=test_request.system_prompt))
+                
+                user_msg = LLMMessage(role="user", content=test_request.prompt)
+                if images:
+                    user_msg.images = images
+                messages.append(user_msg)
 
-            request = LLMRequest(
-                messages=messages,
-                model=llm_model.name,
-                temperature=0.7,
-                max_tokens=1000
-            )
-            
-            # Generate Response
-            response = await provider.generate_response(request)
-            
-            TEST_JOBS[job_id]["status"] = "completed"
-            TEST_JOBS[job_id]["result"] = response.content
-            
-        except Exception as e:
+                request = LLMRequest(
+                    messages=messages,
+                    model=llm_model.name,
+                    temperature=0.7,
+                    max_tokens=1000
+                )
+                
+                # Generate Response
+                logger.info(f"[EXEC-BG] Generating response with model {llm_model.name}...")
+                response = await provider.generate_response(request)
+                logger.info("[EXEC-BG] Response generated successfully")
+                
+                TEST_JOBS[job_id]["status"] = "completed"
+                TEST_JOBS[job_id]["result"] = response.content
+                
+        except asyncio.TimeoutError:
+            logger.error(f"[EXEC-BG] Test timed out after 60 seconds")
+            TEST_JOBS[job_id]["status"] = "failed"
+            TEST_JOBS[job_id]["error"] = "Test timed out after 60 seconds. The model may be slow or unresponsive."
+        except LLMError as e:
+            logger.error(f"[EXEC-BG] LLM-specific error during model test: {e}", exc_info=True)
             TEST_JOBS[job_id]["status"] = "failed"
             TEST_JOBS[job_id]["error"] = str(e)
+        except Exception as e:
+            logger.error(f"[EXEC-BG] Unexpected error during model test: {e}", exc_info=True)
+            error_msg = str(e)
+            if "400" in error_msg and "google" in str(llm_model.provider).lower():
+                error_msg = f"Potential invalid model name. Ensure the Model name is a valid Gemini ID (e.g., gemini-1.5-flash). Original error: {error_msg}"
+            TEST_JOBS[job_id]["status"] = "failed"
+            TEST_JOBS[job_id]["error"] = error_msg
 
 
 @router.post("/test", response_model=Dict[str, str])
@@ -155,6 +208,9 @@ async def test_llm_model(
     ollama_service: OllamaService = Depends(get_ollama_service),
 ):
     """Start a background test for a specific LLM model."""
+    # Cleanup old jobs before creating a new one
+    cleanup_old_jobs()
+    
     job_id = str(uuid.uuid4())
     TEST_JOBS[job_id] = {"status": "pending", "created_at": str(datetime.now())}
     

@@ -37,6 +37,7 @@ class LLMModelUpdate(BaseModel):
 class LLMModelResponse(LLMModelBase):
     """Schema for LLM model API responses."""
     id: UUID
+    api_key: Optional[str] = Field(None, description="API key for the model (masked)")
 
     class Config:
         from_attributes = True

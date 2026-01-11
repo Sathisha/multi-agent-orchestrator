@@ -21,15 +21,15 @@ import {
   FolderOpen as FolderOpenIcon,
 } from '@mui/icons-material'
 import { useQuery } from 'react-query'
-import { getWorkflows, WorkflowResponse } from '../../api/workflows'
+import { listChains } from '../../api/chains'
 import { useNavigate, useParams } from 'react-router-dom'
 
 const WorkflowExplorer: React.FC = () => {
   const navigate = useNavigate()
-  const { workflowId: currentWorkflowId } = useParams<{ workflowId: string }>()
+  const { chainId: currentChainId } = useParams<{ chainId: string }>()
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['workflows']))
 
-  const { data: workflows, isLoading } = useQuery('workflows', getWorkflows)
+  const { data: chains, isLoading } = useQuery('chains', () => listChains())
 
   const toggleFolder = (folderId: string) => {
     const newExpanded = new Set(expandedFolders)
@@ -47,6 +47,8 @@ const WorkflowExplorer: React.FC = () => {
         return '#4ec9b0'
       case 'draft':
         return '#969696'
+      case 'archived':
+        return '#f48771'
       default:
         return '#969696'
     }
@@ -119,40 +121,40 @@ const WorkflowExplorer: React.FC = () => {
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
               <CircularProgress size={16} sx={{ color: '#444' }} />
             </Box>
-          ) : workflows && workflows.length > 0 ? (
-            workflows.map((workflow) => (
+          ) : chains && chains.length > 0 ? (
+            chains.map((chain) => (
               <ListItem
-                key={workflow.id}
+                key={chain.id}
                 disablePadding
                 sx={{
-                  backgroundColor: currentWorkflowId === workflow.id ? '#37373d' : 'transparent',
+                  backgroundColor: currentChainId === chain.id ? '#37373d' : 'transparent',
                   '&:hover': {
-                    backgroundColor: currentWorkflowId === workflow.id ? '#37373d' : '#2a2d2e',
+                    backgroundColor: currentChainId === chain.id ? '#37373d' : '#2a2d2e',
                   },
                 }}
               >
                 <ListItemButton
-                  onClick={() => navigate(`/chains/${workflow.id}`)}
+                  onClick={() => navigate(`/chains/${chain.id}`)}
                   sx={{
                     py: 0.5,
                     pl: 4,
                     minHeight: 'auto',
-                    borderLeft: currentWorkflowId === workflow.id ? '2px solid #007acc' : '2px solid transparent'
+                    borderLeft: currentChainId === chain.id ? '2px solid #007acc' : '2px solid transparent'
                   }}
                 >
                   <ListItemIcon sx={{ minWidth: 20, mr: 1 }}>
                     <WorkflowIcon
                       sx={{
                         fontSize: 16,
-                        color: getStatusColor(workflow.status)
+                        color: getStatusColor(chain.status)
                       }}
                     />
                   </ListItemIcon>
                   <ListItemText
-                    primary={workflow.name}
+                    primary={chain.name}
                     primaryTypographyProps={{
                       fontSize: '13px',
-                      color: currentWorkflowId === workflow.id ? '#ffffff' : '#cccccc',
+                      color: currentChainId === chain.id ? '#ffffff' : '#cccccc',
                       noWrap: true
                     }}
                   />

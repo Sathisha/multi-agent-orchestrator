@@ -1,0 +1,23 @@
+{
+    "mcpServers": {
+        "filesystem": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-filesystem",
+                "/workspace"
+            ],
+            "description": "Access to filesystem operations",
+            "enabled": true
+        },
+        "fetch": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-fetch"
+            ],
+            "description": "HTTP request capabilities",
+            "enabled": true
+        }
+    }
+}

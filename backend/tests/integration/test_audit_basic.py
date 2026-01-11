@@ -29,4 +29,4 @@ def test_imports():
     
     # Test middleware imports
     from shared.middleware.audit import AuditMiddleware
-    print("✅ Audit middleware imported successfully"
+    print("✅ Audit middleware imported successfully")

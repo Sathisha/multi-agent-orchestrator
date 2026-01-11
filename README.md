@@ -165,6 +165,35 @@ For production environments, we recommend using the pre-built images stored in G
    make prod-update
    ```
 
+## 📡 API Documentation
+
+Comprehensive API documentation is available in multiple formats:
+
+### Interactive Documentation
+- **[Swagger UI (Live)](https://sathisha.github.io/multi-agent-orchestrator/api/swagger-ui.html)** - Interactive API explorer hosted on GitHub Pages
+- **[Local Swagger UI](http://localhost:8000/docs)** - When running the application locally
+- **[ReDoc](http://localhost:8000/redoc)** - Alternative documentation format
+
+### Documentation Resources
+- **[API Guide](API.md)** - Comprehensive guide covering:
+  - Authentication methods (API Keys, JWT, Sessions)
+  - All endpoint categories and usage
+  - Common use cases and examples
+  - Best practices and rate limiting
+- **[OpenAPI Specification](https://sathisha.github.io/multi-agent-orchestrator/api/openapi.json)** - Machine-readable OpenAPI 3.1 spec for importing into tools like Postman or Insomnia
+
+### Generating API Docs
+
+```bash
+# Export OpenAPI specification
+make api-docs
+
+# Serve docs locally for testing
+make api-docs-serve
+```
+
+The OpenAPI specification is automatically updated via GitHub Actions when backend code changes are pushed to the main branch.
+
 ## 📚 Documentation
 
 - [Workflow Usage Guide](docs/workflow_usage.md): Comprehensive guide on creating and using workflows, including API usage.

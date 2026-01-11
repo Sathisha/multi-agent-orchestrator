@@ -13,6 +13,7 @@ class LLMProvider(str, Enum):
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     VERTEX_AI = "vertex_ai"
+    GOOGLE = "google"
     OLLAMA = "ollama"
     HUGGINGFACE = "huggingface"
 

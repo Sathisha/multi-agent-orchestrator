@@ -140,3 +140,21 @@ class TestChainsAPI:
         # Get execution status
         status_res = test_client.get(f"/api/v1/chains/executions/{execution_id}/status")
         assert status_res.status_code == 200
+
+        # Verify logs were created
+        import asyncio
+        for _ in range(10):
+             # Check status first
+             status_res = test_client.get(f"/api/v1/chains/executions/{execution_id}/status")
+             if status_res.status_code == 200:
+                 status_data = status_res.json()
+                 if status_data["status"] in [ChainExecutionStatus.COMPLETED, ChainExecutionStatus.FAILED]:
+                     break
+             
+             await asyncio.sleep(0.5)
+        
+        logs_res = test_client.get(f"/api/v1/chains/executions/{execution_id}/logs")
+        assert logs_res.status_code == 200
+        logs = logs_res.json()
+        assert len(logs) > 0, f"No logs found for execution {execution_id} in status {status_data['status']}"
+        print(f"Verified {len(logs)} logs for execution {execution_id}")

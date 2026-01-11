@@ -45,6 +45,16 @@ class OllamaEmbeddingProvider(BaseEmbeddingProvider):
 
     async def generate_embedding(self, text: str) -> List[float]:
         """Generate embedding for a single text."""
+        # Initialize OllamaService for management if not already done
+        if not hasattr(self, "_ollama_mgmt"):
+            from ..ollama_service import OllamaService
+            self._ollama_mgmt = OllamaService(ollama_base_url=self.base_url)
+
+        # Lazy pull if model doesn't exist
+        if not await self._ollama_mgmt.model_exists(self.model):
+            self.logger.info(f"Embedding model '{self.model}' not found. Pulling lazily...")
+            await self._ollama_mgmt.pull_model(self.model)
+
         payload = {
             "model": self.model,
             "prompt": text

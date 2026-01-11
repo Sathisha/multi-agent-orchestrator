@@ -136,8 +136,8 @@ const AgentDetailWorkspace: React.FC = () => {
         // This prevents the "empty select" issue or losing the current setting visually
         // We only do this if BOTH queries have finished, otherwise we might be premature
         if (!isLoadingConfigured && !isLoadingOllama && model && !seenValues.has(model)) {
-            // Try to determine provider from existing config or default to unknown
-            const currentProvider = agent?.config?.llm_provider || 'unknown';
+            // Try to determine provider from existing config or default to 'ollama'
+            const currentProvider = agent?.config?.llm_provider || 'ollama';
             addModel(model, `${model} (Current)`, currentProvider, 'Current Setting');
         }
 

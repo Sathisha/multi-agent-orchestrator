@@ -23,6 +23,45 @@ from ..models.agent import LLMProvider, AgentConfig
 logger = logging.getLogger(__name__)
 
 
+
+from ..config.settings import settings
+
+class GlobalRateLimiter:
+    """Global rate limiter for LLM calls."""
+    
+    _instance = None
+    _lock = asyncio.Lock()
+    _timestamps: List[float] = []
+    _period_seconds = 60
+    
+    @classmethod
+    async def acquire(cls):
+        """Acquire a rate limit slot, waiting if necessary."""
+        # Get limit from settings
+        max_calls = settings.llm.rate_limit_per_minute
+        
+        async with cls._lock:
+            now = time.time()
+            # Remove timestamps older than the period
+            cls._timestamps = [t for t in cls._timestamps if now - t < cls._period_seconds]
+            
+            if len(cls._timestamps) >= max_calls:
+                # Calculate wait time
+                oldest = cls._timestamps[0]
+                wait_time = (oldest + cls._period_seconds) - now
+                
+                if wait_time > 0:
+                    logger.warning(f"Rate limit reached ({max_calls}/min). Waiting {wait_time:.2f}s...")
+                    await asyncio.sleep(wait_time)
+                    
+                    # Re-check after waiting (conceptually redundant if we hold lock, but good for safety)
+                    now = time.time()
+                    cls._timestamps = [t for t in cls._timestamps if now - t < cls._period_seconds]
+            
+            cls._timestamps.append(time.time())
+            logger.debug(f"Rate limit slot acquired. Active calls in window: {len(cls._timestamps)}")
+
+
 class LLMService:
     """Service for managing LLM provider integrations and requests."""
     
@@ -168,7 +207,8 @@ class LLMService:
         self,
         messages: List[Dict[str, str]],
         agent_config: AgentConfig,
-        stream: bool = False
+        stream: bool = False,
+        credentials: Optional[Dict[str, Any]] = None
     ) -> LLMResponse:
         """Generate response using configured LLM provider.
         
@@ -176,6 +216,7 @@ class LLMService:
             messages: List of message dictionaries with 'role' and 'content'
             agent_config: Agent configuration containing LLM settings
             stream: Whether to stream the response
+            credentials: Optional custom credentials to use
             
         Returns:
             LLM response object
@@ -183,6 +224,9 @@ class LLMService:
         Raises:
             LLMError: If response generation fails
         """
+        # Enforce rate limit
+        await GlobalRateLimiter.acquire()
+        
         start_time = time.time()
         
         try:
@@ -198,6 +242,9 @@ class LLMService:
                 model=agent_config.model,
                 temperature=agent_config.temperature,
                 max_tokens=agent_config.max_tokens,
+                top_p=agent_config.top_p,
+                top_k=agent_config.top_k,
+                stop_sequences=agent_config.stop_sequences,
                 stream=stream
             )
             
@@ -209,9 +256,17 @@ class LLMService:
                 # It's a string
                 provider_enum = LLMProviderType(agent_config.llm_provider)
             
-            provider = await self.provider_factory.get_or_create_provider(
-                provider_enum
-            )
+            # Create provider with custom credentials if provided
+            if credentials:
+                logger.info(f"Creating provider {provider_enum.value} with custom credentials")
+                provider = await self.provider_factory.create_provider(
+                    provider_type=provider_enum,
+                    credentials=credentials
+                )
+            else:
+                provider = await self.provider_factory.get_or_create_provider(
+                    provider_enum
+                )
             
             # Generate response with fallback
             response = await self._generate_with_fallback(
@@ -258,13 +313,15 @@ class LLMService:
     async def stream_response(
         self,
         messages: List[Dict[str, str]],
-        agent_config: AgentConfig
+        agent_config: AgentConfig,
+        credentials: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[str, None]:
         """Stream response using configured LLM provider.
         
         Args:
             messages: List of message dictionaries with 'role' and 'content'
             agent_config: Agent configuration containing LLM settings
+            credentials: Optional custom credentials to use
             
         Yields:
             Response content chunks
@@ -272,6 +329,9 @@ class LLMService:
         Raises:
             LLMError: If streaming fails
         """
+        # Enforce rate limit
+        await GlobalRateLimiter.acquire()
+        
         try:
             # Convert messages to LLMMessage objects
             llm_messages = [
@@ -285,6 +345,9 @@ class LLMService:
                 model=agent_config.model,
                 temperature=agent_config.temperature,
                 max_tokens=agent_config.max_tokens,
+                top_p=agent_config.top_p,
+                top_k=agent_config.top_k,
+                stop_sequences=agent_config.stop_sequences,
                 stream=True
             )
             
@@ -296,9 +359,17 @@ class LLMService:
                 # It's a string
                 provider_enum = LLMProviderType(agent_config.llm_provider)
             
-            provider = await self.provider_factory.get_or_create_provider(
-                provider_enum
-            )
+            # Create provider with custom credentials if provided
+            if credentials:
+                logger.info(f"Creating streaming provider {provider_enum.value} with custom credentials")
+                provider = await self.provider_factory.create_provider(
+                    provider_type=provider_enum,
+                    credentials=credentials
+                )
+            else:
+                provider = await self.provider_factory.get_or_create_provider(
+                    provider_enum
+                )
             
             # Stream response
             async for chunk in provider.stream_response(request):
@@ -481,6 +552,9 @@ class LLMService:
             model=request.model,
             temperature=request.temperature,
             max_tokens=request.max_tokens,
+            top_p=request.top_p,
+            top_k=request.top_k,
+            stop_sequences=request.stop_sequences,
             stream=request.stream,
             tools=request.tools,
             metadata=request.metadata

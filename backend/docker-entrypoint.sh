@@ -102,9 +102,14 @@ main() {
     
     # Verify tables exist before seeding
     if verify_tables; then
-        # Seed data if RECREATE_DB is true (or always in dev)
-        if [ "$RECREATE_DB" = "true" ] || [ "$ENVIRONMENT" = "development" ]; then
-            echo "🌱 Seeding database..."
+        # Seed data if RECREATE_DB is true, always in dev, or if FORCE_SEEDING is true
+        if [ "$RECREATE_DB" = "true" ] || [ "$ENVIRONMENT" = "development" ] || [ "$FORCE_SEEDING" = "true" ]; then
+            if [ "$FORCE_SEEDING" = "true" ]; then
+                echo "🌱 Force seeding database (FORCE_SEEDING=true)..."
+            else
+                echo "🌱 Seeding database (RECREATE_DB=$RECREATE_DB, ENVIRONMENT=$ENVIRONMENT)..."
+            fi
+            
             python3 /app/seed_data.py
             
             if [ $? -eq 0 ]; then
@@ -114,7 +119,7 @@ main() {
                 # Don't exit on seeding failure - let the app start
             fi
         else
-            echo "ℹ️  Skipping database seeding (RECREATE_DB=false and ENVIRONMENT!=development)"
+            echo "ℹ️  Skipping database seeding (RECREATE_DB=$RECREATE_DB, ENVIRONMENT=$ENVIRONMENT, FORCE_SEEDING=$FORCE_SEEDING)"
         fi
     else
         echo "⚠️  Skipping seeding - tables not verified"

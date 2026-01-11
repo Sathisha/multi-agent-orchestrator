@@ -7,11 +7,11 @@ import time
 from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from backend.shared.database.connection import AsyncSessionLocal
-from backend.shared.models.agent import Agent, AgentStatus
-from backend.shared.services.agent_executor import AgentExecutorService
-from backend.shared.services.llm_service import LLMService
-from backend.shared.services.llm_providers import LLMProviderType, LLMResponse, LLMUsage, LLMMessage, LLMRequest
+from shared.database.connection import AsyncSessionLocal
+from shared.models.agent import Agent, AgentStatus
+from shared.services.agent_executor import AgentExecutorService
+from shared.services.llm_service import LLMService
+from shared.services.llm_providers import LLMProviderType, LLMResponse, LLMUsage, LLMMessage, LLMRequest
 
 # Fixture for an async session
 @pytest.fixture
@@ -29,14 +29,14 @@ async def dummy_agent(db_session: AsyncSession):
         description="A test agent for LLM response time measurement",
         system_prompt="You are a helpful assistant.",
         status=AgentStatus.ACTIVE,
-        config={"llm_provider": LLMProviderType.OLLAMA.value, "model_name": "llama3"}
+        config={"llm_provider": LLMProviderType.OLLAMA.value, "model_name": "llama3.2:latest"}
     )
     db_session.add(agent)
     await db_session.commit()
     return agent
 
 # We need to mock LLMService.generate_response as it's called by AgentExecutorService
-@patch('backend.shared.services.llm_service.LLMService.generate_response')
+@patch('shared.services.llm_service.LLMService.generate_response')
 @pytest.mark.asyncio
 async def test_llm_response_time_measurement(
     mock_generate_response: AsyncMock,
@@ -50,14 +50,14 @@ async def test_llm_response_time_measurement(
         # Ensure we are checking the actual request passed
         llm_request: LLMRequest = args[0] # The first arg to generate_response is LLMRequest
         assert isinstance(llm_request, LLMRequest)
-        assert llm_request.model == "llama3"
+        assert llm_request.model == "llama3.2:latest"
         assert any(msg.content == "What is the capital of France?" for msg in llm_request.messages)
 
         await asyncio.sleep(simulated_delay_seconds)
         return LLMResponse(
             content="Mock LLM response", 
             usage=LLMUsage(prompt_tokens=10, completion_tokens=40, total_tokens=50),
-            model="llama3",
+            model="llama3.2:latest",
             provider=LLMProviderType.OLLAMA
         )
 
@@ -112,12 +112,12 @@ async def test_llm_response_time_measurement(
     # The first argument is an LLMRequest object
     llm_request_arg: LLMRequest = call_args[0] 
     assert isinstance(llm_request_arg, LLMRequest)
-    assert llm_request_arg.model == "llama3"
+    assert llm_request_arg.model == "llama3.2:latest"
     assert any(msg.content == "What is the capital of France?" for msg in llm_request_arg.messages)
     assert llm_request_arg.stream is False
     # The second argument is AgentConfig
     agent_config_arg = call_args[1]
-    assert agent_config_arg.model_name == "llama3"
+    assert agent_config_arg.model_name == "llama3.2:latest"
     assert agent_config_arg.llm_provider == LLMProviderType.OLLAMA
 
     print(f"LLM response time test completed. Measured: {execution_record.execution_time_ms}ms, Simulated: {simulated_delay_seconds*1000}ms")

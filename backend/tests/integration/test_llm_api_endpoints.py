@@ -102,7 +102,7 @@ async def test_llm_api_endpoints():
         
         test_data = {
             "provider_type": "ollama",
-            "model": "llama3:latest",
+            "model": "llama3.2:latest",
             "message": "Say 'API test successful'"
         }
         

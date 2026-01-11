@@ -27,19 +27,17 @@ import {
 } from '@mui/icons-material'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
 import { getAgents, createAgent, deleteAgent, updateAgent, CreateAgentRequest, UpdateAgentRequest, Agent, getAgentTemplates, AgentTemplate } from '../api/agents'
-import { getModels, discoverOllamaModels, LLMModel, OllamaModel } from '../api/llmModels' // Import LLM model API functions
+import { getModels, discoverOllamaModels, LLMModel, OllamaModel } from '../api/llmModels'
 import { useNavigate } from 'react-router-dom'
+import AgentCreationWizard from '../components/wizards/AgentCreationWizard'
 
 const AgentWorkspace: React.FC = () => {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
   // State management
-  const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [wizardOpen, setWizardOpen] = useState(false)
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false)
-  const [newAgentName, setNewAgentName] = useState('')
-  const [newAgentDesc, setNewAgentDesc] = useState('')
-  const [newAgentType, setNewAgentType] = useState('conversational')
   const [searchQuery, setSearchQuery] = useState('')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [filterStatus, setFilterStatus] = useState<string[]>(['active', 'inactive'])
@@ -48,7 +46,6 @@ const AgentWorkspace: React.FC = () => {
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
 
   // LLM Model State
-  const [selectedLLMModelId, setSelectedLLMModelId] = useState<string | null>(null)
   const [ollamaDiscoveryLoading, setOllamaDiscoveryLoading] = useState(false)
   const [discoveredOllamaModels, setDiscoveredOllamaModels] = useState<OllamaModel[]>([])
 
@@ -60,12 +57,8 @@ const AgentWorkspace: React.FC = () => {
   const createMutation = useMutation(createAgent, {
     onSuccess: () => {
       queryClient.invalidateQueries('agents')
-      setCreateDialogOpen(false)
+      setWizardOpen(false)
       setTemplateDialogOpen(false)
-      setNewAgentName('')
-      setNewAgentDesc('')
-      setNewAgentType('conversational')
-      setSelectedLLMModelId(null);
     },
   })
 
@@ -149,26 +142,17 @@ const AgentWorkspace: React.FC = () => {
     }
   }, [agents])
 
-  const handleCreate = () => {
-    if (!selectedLLMModelId) {
-      alert('Please select an LLM model.');
-      return;
-    }
-    createMutation.mutate({
-      name: newAgentName,
-      description: newAgentDesc,
-      type: newAgentType,
-      llm_model_id: selectedLLMModelId // Pass the selected LLM model ID
-    })
+  const handleWizardCreate = (agentData: any) => {
+    createMutation.mutate(agentData)
   }
 
   const handleCreateFromTemplate = (template: AgentTemplate) => {
+    // TODO: Integrate template selection with wizard
     createMutation.mutate({
       name: template.name,
       description: template.description,
       type: template.type,
       system_prompt: template.system_prompt,
-      llm_model_id: selectedLLMModelId, // Also pass for templates
       config: template.config
     })
   }
@@ -261,7 +245,7 @@ const AgentWorkspace: React.FC = () => {
             <Button
               variant="contained"
               startIcon={<AddIcon />}
-              onClick={() => setCreateDialogOpen(true)}
+              onClick={() => setWizardOpen(true)}
               sx={{
                 backgroundColor: '#007acc',
                 '&:hover': {
@@ -519,7 +503,7 @@ const AgentWorkspace: React.FC = () => {
                     <Button
                       variant="contained"
                       startIcon={<AddIcon />}
-                      onClick={() => setCreateDialogOpen(true)}
+                      onClick={() => setWizardOpen(true)}
                       sx={{ backgroundColor: '#007acc' }}
                     >
                       Create Agent
@@ -614,99 +598,13 @@ const AgentWorkspace: React.FC = () => {
         </MenuItem>
       </Menu>
 
-      {/* Create Dialog */}
-      <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ bgcolor: '#252526', color: '#cccccc' }}>Create New Agent</DialogTitle>
-        <DialogContent sx={{ bgcolor: '#1e1e1e', pt: 2 }}>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Name"
-            fullWidth
-            value={newAgentName}
-            onChange={(e) => setNewAgentName(e.target.value)}
-            sx={{ mb: 2 }}
-          />
-          <TextField
-            margin="dense"
-            label="Description"
-            fullWidth
-            multiline
-            rows={3}
-            value={newAgentDesc}
-            onChange={(e) => setNewAgentDesc(e.target.value)}
-            sx={{ mb: 2 }}
-          />
-          <FormControl fullWidth>
-            <InputLabel>Type</InputLabel>
-            <Select
-              value={newAgentType}
-              label="Type"
-              onChange={(e) => setNewAgentType(e.target.value)}
-            >
-              <MenuItem value="conversational">Conversational</MenuItem>
-              <MenuItem value="content-generation">Content Generation</MenuItem>
-              <MenuItem value="data-analysis">Data Analysis</MenuItem>
-            </Select>
-          </FormControl>
-
-          {/* LLM Model Selection */}
-          <FormControl fullWidth margin="dense">
-            <InputLabel id="llm-model-select-label">LLM Model</InputLabel>
-            <Select
-              labelId="llm-model-select-label"
-              value={selectedLLMModelId || ''}
-              label="LLM Model"
-              onChange={(e) => setSelectedLLMModelId(e.target.value as string)}
-              endAdornment={
-                <InputAdornment position="end">
-                  <Tooltip title="Discover Ollama Models">
-                    <IconButton
-                      onClick={handleDiscoverOllamaModels}
-                      disabled={ollamaDiscoveryLoading || llmModelsLoading}
-                    >
-                      {ollamaDiscoveryLoading ? <CircularProgress size={20} /> : <RefreshIcon />}
-                    </IconButton>
-                  </Tooltip>
-                </InputAdornment>
-              }
-            >
-              {configuredLLMModels?.map((model) => (
-                <MenuItem key={model.id} value={model.id}>
-                  {model.name} ({model.provider})
-                </MenuItem>
-              ))}
-              {discoveredOllamaModels.map((model) => {
-                // Determine if this discovered Ollama model is already configured in our DB
-                const isConfigured = configuredLLMModels?.some(
-                  (configuredModel) => configuredModel.provider === 'ollama' && configuredModel.name === model.name
-                );
-                return (
-                  <MenuItem
-                    key={`discovered-${model.name}`}
-                    value={`discovered-${model.name}`} // Use a distinct value for unconfigured discovered models
-                    disabled={true} // Grey out and disable unconfigured models
-                    sx={{ color: isConfigured ? 'inherit' : 'gray' }}
-                  >
-                    {model.name} (Ollama - Unconfigured)
-                  </MenuItem>
-                );
-              })}
-            </Select>
-          </FormControl>
-        </DialogContent>
-        <DialogActions sx={{ bgcolor: '#252526' }}>
-          <Button onClick={() => setCreateDialogOpen(false)} sx={{ color: '#969696' }}>Cancel</Button>
-          <Button
-            onClick={handleCreate}
-            disabled={!newAgentName || !selectedLLMModelId || createMutation.isLoading}
-            variant="contained"
-            sx={{ backgroundColor: '#007acc' }}
-          >
-            Create
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {/* Agent Creation Wizard */}
+      <AgentCreationWizard
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        onCreate={handleWizardCreate}
+        isLoading={createMutation.isLoading}
+      />
 
       {/* Template Dialog */}
       <Dialog open={templateDialogOpen} onClose={() => setTemplateDialogOpen(false)} maxWidth="md" fullWidth>

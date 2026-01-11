@@ -61,6 +61,12 @@ class LLMProviderFactory:
             # Generate cache key if not provided
             if not cache_key:
                 cache_key = self._generate_cache_key(provider_type)
+                # If custom credentials are provided, append a hash to avoid 
+                # using/overwriting the default provider instance
+                if credentials:
+                    import hashlib
+                    cred_hash = hashlib.md5(str(credentials).encode()).hexdigest()[:8]
+                    cache_key = f"{cache_key}:custom:{cred_hash}"
             
             # Check cache first
             if cache_key in self._provider_cache:

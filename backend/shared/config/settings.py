@@ -98,11 +98,11 @@ class MemorySettings(BaseSettings):
     """Memory system configuration settings."""
     
     embedding_provider: str = Field(
-        default="openai",
+        default="ollama",
         description="Embedding provider to use (openai, ollama, or local)"
     )
     embedding_model: str = Field(
-        default="text-embedding-3-small",
+        default="nomic-embed-text",
         description="Embedding model name"
     )
     openai_api_key: Optional[str] = Field(
@@ -119,6 +119,18 @@ class MemorySettings(BaseSettings):
     )
     
     model_config = SettingsConfigDict(env_prefix="MEMORY_")
+
+
+
+class LLMSettings(BaseSettings):
+    """LLM configuration settings."""
+    
+    rate_limit_per_minute: int = Field(
+        default=60,
+        description="Maximum number of LLM calls per minute"
+    )
+    
+    model_config = SettingsConfigDict(env_prefix="LLM_")
 
 
 class Settings(BaseSettings):
@@ -139,6 +151,7 @@ class Settings(BaseSettings):
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     api: APISettings = Field(default_factory=APISettings)
     memory: MemorySettings = Field(default_factory=MemorySettings)
+    llm: LLMSettings = Field(default_factory=LLMSettings)
 
     # Zeebe settings
     zeebe_gateway_host: str = Field(default="zeebe", description="Zeebe gateway host")

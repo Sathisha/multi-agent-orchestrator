@@ -241,7 +241,7 @@ class CredentialManager:
                 "base_url": "OLLAMA_BASE_URL"
             },
             LLMProviderType.GOOGLE: {
-                "api_key": "GOOGLE_API_KEY"
+                "api_key": ["GEMINI_API_KEY", "GOOGLE_API_KEY"]  # Support both env vars
             }
         }
         
@@ -249,10 +249,15 @@ class CredentialManager:
             return None
         
         credentials = {}
-        for cred_key, env_var in env_mapping[provider_type].items():
-            value = os.getenv(env_var)
-            if value:
-                credentials[cred_key] = value
+        for cred_key, env_var_config in env_mapping[provider_type].items():
+            # Support both single env var and list of fallback env vars
+            env_vars = env_var_config if isinstance(env_var_config, list) else [env_var_config]
+            
+            for env_var in env_vars:
+                value = os.getenv(env_var)
+                if value:
+                    credentials[cred_key] = value
+                    break  # Use first found value
         
         # Fallback for Ollama if not provided
         if provider_type == LLMProviderType.OLLAMA and "base_url" not in credentials:

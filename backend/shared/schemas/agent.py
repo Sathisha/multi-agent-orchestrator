@@ -35,11 +35,18 @@ class AgentConfig(BaseModel):
     description: Optional[str] = None
     temperature: float = 0.7
     max_tokens: int = 1000
+    top_p: Optional[float] = None  # Nucleus sampling parameter (0.0-1.0)
+    top_k: Optional[int] = None  # Top-k sampling parameter
+    stop_sequences: Optional[List[str]] = None  # Stop sequences for generation
     system_prompt: Optional[str] = None
     tools: List[str] = []
     mcp_servers: Optional[List[str]] = []
     memory_enabled: bool = False
     guardrails_enabled: bool = False
+    
+    model_config = {
+        "protected_namespaces": ()
+    }
 
 class AgentBase(BaseModel):
     """Base Agent schema."""
@@ -54,6 +61,10 @@ class AgentBase(BaseModel):
 class AgentCreate(AgentBase):
     """Schema for creating an Agent."""
     llm_model_id: Optional[UUID] = None
+    
+    model_config = {
+        "protected_namespaces": ()
+    }
 
 class AgentUpdate(AgentBase):
     """Schema for updating an Agent."""

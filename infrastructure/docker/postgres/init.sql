@@ -138,4 +138,3 @@ CREATE INDEX IF NOT EXISTS ix_chain_execution_logs_timestamp ON chain_execution_
 GRANT ALL PRIVILEGES ON DATABASE ai_agent_framework TO postgres;
 GRANT ALL PRIVILEGES ON DATABASE keycloak TO postgres;
 GRANT ALL PRIVILEGES ON DATABASE superset TO postgres;
-```

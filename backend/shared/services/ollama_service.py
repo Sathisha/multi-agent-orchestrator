@@ -15,12 +15,46 @@ class OllamaService:
             response = await self.client.get(f"{self.ollama_base_url}/api/tags")
             response.raise_for_status()
             return response.json().get("models", [])
-        except httpx.RequestError as e:
+        except Exception as e:
             print(f"Error connecting to Ollama: {e}")
             return []
-        except httpx.HTTPStatusError as e:
-            print(f"Error from Ollama API: {e}")
-            return []
+
+    async def model_exists(self, model_name: str) -> bool:
+        """
+        Check if a model exists locally.
+        """
+        models = await self.list_local_models()
+        # Some models have :latest suffix or other tags
+        for model in models:
+            name = model.get("name", "")
+            if name == model_name or name.split(":")[0] == model_name.split(":")[0]:
+                return True
+        return False
+
+    async def pull_model(self, model_name: str) -> bool:
+        """
+        Pulls a model from the Ollama library.
+        https://github.com/ollama/ollama/blob/main/docs/api.md#pull-a-model
+        """
+        print(f"Pulling Ollama model: {model_name}...")
+        try:
+            # We use a long timeout for pulling models
+            async with self.client.stream(
+                "POST", 
+                f"{self.ollama_base_url}/api/pull", 
+                json={"name": model_name, "stream": True},
+                timeout=None
+            ) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if line.strip():
+                        # We could parse progress here, but for now we just wait
+                        pass
+            print(f"Successfully pulled model: {model_name}")
+            return True
+        except Exception as e:
+            print(f"Error pulling model {model_name}: {e}")
+            return False
 
     async def list_running_models(self) -> List[Dict[str, Any]]:
         """

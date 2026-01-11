@@ -60,6 +60,10 @@ class OllamaProvider(BaseLLMProvider):
                     provider=self.provider_type.value
                 )
             
+            # Initialize OllamaService for model management
+            from ..ollama_service import OllamaService
+            self._ollama_mgmt = OllamaService(ollama_base_url=self.base_url)
+            
             self.logger.info(f"Ollama provider initialized successfully at {self.base_url}")
             
         except httpx.RequestError as e:
@@ -103,6 +107,17 @@ class OllamaProvider(BaseLLMProvider):
         
         try:
             await self.ensure_initialized()
+            
+            # Lazy pull if model doesn't exist
+            if not await self._ollama_mgmt.model_exists(request.model):
+                self.logger.info(f"Model '{request.model}' not found. Pulling lazily...")
+                success = await self._ollama_mgmt.pull_model(request.model)
+                if not success:
+                    raise LLMError(
+                        message=f"Failed to pull model '{request.model}'",
+                        provider=self.provider_type.value,
+                        error_code="MODEL_PULL_FAILED"
+                    )
             
             # Convert messages to Ollama format
             ollama_messages = []
@@ -206,6 +221,17 @@ class OllamaProvider(BaseLLMProvider):
         """Stream response from Ollama."""
         try:
             await self.ensure_initialized()
+            
+            # Lazy pull if model doesn't exist
+            if not await self._ollama_mgmt.model_exists(request.model):
+                self.logger.info(f"Model '{request.model}' not found. Pulling lazily...")
+                success = await self._ollama_mgmt.pull_model(request.model)
+                if not success:
+                    raise LLMError(
+                        message=f"Failed to pull model '{request.model}'",
+                        provider=self.provider_type.value,
+                        error_code="MODEL_PULL_FAILED"
+                    )
             
             # Convert messages to Ollama format
             ollama_messages = []

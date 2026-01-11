@@ -13,7 +13,7 @@ This is a comprehensive platform designed to create, orchestrate, and deploy AI 
 
 # Building and Running
 
-This project utilizes a **Docker-first development approach**, meaning all development and testing occur within Docker containers. You do not need Python, npm, or databases installed directly on your host machine.
+This project utilizes a **Docker-first approach** with production-ready images. All services run within Docker containers using the production docker-compose.yml configuration.
 
 ### Prerequisites
 *   **Docker**: Docker Desktop or Docker Engine installed.
@@ -21,24 +21,27 @@ This project utilizes a **Docker-first development approach**, meaning all devel
 
 ### Essential Commands
 
-All commands are typically run using `make` from the project root.
+All commands are run using `make` from the project root.
 
 *   **`make help`**: Show all available commands.
-*   **`make setup`**: Complete initial setup (builds, starts, and migrates).
-*   **`make start`**: Start core services (PostgreSQL, Redis, Keycloak, Kong, Ollama, Backend, Frontend).
-*   **`make api`**: Start the backend API server with hot-reloading for development.
+*   **`make build`**: Build all Docker images locally.
+*   **`make deploy`**: Deploy the application (pulls images from GHCR or builds locally).
+*   **`make pull`**: Pull latest images from GitHub Container Registry.
+*   **`make update`**: Update to latest images and restart services.
 *   **`make test`**: Run all backend tests within Docker.
-*   **`make logs`**: View logs for all running services.
+*   **`make logs`**: View backend logs.
 *   **`make shell`**: Open a shell within the backend container.
 *   **`make stop`**: Stop all running Docker services.
 *   **`make clean`**: Stop all services and remove containers, networks, and volumes.
 
 ### Accessing the Application
 
-*   **Frontend Application**: `http://localhost:3000` (for production build) or `http://localhost:3001` (for development with hot reload).
-*   **Backend API**: `http://localhost:8000`
-*   **API Documentation (Swagger UI)**: `http://localhost:8000/docs`
-*   **API Health Check**: `http://localhost:8000/health`
+*   **Frontend Application**: `http://localhost:3000`
+*   **Backend API**: `http://localhost:8001`
+*   **API Documentation (Swagger UI)**: `http://localhost:8001/docs`
+*   **API Health Check**: `http://localhost:8001/health`
+*   **Superset Dashboard**: `http://localhost:8088` (admin/admin)
+*   **Prometheus Monitoring**: `http://localhost:9090`
 
 # Development Conventions
 
