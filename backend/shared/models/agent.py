@@ -35,6 +35,7 @@ class LLMProvider(str, Enum):
     GOOGLE = "google"
     OLLAMA = "ollama"
     HUGGINGFACE = "huggingface"
+    MOCK = "mock"
 
 class AgentConfig(BaseModel):
     """Configuration for an agent."""
@@ -52,6 +53,7 @@ class AgentConfig(BaseModel):
     mcp_servers: Optional[List[str]] = []
     memory_enabled: bool = False
     guardrails_enabled: bool = False
+    use_standard_response_format: bool = False
 
 class Agent(SystemEntity):
     __tablename__ = "agents"

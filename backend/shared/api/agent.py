@@ -11,8 +11,10 @@ from pydantic import BaseModel, Field
 
 from ..database.connection import get_async_db
 from ..services.agent import AgentService, AgentDeploymentService, AgentExecutionService, AgentMemoryService
+from ..services.permission_service import PermissionService
 from ..models.agent import Agent, AgentType, AgentStatus, AgentDeployment, AgentExecution, AgentMemory
 from ..middleware.permissions import require_permission
+from ..api.auth import get_current_user
 
 router = APIRouter(prefix="/api/v1/agents", tags=["agents"])
 
@@ -155,6 +157,18 @@ class PromptRefinementResponse(BaseModel):
     refined_prompt: str
     improvements: List[str]
     confidence: float = Field(..., ge=0.0, le=1.0)
+
+
+# RBAC models
+class AgentRoleAssignRequest(BaseModel):
+    role_id: UUID
+    access_type: str = Field(..., pattern="^(view|execute|modify)$")
+
+
+class AgentRoleResponse(BaseModel):
+    role_id: UUID
+    role_name: str
+    access_type: str
 
 
 # Agent CRUD endpoints
@@ -527,7 +541,7 @@ async def refine_agent_prompt(
         if not model_config:
             model_config = AgentConfig(
                 name="prompt_refiner",
-                model="tin yllama",
+                model="tinyllama",
                 temperature=0.3,
                 max_tokens=1500,
                 llm_provider=LLMProvider.OLLAMA
@@ -568,7 +582,7 @@ Please refine this prompt. Output only JSON."""
         except json.JSONDecodeError:
             match = re.search(r'(\{.*\})', content, re.DOTALL)
             result = json.loads(match.group(1)) if match else {
-                "refused_prompt": request.original_prompt,
+                "refined_prompt": request.original_prompt,
                 "improvements": ["Unable to parse LLM response"],
                 "confidence": 0.5
             }
@@ -586,4 +600,139 @@ Please refine this prompt. Output only JSON."""
             refined_prompt=request.original_prompt,
             improvements=[f"Refinement failed: {str(e)}"],
             confidence=0.0
+        )
+
+
+# ============================================================================
+# Agent Role Management Endpoints (RBAC)
+# ============================================================================
+
+@router.post("/{agent_id}/roles", response_model=AgentRoleResponse, status_code=status.HTTP_201_CREATED)
+async def assign_role_to_agent(
+    agent_id: UUID,
+    request: AgentRoleAssignRequest,
+    session: AsyncSession = Depends(get_async_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Assign a role to an agent with specific access type.
+    
+    Only service users and super admins can assign roles to agents.
+    """
+    # Check permission
+    permission_service = PermissionService(session)
+    has_perm = await permission_service.has_permission(
+        user=current_user,
+        resource_type="agent",
+        action="modify",
+        resource_id=agent_id
+    )
+    
+    if not has_perm:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions to assign roles to this agent"
+        )
+    
+    try:
+        # Assign role to agent
+        assignment = await permission_service.assign_resource_role(
+            resource_type="agent",
+            resource_id=agent_id,
+            role_id=request.role_id,
+            access_type=request.access_type,
+            created_by=current_user.id
+        )
+        
+        # Get role name for response
+        from ..services.rbac import RBACService
+        rbac_service = RBACService(session)
+        role = await rbac_service.get_role_by_id(request.role_id)
+        
+        return AgentRoleResponse(
+            role_id=request.role_id,
+            role_name=role.name if role else "unknown",
+            access_type=request.access_type
+        )
+    except Exception as e:
+        logger.error(f"Error assigning role to agent: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to assign role: {str(e)}"
+        )
+
+
+@router.get("/{agent_id}/roles", response_model=List[AgentRoleResponse])
+async def list_agent_roles(
+    agent_id: UUID,
+    session: AsyncSession = Depends(get_async_db),
+    current_user = Depends(get_current_user)
+):
+    """Get all roles assigned to an agent."""
+    permission_service = PermissionService(session)
+    
+    try:
+        roles = await permission_service.get_resource_roles(
+            resource_type="agent",
+            resource_id=agent_id
+        )
+        
+        return [
+            AgentRoleResponse(
+                role_id=role["role_id"],
+                role_name=role["role_name"],
+                access_type=role["access_type"]
+            )
+            for role in roles
+        ]
+    except Exception as e:
+        logger.error(f"Error listing agent roles: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list agent roles: {str(e)}"
+        )
+
+
+@router.delete("/{agent_id}/roles/{role_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_role_from_agent(
+    agent_id: UUID,
+    role_id: UUID,
+    session: AsyncSession = Depends(get_async_db),
+    current_user = Depends(get_current_user)
+):
+    """Remove a role from an agent."""
+    # Check permission
+    permission_service = PermissionService(session)
+    has_perm = await permission_service.has_permission(
+        user=current_user,
+        resource_type="agent",
+        action="modify",
+        resource_id=agent_id
+    )
+    
+    if not has_perm:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions to modify agent roles"
+        )
+    
+    try:
+        success = await permission_service.revoke_resource_role(
+            resource_type="agent",
+            resource_id=agent_id,
+            role_id=role_id
+        )
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Role assignment not found"
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error removing role from agent: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to remove role: {str(e)}"
         )

@@ -21,18 +21,20 @@ This project utilizes a **Docker-first approach** with production-ready images. 
 
 ### Essential Commands
 
-All commands are run using `make` from the project root.
+**CRITICAL:** This project strictly uses `docker-compose` for all build and testing operations. Do **NOT** try to run tests or build the backend directly on the host machine.
+
+You can use the `make` wrappers which execute the underlying `docker-compose` commands:
 
 *   **`make help`**: Show all available commands.
-*   **`make build`**: Build all Docker images locally.
-*   **`make deploy`**: Deploy the application (pulls images from GHCR or builds locally).
-*   **`make pull`**: Pull latest images from GitHub Container Registry.
-*   **`make update`**: Update to latest images and restart services.
-*   **`make test`**: Run all backend tests within Docker.
-*   **`make logs`**: View backend logs.
-*   **`make shell`**: Open a shell within the backend container.
-*   **`make stop`**: Stop all running Docker services.
-*   **`make clean`**: Stop all services and remove containers, networks, and volumes.
+*   **`make build`**: Build images using `docker-compose build`.
+*   **`make deploy`**: Deploy using `docker-compose up -d`.
+*   **`make pull`**: Pull images using `docker-compose pull`.
+*   **`make update`**: Update images and restart services.
+*   **`make test`**: Run backend tests via `docker-compose run backend pytest`.
+*   **`make logs`**: View logs via `docker-compose logs`.
+*   **`make shell`**: Open shell via `docker-compose exec backend bash`.
+*   **`make stop`**: Stop services via `docker-compose stop`.
+*   **`make clean`**: Remove containers via `docker-compose down -v`.
 
 ### Accessing the Application
 

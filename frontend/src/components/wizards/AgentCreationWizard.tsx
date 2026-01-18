@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import {
-    Dialog, DialogTitle, DialogContent, Box, Tabs, Tab, TextField, Button,
+    Dialog, DialogTitle, DialogContent, DialogActions, Box, Tabs, Tab, TextField, Button,
     FormControl, InputLabel, Select, MenuItem, Typography, Chip, IconButton,
     Slider, Tooltip, Divider, CircularProgress, Alert, Stack, InputAdornment,
     LinearProgress, FormControlLabel, Checkbox, List, ListItem, ListItemText,
@@ -59,6 +59,10 @@ const AgentCreationWizard: React.FC<AgentWizardProps> = ({
     const [description, setDescription] = useState('')
     const [type, setType] = useState('conversational')
     const [status, setStatus] = useState('active')
+
+    // Refinement State
+    const [refinementData, setRefinementData] = useState<{ refined_prompt: string, improvements: string[] } | null>(null)
+    const [showRefinementReview, setShowRefinementReview] = useState(false)
 
     // Configuration
     const [llmModelId, setLlmModelId] = useState<string>('')
@@ -135,7 +139,8 @@ const AgentCreationWizard: React.FC<AgentWizardProps> = ({
 
             const result = await response.json()
             if (result.refined_prompt) {
-                setSystemPrompt(result.refined_prompt)
+                setRefinementData(result)
+                setShowRefinementReview(true)
             }
         } catch (error) {
             console.error('Failed to refine prompt:', error)
@@ -646,6 +651,79 @@ const AgentCreationWizard: React.FC<AgentWizardProps> = ({
                     )}
                 </Box>
             </Box>
+
+            {/* Refinement Review Dialog */}
+            <Dialog
+                open={showRefinementReview}
+                onClose={() => setShowRefinementReview(false)}
+                maxWidth="md"
+                fullWidth
+                PaperProps={{ sx: { bgcolor: '#1e1e1e' } }}
+            >
+                <DialogTitle sx={{ bgcolor: '#252526', color: '#cccccc' }}>
+                    Review Refined Prompt
+                </DialogTitle>
+                <DialogContent sx={{ bgcolor: '#1e1e1e', pt: 3 }} dividers>
+                    <Stack spacing={3}>
+                        <Box>
+                            <Typography variant="subtitle2" sx={{ color: '#4ec9b0', mb: 1 }}>
+                                Improvements Made:
+                            </Typography>
+                            <List dense>
+                                {refinementData?.improvements?.map((imp, i) => (
+                                    <ListItem key={i}>
+                                        <ListItemIcon sx={{ minWidth: 30 }}>
+                                            <CheckCircleIcon sx={{ fontSize: 16, color: '#4ec9b0' }} />
+                                        </ListItemIcon>
+                                        <ListItemText primary={imp} sx={{ color: '#cccccc' }} />
+                                    </ListItem>
+                                ))}
+                            </List>
+                        </Box>
+
+                        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+                            <Box>
+                                <Typography variant="caption" sx={{ color: '#969696', mb: 1, display: 'block' }}>
+                                    Original Prompt
+                                </Typography>
+                                <Box sx={{ p: 2, bgcolor: '#252526', borderRadius: 1, color: '#888', whiteSpace: 'pre-wrap', maxHeight: '300px', overflow: 'auto' }}>
+                                    {systemPrompt}
+                                </Box>
+                            </Box>
+                            <Box>
+                                <Typography variant="caption" sx={{ color: '#4ec9b0', mb: 1, display: 'block' }}>
+                                    Refined Prompt
+                                </Typography>
+                                <Box sx={{ p: 2, bgcolor: '#2d2d30', borderRadius: 1, color: '#fff', whiteSpace: 'pre-wrap', maxHeight: '300px', overflow: 'auto', border: '1px solid #007acc' }}>
+                                    {refinementData?.refined_prompt}
+                                </Box>
+                            </Box>
+                        </Box>
+                    </Stack>
+                </DialogContent>
+                <DialogActions sx={{ bgcolor: '#252526', p: 2 }}>
+                    <Button
+                        onClick={() => setShowRefinementReview(false)}
+                        variant="outlined"
+                        sx={{ color: '#969696' }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={() => {
+                            if (refinementData) {
+                                setSystemPrompt(refinementData.refined_prompt)
+                                setShowRefinementReview(false)
+                            }
+                        }}
+                        variant="contained"
+                        sx={{ bgcolor: '#007acc' }}
+                        startIcon={<CheckCircleIcon />}
+                    >
+                        Accept Refine
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Dialog>
     )
 }

@@ -85,3 +85,31 @@ export const getExecutionStatus = async (executionId: string): Promise<WorkflowE
     const response = await apiClient.get<WorkflowExecutionResponse>(`/workflows/executions/${executionId}`)
     return response.data
 }
+
+// Workflow Role Management Interfaces
+export interface WorkflowRoleResponse {
+    role_id: string
+    role_name: string
+    access_type: string
+    assigned_at: string
+}
+
+export interface WorkflowRoleAssignRequest {
+    role_id: string
+    access_type: string  // 'read', 'write', or 'execute'
+}
+
+// Workflow Role Management Functions
+export const getWorkflowRoles = async (workflowId: string): Promise<WorkflowRoleResponse[]> => {
+    const response = await apiClient.get<WorkflowRoleResponse[]>(`/workflows/${workflowId}/roles`)
+    return response.data
+}
+
+export const assignWorkflowRole = async (workflowId: string, data: WorkflowRoleAssignRequest): Promise<WorkflowRoleResponse> => {
+    const response = await apiClient.post<WorkflowRoleResponse>(`/workflows/${workflowId}/roles`, data)
+    return response.data
+}
+
+export const revokeWorkflowRole = async (workflowId: string, roleId: string): Promise<void> => {
+    await apiClient.delete(`/workflows/${workflowId}/roles/${roleId}`)
+}

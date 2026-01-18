@@ -10,6 +10,7 @@ from .anthropic_provider import AnthropicProvider, AnthropicConfig
 from .azure_openai_provider import AzureOpenAIProvider, AzureOpenAIConfig
 from .google_provider import GoogleProvider, GoogleConfig
 from .credential_manager import CredentialManager
+from .mock_provider import MockProvider, MockConfig
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,8 @@ class LLMProviderFactory:
             LLMProviderType.OPENAI: (OpenAIProvider, OpenAIConfig),
             LLMProviderType.ANTHROPIC: (AnthropicProvider, AnthropicConfig),
             LLMProviderType.AZURE_OPENAI: (AzureOpenAIProvider, AzureOpenAIConfig),
-            LLMProviderType.GOOGLE: (GoogleProvider, GoogleConfig)
+            LLMProviderType.GOOGLE: (GoogleProvider, GoogleConfig),
+            LLMProviderType.MOCK: (MockProvider, MockConfig)
         }
     
     async def create_provider(

@@ -1,0 +1,161 @@
+@startuml data-flow-memory-embeddings
+
+title Multi-Agent Orchestrator - Memory & Embeddings Data Flow
+
+participant "Agent Service" as AgentSvc
+participant "Memory Service" as MemorySvc
+participant "Embedding\nProvider" as EmbedProvider
+database "PostgreSQL\n(Conversations)" as PostgreSQL
+database "ChromaDB\n(Vectors)" as ChromaDB
+cloud "OpenAI\nEmbeddings API" as OpenAIEmbed
+participant "SentenceTransformers\n(Local)" as LocalEmbed
+
+== Configuration ==
+
+note over MemorySvc
+  **Environment Variables:**
+  - MEMORY_EMBEDDING_PROVIDER: "openai" or "local"
+  - MEMORY_EMBEDDING_MODEL:
+    * OpenAI: "text-embedding-3-small" (default)
+    * Local: "all-MiniLM-L6-v2"
+  - OPENAI_API_KEY: Required for OpenAI provider
+  - MEMORY_VECTOR_DB_PATH: "./data/chroma"
+end note
+
+== Storing Agent Interaction ==
+
+AgentSvc -> MemorySvc: store_interaction(\n  agent_id,\n  session_id,\n  user_input,\n  agent_response,\n  metadata\n)
+
+MemorySvc -> PostgreSQL: INSERT INTO conversations\n(\n  agent_id, session_id,\n  user_message, assistant_message,\n  timestamp, metadata\n)
+PostgreSQL --> MemorySvc: conversation_id
+
+== Generate Embeddings ==
+
+MemorySvc -> MemorySvc: Prepare Text for Embedding:\ncombined_text = f"{user_input}\\n{agent_response}"
+
+MemorySvc -> EmbedProvider: Get Embedding Config
+EmbedProvider --> MemorySvc: {\n  provider: "openai",\n  model: "text-embedding-3-small"\n}
+
+alt Provider == "openai"
+    MemorySvc -> OpenAIEmbed: POST /v1/embeddings\n{\n  model: "text-embedding-3-small",\n  input: combined_text\n}
+    
+    OpenAIEmbed -> OpenAIEmbed: Generate Vector:\n[0.023, -0.014, ... ] (1536 dims)
+    
+  OpenAIEmbed --> MemorySvc: {\n  embedding: [float array],\n  usage: {tokens: 42}\n}
+    
+else Provider == "local"
+    MemorySvc -> LocalEmbed: encode(combined_text)
+    
+    LocalEmbed -> LocalEmbed: Load Model:\n"all-MiniLM-L6-v2"\n(if not cached)
+    
+    LocalEmbed -> LocalEmbed: Generate Vector:\n[0.145, -0.023, ...] (384 dims)
+    
+    LocalEmbed --> MemorySvc: embedding_vector
+end
+
+== Store in Vector Database ==
+
+MemorySvc -> ChromaDB: add(\n  documents=[combined_text],\n  embeddings=[vector],\n  metadatas=[{\n    conversation_id,\n    agent_id, session_id,\n    timestamp\n  }],\n  ids=[uuid]\n)
+
+ChromaDB -> ChromaDB: Index Vector:\n- Add to collection\n- Update HNSW index\n- Store metadata
+
+ChromaDB --> MemorySvc: Document Stored
+
+MemorySvc --> AgentSvc: Memory Stored Successfully
+
+== Retrieving Relevant Context ==
+
+AgentSvc -> MemorySvc: get_relevant_context(\n  agent_id,\n  session_id,\n  query,\n  k=5\n)
+
+== Step 1: Get Recent Conversation History ==
+
+MemorySvc -> PostgreSQL: SELECT * FROM conversations\nWHERE agent_id = ?\n  AND session_id = ?\nORDER BY timestamp DESC\nLIMIT 10
+PostgreSQL --> MemorySvc: Recent Messages:\n[msg1, msg2, ..., msg10]
+
+== Step 2: Semantic Search for Long-term Memory ==
+
+MemorySvc -> EmbedProvider: Get Embedding Config
+
+alt Provider == "openai"
+    MemorySvc -> OpenAIEmbed: POST /v1/embeddings\n{\n  model: "text-embedding-3-small",\n  input: query\n}
+    OpenAIEmbed --> MemorySvc: query_embedding
+
+else Provider == "local"
+    MemorySvc -> LocalEmbed: encode(query)
+    LocalEmbed --> MemorySvc: query_embedding
+end
+
+MemorySvc -> ChromaDB: query(\n  query_embeddings=[query_embedding],\n  where={\n    "agent_id": agent_id,\n    "session_id": session_id\n  },\n  n_results=5\n)
+
+ChromaDB -> ChromaDB: Cosine Similarity Search:\n- Compare query vector to stored vectors\n- Rank by similarity score\n- Filter by metadata
+
+ChromaDB --> MemorySvc: Similar Documents:\n[\n  {text, similarity: 0.87, metadata},\n  {text, similarity: 0.82, metadata},\n  ...\n]
+
+== Step 3: Combine & Rank Context ==
+
+MemorySvc -> MemorySvc: Merge Results:\n- Recent history (temporal relevance)\n- Similar past conversations (semantic relevance)
+
+MemorySvc -> MemorySvc: Deduplicate & Rank:\n- Remove duplicates\n- Score by recency + similarity\n- Limit total context size
+
+MemorySvc --> AgentSvc: Relevant Context:\n{\n  recent_messages: [...],\n  similar_past_interactions: [...],\n  total_tokens: 450\n}
+
+== Agent Uses Context ==
+
+AgentSvc -> AgentSvc: Build Prompt:\n```\nSystem: {system_prompt}\n\nRelevant Context:\n{similar_past_interactions}\n\nRecent Conversation:\n{recent_messages}\n\nUser: {current_query}\n```
+
+AgentSvc -> AgentSvc: Send to LLM with Context
+
+== Performance Considerations ==
+
+note over OpenAIEmbed
+  **OpenAI Embeddings (Default):**
+  Pros:
+  - No large model downloads
+  - Fast cold start
+  - High quality embeddings (1536 dims)
+  - API-based (no local compute)
+  
+  Cons:
+  - Requires API key
+  - API costs (~$0.0001/1K tokens)
+  - Network latency
+end note
+
+note over LocalEmbed
+  **Local Embeddings (SentenceTransformers):**
+  Pros:
+  - No API costs
+  - No API key needed
+  - Offline capability
+  - Privacy (data stays local)
+  
+  Cons:
+  - Large model download (~200MB first run)
+  - Slower cold start
+  - Requires compute resources
+  - Lower dimension (384 vs 1536)
+end note
+
+note over ChromaDB
+  **Vector Database:**
+  - Storage: ./data/chroma
+  - Index: HNSW (fast approximate search)
+  - Metadata filtering
+  - Persistence across restarts
+  - Automatic indexing
+  - Cosine similarity metric
+end note
+
+note over MemorySvc
+  **Memory Types:**
+  1. **Short-term**: Recent conversation (PostgreSQL)
+     - Last 10 messages in session
+     - Full context preservation
+     
+  2. **Long-term**: Semantic memory (ChromaDB)
+     - Past relevant interactions
+     - Embeddings-based retrieval
+     - Cross-session memory
+end note
+
+@enduml

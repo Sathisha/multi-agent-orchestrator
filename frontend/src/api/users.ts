@@ -1,31 +1,40 @@
 import apiClient from './client'
 
+// Role types
+export interface Role {
+    id: string
+    name: string
+    display_name: string
+    description?: string
+    permission_level: number
+    is_system_role: boolean
+    permissions?: Permission[]
+}
+
+export interface UserRole {
+    role_id: string
+    role_name: string
+    assigned_at?: string
+    expires_at?: string
+}
+
+// User types
 export interface User {
     id: string
     email: string
     username: string
     full_name: string
-    avatar_url?: string
-    status: string
     is_active: boolean
+    is_superuser: boolean
     is_system_admin: boolean
-    created_at: string
-    updated_at: string
+    status: string
+    roles: Role[]
+    created_at?: string
     last_login_at?: string
+    updated_at?: string
 }
 
 export interface UserDetail extends User {
-    roles: Role[]
-}
-
-export interface Role {
-    id: string
-    name: string
-    description: string
-    permissions?: Permission[]
-    is_system_role?: boolean
-    created_at: string
-    updated_at: string
 }
 
 export interface Permission {

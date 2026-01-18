@@ -1,0 +1,166 @@
+@startuml data-flow-llm-interaction
+
+title Multi-Agent Orchestrator - LLM Request/Response Data Flow
+
+participant "Agent Service" as AgentSvc
+participant "LLM Manager" as LLMManager
+participant "Rate Limiter" as RateLimiter
+participant "Token Counter" as TokenCounter
+participant "Provider Router" as Router
+participant "Retry Handler\n(Tenacity)" as Retry
+database "PostgreSQL\n(API Keys)" as DB
+database "Redis\n(Rate Limits\n& Cache)" as Redis
+cloud "OpenAI" as OpenAI
+cloud "Anthropic" as Anthropic
+cloud "Google Gemini" as Gemini
+cloud "Azure OpenAI" as Azure
+participant "Ollama\n(Local)" as Ollama
+
+== Request Preparation ==
+
+AgentSvc -> LLMManager: generate_response(\n  model_id,\n  messages,\n  tools,\n  parameters\n)
+
+LLMManager -> DB: Get Model Config\n(model_id)
+DB --> LLMManager: {\n  provider: "openai",\n  model: "gpt-4",\n  api_key: "sk-...",\n  base_url, org_id\n}
+
+LLMManager -> TokenCounter: Count Input Tokens\n(messages + tools)
+TokenCounter -> TokenCounter: Use tiktoken\nfor OpenAI models
+TokenCounter --> LLMManager: input_tokens: 350
+
+LLMManager -> LLMManager: Validate:\n- Max tokens not exceeded\n- Model supports tools (if provided)
+
+== Rate Limiting Check ==
+
+LLMManager -> RateLimiter: Check Rate Limit\n(global: 5 calls/min)
+RateLimiter -> Redis: GET llm:rate:global
+Redis --> RateLimiter: current_count: 3
+
+alt Rate Limit Reached
+    RateLimiter -> RateLimiter: Wait for Available Slot\n(blocking)
+    note over RateLimiter: Waits until rate limit window resets
+end
+
+RateLimiter -> Redis: INCR llm:rate:global\nEXPIRE 60
+Redis --> RateLimiter: Updated Count
+RateLimiter --> LLMManager: Proceed
+
+== Response Cache Check ==
+
+LLMManager -> LLMManager: Generate Cache Key:\nSHA256(model + messages)
+
+LLMManager -> Redis: GET llm:cache:{key}
+Redis --> LLMManager: cached_response (if exists)
+
+alt Cache Hit
+    LLMManager --> AgentSvc: Cached Response\n(skip LLM call)
+    note over LLMManager: Saves cost & latency
+else Cache Miss
+    
+== Provider Routing ==
+
+LLMManager -> Router: Route Request\n(provider_type)
+
+Router -> Router: Select Provider Client
+
+alt provider == "openai"
+    Router -> Retry: Call OpenAI
+    Retry -> OpenAI: POST /v1/chat/completions\n{\n  model, messages,\n  tools, temperature\n}
+
+else provider == "anthropic"
+    Router -> Retry: Call Anthropic
+    Retry -> Anthropic: POST /v1/messages\n{\n  model, messages,\n  tools, max_tokens\n}
+
+else provider == "google"
+    Router -> Retry: Call Google Gemini
+    Retry -> Gemini: POST /v1/models/{model}:generateContent\n{\n  contents,\n  tools,\n  generationConfig\n}
+
+else provider == "azure"
+    Router -> Retry: Call Azure OpenAI
+    Retry -> Azure: POST /openai/deployments/{deployment}/chat/completions\n{\n  messages,\n  functions\n}
+
+else provider == "ollama"
+    Router -> Retry: Call Ollama (Local)
+    Retry -> Ollama: POST /api/chat\n{\n  model, messages,\n  stream: false\n}
+end
+
+== Retry Logic ==
+
+Retry -> Retry: Exponential Backoff\n(max 3 retries)
+
+alt Request Fails
+    Retry -> Retry: Wait & Retry:\n- 1s, 2s, 4s delays
+    
+    alt Max Retries Reached
+        Retry --> Router: Error:\n"LLM Provider Unavailable"
+        Router --> LLMManager: Propagate Error
+        LLMManager --> AgentSvc: LLMError Exception
+    end
+end
+
+Anthropic --> Retry: Success Response
+Retry --> Router: LLM Response
+
+== Response Processing ==
+
+Router --> LLMManager: {\n  content: "...",\n  tool_calls: [...],\n  model, usage: {...}\n}
+
+LLMManager -> TokenCounter: Count Output Tokens\n(response content)
+TokenCounter --> LLMManager: output_tokens: 520
+
+LLMManager -> LLMManager: Calculate Cost:\n- Input: 350 × $0.01/1K = $0.0035\n- Output: 520 × $0.03/1K = $0.0156\nTotal: $0.0191
+
+LLMManager -> LLMManager: Normalize Response:\n(handle provider differences)
+
+LLMManager -> Redis: SETEX llm:cache:{key}\n(response, 3600s)
+Redis --> LLMManager: Cached
+
+end
+
+== Response Delivery ==
+
+LLMManager -> DB: Log LLM Call:\n- model, provider\n- input_tokens, output_tokens\n- cost, latency\n- timestamp
+DB --> LLMManager: Logged
+
+LLMManager --> AgentSvc: {\n  content,\n  tool_calls,\n  usage: {\n    input_tokens,\n    output_tokens,\n    total_tokens\n  },\n  cost,\n  model\n}
+
+note over TokenCounter
+  **Token Counting:**
+  - OpenAI: tiktoken library
+  - Anthropic: Estimate based on chars
+  - Gemini: Official tokenizer
+  - Ollama: Character-based estimate
+  
+  **Purpose:**
+  - Cost estimation
+  - Rate limiting
+  - Analytics
+end note
+
+note over RateLimiter
+  **Global Rate Limit:**
+  - 5 calls per minute (all LLM interactions)
+  - Applies to app and tests
+  - Waits for slot (doesn't fail)
+  - Prevents API quota exhaustion
+end note
+
+note over Redis
+  **Caching Strategy:**
+  - Cache identical requests (1 hour)
+  - Key: Hash of (model + messages)
+  - Reduces cost & latency
+  - Invalidation: Time-based (3600s)
+end note
+
+note over Retry
+  **Retry Strategy (Tenacity):**
+  - Max 3 attempts
+  - Exponential backoff: 1s, 2s, 4s
+  - Retries on:
+    * Rate limit errors (429)
+    * Server errors (5xx)
+    * Network timeouts
+  - Propagates errors after max retries
+end note
+
+@enduml

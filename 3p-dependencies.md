@@ -2,9 +2,15 @@
 
 This document tracks all third-party libraries, frameworks, and Docker images used in the AI Agent Framework project.
 
-**Last Updated:** January 6, 2026
+**Last Updated:** January 18, 2026
 
 ## Recent Changes
+
+### January 18, 2026 - Architecture Simplification & Google Gemini Integration
+- **Backend**: Added Google Generative AI SDK (`google-genai>=1.0.0`) for Gemini model support
+- **Backend**: Added built-in tools dependencies (requests, beautifulsoup4, pytz, jsonschema)
+- **Architecture**: Removed Camunda/Zeebe BPMN dependencies (migrated to internal workflow engine)
+- **Infrastructure**: Removed Elasticsearch dependency (no longer needed without Camunda)
 
 ### January 6, 2026 - Dependency Synchronization
 - **Backend**: Verified against `backend/requirements.txt`
@@ -25,9 +31,6 @@ This document tracks all third-party libraries, frameworks, and Docker images us
 | prom/prometheus | v2.47.0, latest | docker-compose.yml, docker-compose.security.yml | Metrics collection and monitoring | Active | Apache-2.0 | Time-series database |
 | grafana/grafana | latest | docker-compose.security.yml | Monitoring dashboards (optional) | Active | AGPL-3.0 | Note: AGPL license |
 | ollama/ollama | latest | docker-compose.yml | Local LLM model serving | Active | MIT | For local AI model inference |
-| camunda/zeebe | 8.3.0 | docker-compose.yml | BPMN workflow engine | Active | Apache-2.0 | Community Edition |
-| camunda/operate | 8.3.0 | docker-compose.yml | Workflow monitoring UI | Active | Apache-2.0 | Community Edition |
-| docker.elastic.co/elasticsearch/elasticsearch | 8.9.0 | docker-compose.yml | Search and analytics for Camunda | Active | Elastic License 2.0 | For workflow data storage |
 | apache/superset | 3.0.0 | docker-compose.yml | Data visualization and dashboards | Active | Apache-2.0 | Business intelligence platform |
 
 ## Python Dependencies (Backend)
@@ -81,12 +84,22 @@ This document tracks all third-party libraries, frameworks, and Docker images us
 |------|---------|----------|---------|----------|---------|-------|
 | openai | 1.40.0 | backend/requirements.txt | OpenAI API client | Active | MIT | Official OpenAI Python client for GPT models |
 | anthropic | 0.28.0 | backend/requirements.txt | Anthropic API client | Active | MIT | Official Anthropic Python client for Claude models |
+| google-genai | >=1.0.0 | backend/requirements.txt | Google Generative AI SDK | Active | Apache-2.0 | Official Google Python client for Gemini models |
 | tiktoken | 0.5.2 | backend/requirements.txt | Token counting for OpenAI models | Active | MIT | OpenAI tokenizer library for accurate cost estimation |
 | tenacity | 8.2.3 | backend/requirements.txt | Retry library with backoff | Active | Apache-2.0 | Resilient API calls and error handling for LLM providers |
 | chromadb | 0.4.18 | backend/requirements.txt | Vector database for embeddings | Active | Apache-2.0 | Local vector database for semantic memory and RAG |
 | sentence-transformers | 2.2.2 | backend/requirements.txt | Text embeddings generation | Active | Apache-2.0 | Pre-trained models for semantic similarity and search |
 | numpy | 1.24.4 | backend/requirements.txt | Numerical computing for ML | Active | BSD-3-Clause | Core dependency for embeddings and vector operations |
 | huggingface-hub | 0.19.4 | backend/requirements.txt | HuggingFace model hub client | Active | Apache-2.0 | Download and manage pre-trained models |
+
+## Built-in Tools Dependencies (Backend)
+
+| Name | Version | Location | Purpose | EOL Date | License | Notes |
+|------|---------|----------|---------|----------|---------|-------|
+| requests | 2.31.0 | backend/requirements.txt | HTTP requests for web tools | Active | Apache-2.0 | Standard HTTP library for web scraping and API calls |
+| beautifulsoup4 | 4.12.3 | backend/requirements.txt | HTML parsing for web scraping | Active | MIT | Parse and extract data from HTML/XML documents |
+| pytz | 2024.1 | backend/requirements.txt | Timezone support for datetime tool | Active | MIT | Accurate timezone handling for datetime operations |
+| jsonschema | 4.21.0 | backend/requirements.txt | JSON Schema validation for tools | Active | MIT | Validate tool inputs and outputs against schemas |
 
 ## Frontend Dependencies (Node.js/React)
 
@@ -139,10 +152,8 @@ This document tracks all third-party libraries, frameworks, and Docker images us
 ## Security Considerations
 
 ### High-Risk Dependencies
-- **Grafana**: Uses AGPL-3.0 license which may have commercial restrictions
 - **psycopg2-binary**: LGPL-3.0 license requires compliance considerations
 - **React 18.2.0**: Monitor for React2Shell vulnerability (CVE-2025-55182) - ensure React Server Components are not used or properly secured
-- **Elasticsearch**: Uses Elastic License 2.0 which has restrictions on cloud service providers
 
 ### Frontend Security
 - **Monaco Editor**: Code editor component - ensure proper input sanitization for user-provided code
@@ -152,13 +163,18 @@ This document tracks all third-party libraries, frameworks, and Docker images us
 - **Node.js 18**: Monitor for security updates, EOL April 2025 - plan migration to Node.js 20 LTS
 
 ### LLM Provider Security
-- **OpenAI, Anthropic**: API keys and credentials must be securely managed
+- **OpenAI, Anthropic, Google Gemini**: API keys and credentials must be securely managed
 - **tiktoken**: Used for token counting - ensure input sanitization
 - **tenacity**: Retry mechanisms should include rate limiting to prevent abuse
 - **chromadb**: Vector database should be secured with proper access controls
 - **sentence-transformers**: Model files should be verified for integrity
 - **numpy**: Core numerical library - keep updated for security patches
 - **huggingface-hub**: Model downloads should be verified and scanned
+
+### Built-in Tools Security
+- **requests**: Configure proper timeouts and SSL verification for HTTP requests
+- **beautifulsoup4**: Validate and sanitize parsed HTML to prevent XSS attacks
+- **jsonschema**: Ensure tool inputs are validated against strict schemas
 
 ### Container Security
 - **Node.js Alpine**: Minimal attack surface but monitor for Alpine Linux security updates
@@ -175,6 +191,7 @@ This document tracks all third-party libraries, frameworks, and Docker images us
 - **TypeScript 5.3**: Monitor for security updates and new releases
 - **OpenAI SDK**: Monitor for security updates and API changes
 - **Anthropic SDK**: Monitor for security updates and API changes
+- **Google Gemini SDK**: Monitor for security updates and API changes
 
 ### License Compliance
 - Most dependencies use permissive licenses (MIT, Apache-2.0, BSD)
@@ -228,7 +245,8 @@ This document tracks all third-party libraries, frameworks, and Docker images us
 28. Python 3.11 Slim provides secure, minimal runtime for backend services
 29. Docker Compose orchestrates multi-container development and production environments
 30. Ollama enables local LLM inference without external API dependencies
-31. Camunda Platform 8 provides enterprise-grade BPMN workflow orchestration
-32. Elasticsearch powers Camunda's workflow data storage and search capabilities
-33. Apache Superset provides self-hosted business intelligence and data visualization
-34. Vitest provides a fast, modern testing framework for the frontend, replacing Jest
+31. Apache Superset provides self-hosted business intelligence and data visualization
+32. Vitest provides a fast, modern testing framework for the frontend, replacing Jest
+33. Internal workflow orchestration engine replaces Camunda/Zeebe BPMN for simplified architecture
+34. Google Gemini SDK enables integration with Google's latest language models
+35. Built-in tools (requests, beautifulsoup4, pytz, jsonschema) provide core functionality for web scraping, datetime operations, and validation

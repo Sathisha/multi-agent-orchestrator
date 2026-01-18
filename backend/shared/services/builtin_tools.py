@@ -196,7 +196,12 @@ def execute(inputs: dict, context=None) -> dict:
         if not query:
             return {'error': 'Query is required'}
 
-        # Wikipedia API
+        # Wikipedia API requires User-Agent
+        headers = {
+            'User-Agent': 'AI-Agent-Framework/1.0 (educational purpose)'
+        }
+
+        # 1. Search for the page
         params = {
             'action': 'query',
             'format': 'json',
@@ -206,7 +211,7 @@ def execute(inputs: dict, context=None) -> dict:
         }
         
         search_url = 'https://en.wikipedia.org/w/api.php'
-        response = requests.get(search_url, params=params, timeout=10)
+        response = requests.get(search_url, params=params, headers=headers, timeout=10)
         
         if response.status_code != 200:
             return {'error': f'Wikipedia API error: {response.status_code}'}
@@ -230,10 +235,13 @@ def execute(inputs: dict, context=None) -> dict:
             'titles': page_title
         }
         
-        summary_response = requests.get(search_url, params=summary_params, timeout=10)
+        summary_response = requests.get(search_url, params=summary_params, headers=headers, timeout=10)
         summary_data = summary_response.json()
         
         pages = summary_data.get('query', {}).get('pages', {})
+        if not pages:
+             return {'error': 'Failed to retrieve page content'}
+             
         page = list(pages.values())[0]
         
         return {

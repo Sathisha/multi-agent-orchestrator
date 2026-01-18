@@ -5,6 +5,11 @@ Run this once after deployment to make tools available to agents.
 
 import asyncio
 import logging
+import os
+import sys
+
+# Add parent directory to path so we can import shared modules
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from shared.services.builtin_tools import BUILTIN_TOOLS
 from shared.services.tool_registry import ToolRegistryService
 from shared.database.connection import AsyncSessionLocal
@@ -41,24 +46,24 @@ async def register_builtin_tools():
                         tool_id=existing_tool.id,
                         tool_request=tool_request
                     )
-                    logger.info(f"✅ Updated: {tool_data['name']}")
+                    logger.info(f" Updated: {tool_data['name']}")
                 else:
                     tool_request = ToolRequest(**tool_data)
                     tool = await tool_service.create_tool(
                         user_id=SYSTEM_USER_ID,
                         tool_request=tool_request
                     )
-                    logger.info(f"✅ Registered: {tool.name} (ID: {tool.id})")
+                    logger.info(f" Registered: {tool.name} (ID: {tool.id})")
                     registered_count += 1
                 
             except Exception as e:
-                logger.error(f"❌ Failed to process '{tool_data['name']}': {e}")
+                logger.error(f" Failed to process '{tool_data['name']}': {e}")
                 failed_count += 1
         
         logger.info("\n" + "="*50)
         logger.info(f"Registration/Update complete!")
-        logger.info(f"  ✅ Processed: {registered_count}")
-        logger.info(f"  ❌ Failed: {failed_count}")
+        logger.info(f"   Processed: {registered_count}")
+        logger.info(f"   Failed: {failed_count}")
         logger.info("="*50)
 
 

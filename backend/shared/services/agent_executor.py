@@ -64,6 +64,33 @@ class ExecutionStatus(str, Enum):
     TIMEOUT = "timeout"
 
 
+SACP_INSTRUCTION = """
+### SYSTEM PROTOCOL: RESPONSE FORMAT INSTRUCTIONS
+You are a highly organized AI agent integrated into a larger workflow.
+CRITICAL: You MUST provide your response in a valid JSON format.
+DO NOT include any text outside the JSON block.
+DO NOT use markdown code blocks (```json ... ```) unless specifically asked, but the raw response MUST be parseable JSON.
+
+Your response schema is:
+{
+    "thought": "Your reasoning process here...",
+    "status": "success" | "failure" | "clarification_needed",
+    "data": {
+        "key": "value"
+        // Any structured data extracted or generated
+    },
+    "message": "The final human-readable answer."
+}
+
+Example:
+{
+    "thought": "I need to calculate the sum. 5+5 is 10.",
+    "status": "success",
+    "data": { "result": 10 },
+    "message": "The result is 10."
+}
+"""
+
 class AgentExecutionContext(BaseModel):
     """Context for agent execution."""
     execution_id: str
@@ -409,9 +436,28 @@ class AgentExecutorService(BaseService):
                 logger.info(f"[EXEC-LOGIC] Looking for model with provider='{raw_provider}' and name='{agent_config.model}'")
                 logger.info(f"[EXEC-LOGIC] Available models: {[(m.provider, m.name, m.id) for m in llm_models]}")
                 
-                # Find matching model by provider and name (case-insensitive provider comparison)
+                # Normalize provider name for matching (handle display names like "Google Gemini" -> "google")
+                def normalize_provider(provider_str: str) -> str:
+                    """Normalize provider name to match enum values."""
+                    provider_lower = provider_str.lower().strip()
+                    # Map common variations to canonical names
+                    if 'google' in provider_lower or 'gemini' in provider_lower:
+                        return 'google'
+                    elif 'openai' in provider_lower:
+                        return 'openai'
+                    elif 'anthropic' in provider_lower or 'claude' in provider_lower:
+                        return 'anthropic'
+                    elif 'azure' in provider_lower:
+                        return 'azure-openai'
+                    elif 'ollama' in provider_lower:
+                        return 'ollama'
+                    return provider_lower
+                
+                normalized_target_provider = normalize_provider(raw_provider)
+                
+                # Find matching model by normalized provider and name
                 target_model = next((m for m in llm_models 
-                                   if m.provider.lower() == raw_provider.lower() 
+                                   if normalize_provider(m.provider) == normalized_target_provider 
                                    and m.name == agent_config.model), None)
                 
                 if target_model:
@@ -451,14 +497,16 @@ class AgentExecutorService(BaseService):
             tool_executions = []
             
             if available_tools:
-                logger.info(f"[EXEC-LOGIC] Agent has {len(available_tools)} tools available")
+                logger.info(f"[EXEC-LOGIC] Phase 1: Tool Analysis & Execution for {context.execution_id}")
                 try:
                     from ..services.tool_executor import ToolExecutorService
                     tool_executor = ToolExecutorService(self.session, llm_service=self.llm_service)
                     
                     # Analyze input and execute tools if needed
                     user_input_str = str(context.input_data.get("message", context.input_data))
-                    tool_executions = await tool_executor.analyze_and_execute_tools(
+                    
+                    # Phase 1: Tool Decision & Execution
+                    tool_executions, tool_usage = await tool_executor.analyze_and_execute_tools(
                         user_input=user_input_str,
                         available_tools=available_tools,
                         agent_id=context.agent_id,
@@ -467,15 +515,27 @@ class AgentExecutorService(BaseService):
                     )
                     
                     if tool_executions:
-                        logger.info(f"[EXEC-LOGIC] Executed {len(tool_executions)} tool(s)")
+                        logger.info(f"[EXEC-LOGIC] Phase 1 Completed: Executed {len(tool_executions)} tool(s)")
+                        logger.debug(f"[EXEC-LOGIC] Phase 1 Token Usage: {tool_usage}")
+                    else:
+                        logger.info(f"[EXEC-LOGIC] Phase 1 Completed: No tools executed")
+                        
                 except Exception as e:
                     logger.error(f"[EXEC-LOGIC] Tool execution failed: {e}", exc_info=True)
                     # Continue without tools if they fail
+                    tool_usage = {"total_tokens": 0}
+            else:
+                tool_usage = {"total_tokens": 0}
+
+            logger.info(f"[EXEC-LOGIC] Phase 2: Final Response Generation for {context.execution_id}")
             
-            # Prepare messages
             system_prompt = agent.system_prompt or "You are a helpful assistant."
             if memory_context:
                 system_prompt += f"\nContext from memory: {', '.join(memory_context)}"
+            
+            # Inject Standard Agent Communication Protocol if enabled
+            if agent.config.get("use_standard_protocol") or agent.config.get("use_standard_response_format"):
+                system_prompt += f"\n\n{SACP_INSTRUCTION}"
             
             # Add tool results to context if available
             if tool_executions:
@@ -517,7 +577,13 @@ class AgentExecutorService(BaseService):
                 logger.debug(f"[EXEC-LOGIC] Memory stored for execution {context.execution_id}")
 
             execution_time_ms = int((time.time() - start_time) * 1000)
-            tokens_used = llm_response.usage.total_tokens if llm_response.usage else 0
+            
+            # Calculate total tokens (Phase 1 + Phase 2)
+            phase2_tokens = llm_response.usage.total_tokens if llm_response.usage else 0
+            phase1_tokens = tool_usage.get("total_tokens", 0)
+            total_tokens_used = phase1_tokens + phase2_tokens
+            
+            logger.info(f"[EXEC-LOGIC] Token Usage - Phase 1: {phase1_tokens}, Phase 2: {phase2_tokens}, Total: {total_tokens_used}")
             cost = 0.0 # Simplify cost
             
             logger.debug(f"[EXEC-LOGIC] Creating execution result for {context.execution_id}")
@@ -525,7 +591,7 @@ class AgentExecutorService(BaseService):
                 execution_id=context.execution_id,
                 status=ExecutionStatus.COMPLETED,
                 output_data={"content": llm_response.content, "model": llm_response.model},
-                tokens_used=tokens_used,
+                tokens_used=total_tokens_used,
                 execution_time_ms=execution_time_ms,
                 cost=cost,
                 completed_at=datetime.utcnow()

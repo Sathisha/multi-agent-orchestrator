@@ -1,0 +1,140 @@
+@startuml architecture-overview
+
+!define RECTANGLE class
+
+title Multi-Agent Orchestrator - System Architecture Overview
+
+' Define color scheme
+skinparam rectangleBackgroundColor<<Frontend>> LightBlue
+skinparam rectangleBackgroundColor<<Backend>> LightGreen
+skinparam rectangleBackgroundColor<<Database>> LightYellow
+skinparam rectangleBackgroundColor<<Security>> LightCoral
+skinparam rectangleBackgroundColor<<External>> LightGray
+skinparam rectangleBackgroundColor<<Infrastructure>> Wheat
+
+' User layer
+actor "End User" as User
+actor "Developer" as Dev
+actor "System Admin" as Admin
+
+' Frontend layer
+package "Frontend Layer" <<Frontend>> {
+  [Web UI\n(React 18+ TypeScript)] as WebUI
+  [Monaco Editor] as Editor
+  [React Flow\n(Workflow Designer)] as ReactFlow
+}
+
+' API Gateway and Load Balancer
+package "Infrastructure Layer" <<Infrastructure>> {
+  [Kong Gateway\n(API Gateway)] as Kong
+  [Prometheus\n(Metrics)] as Prometheus
+  [Apache Superset\n(Visualization)] as Superset
+}
+
+' Security Layer
+package "Security Layer" <<Security>> {
+  [Keycloak\n(Identity & Access)] as Keycloak
+  [Casbin\n(RBAC Engine)] as Casbin
+  [Guardrails\nEngine] as Guardrails
+}
+
+' Backend Services
+package "Backend Services" <<Backend>> {
+  [FastAPI\nApplication] as FastAPI
+  [Agent Service] as AgentSvc
+  [Workflow\nOrchestrator] as WorkflowSvc
+  [LLM Provider\nManager] as LLMManager
+  [Tool Manager] as ToolManager
+  [Memory Service] as MemorySvc
+}
+
+' Database Layer
+package "Data Layer" <<Database>> {
+  database "PostgreSQL\n(Primary DB)" as PostgreSQL
+  database "Redis\n(Cache & Sessions)" as Redis
+  database "ChromaDB\n(Vector Store)" as ChromaDB
+}
+
+' External LLM Providers
+package "LLM Providers" <<External>> {
+  cloud "OpenAI" as OpenAI
+  cloud "Anthropic\n(Claude)" as Anthropic
+  cloud "Google Gemini" as Gemini
+  cloud "Azure OpenAI" as Azure
+  [Ollama\n(Local Models)] as Ollama
+}
+
+' Connections - User to Frontend
+User --> WebUI : Browse /\nInteract
+Dev --> WebUI : Create Agents /\nBuild Workflows
+Admin --> WebUI : Manage Users /\nConfigure System
+
+' Frontend to Gateway
+WebUI --> Kong : HTTPS API Calls
+Editor -[hidden]-> Kong
+ReactFlow -[hidden]-> Kong
+
+' Gateway to Security
+Kong --> Keycloak : Authenticate
+Kong --> FastAPI : Forward Requests
+
+' Backend Internal
+FastAPI --> Casbin : Check Permissions
+FastAPI --> Guardrails : Validate Input/Output
+FastAPI --> AgentSvc : Execute Agent
+FastAPI --> WorkflowSvc : Execute Workflow
+FastAPI --> LLMManager : Manage Models
+FastAPI --> ToolManager : Execute Tools
+FastAPI --> MemorySvc : Store/Retrieve Memory
+
+' Backend to Data Layer
+AgentSvc --> PostgreSQL : Store Agent Config
+WorkflowSvc --> PostgreSQL : Store Workflows
+LLMManager --> PostgreSQL : Store LLM Configs
+FastAPI --> Redis : Cache / Sessions
+MemorySvc --> ChromaDB : Embeddings
+MemorySvc --> PostgreSQL : Conversation History
+
+' Backend to LLM Providers
+LLMManager --> OpenAI : API Calls
+LLMManager --> Anthropic : API Calls
+LLMManager --> Gemini : API Calls
+LLMManager --> Azure : API Calls
+LLMManager --> Ollama : Local Inference
+
+AgentSvc --> LLMManager : Get LLM Response
+
+' Monitoring
+FastAPI --> Prometheus : Export Metrics
+Prometheus --> Superset : Query Metrics
+Admin --> Superset : View Dashboards
+
+' Notes
+note right of Keycloak
+  - JWT Token Generation
+  - SSO Support
+  - User Management
+end note
+
+note right of Casbin
+  - Role-Based Access Control
+  - System Admin
+  - Developer
+  - User/Viewer
+end note
+
+note right of Guardrails
+  - Input Validation
+  - Output Sanitization
+  - Policy Enforcement
+end note
+
+note bottom of Ollama
+  Local LLM models:
+  - tinyllama
+  - phi
+  - llama3.2
+  - nomic-embed-text
+end note
+
+@enduml

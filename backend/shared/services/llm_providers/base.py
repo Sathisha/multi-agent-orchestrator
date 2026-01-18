@@ -18,6 +18,7 @@ class LLMProviderType(str, Enum):
     ANTHROPIC = "anthropic"
     AZURE_OPENAI = "azure-openai"
     GOOGLE = "google"
+    MOCK = "mock"
 
 
 class LLMMessage(BaseModel):

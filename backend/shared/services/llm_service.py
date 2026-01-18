@@ -476,7 +476,7 @@ class LLMService:
         
         # Try primary provider first
         try:
-            return await primary_provider.generate_response(request)
+            return await self._generate_with_retry(primary_provider, request)
         except (LLMConnectionError, LLMRateLimitError) as e:
             errors.append(f"{primary_provider.provider_type.value}: {str(e)}")
             self.logger.warning(f"Primary provider failed: {e}")
@@ -510,7 +510,7 @@ class LLMService:
                     request, fallback_type
                 )
                 
-                response = await fallback_provider.generate_response(fallback_request)
+                response = await self._generate_with_retry(fallback_provider, fallback_request)
                 
                 # Add fallback metadata
                 response.metadata["fallback_used"] = True
@@ -531,6 +531,28 @@ class LLMService:
             provider="fallback_system",
             error_code="ALL_PROVIDERS_FAILED"
         )
+
+    async def _generate_with_retry(self, provider: BaseLLMProvider, request: LLMRequest) -> LLMResponse:
+        """Generate response with retry for 503 errors."""
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                return await provider.generate_response(request)
+            except Exception as e:
+                # Check if it's a 503 error (Service Unavailable)
+                # LLM providers might raise different exceptions, check for '503' in message or status code
+                is_503 = "503" in str(e)
+                if hasattr(e, "status_code") and e.status_code == 503:
+                    is_503 = True
+                
+                if is_503:
+                    if attempt < max_retries - 1:
+                        self.logger.warning(f"Received 503 error from {provider.provider_type.value}. Sleeping for 60s (Attempt {attempt + 1}/{max_retries})...")
+                        await asyncio.sleep(60)
+                        continue
+                
+                raise e
+        return await provider.generate_response(request)
     
     def _adjust_request_for_provider(
         self, 

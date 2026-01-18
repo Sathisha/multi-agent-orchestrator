@@ -15,6 +15,17 @@ A comprehensive platform that enables developers to create, orchestrate, and dep
 - **Extensible Architecture**: Plugin system for custom tools and MCP server integrations.
 - **Self-Hosting**: Complete data sovereignty with Docker-first deployment.
 
+## 📸 Screenshots
+
+![Dashboard](docs/images/dashboard.png)
+_Interactive Dashboard for managing agents and workflows_
+
+![Workflow Orchestrator](docs/images/workflow_orchestrator.png)
+_Visual Workflow Orchestrator for complex agent chains_
+
+![Agent Management](docs/images/agent_management.png)
+_Comprehensive Agent Management interface_
+
 ## 🛡️ Enterprise-Grade Capabilities
 
 Designed for mission-critical applications, the platform includes a robust suite of enterprise features:
@@ -47,6 +58,7 @@ Designed for mission-critical applications, the platform includes a robust suite
 - **Backend**: Python microservices with FastAPI, PostgreSQL, Redis
 - **Frontend**: React 18+ with TypeScript and VS Code-style interface
 - **Orchestration**: Custom graph-based workflow engine with parallel execution support
+- **LLM Providers**: OpenAI, Anthropic, Azure OpenAI, Google Gemini,  and Ollama
 - **Security**: Keycloak authentication, Casbin RBAC, comprehensive guardrails
 - **Monitoring**: Prometheus metrics with Apache Superset dashboards
 
@@ -54,9 +66,10 @@ Designed for mission-critical applications, the platform includes a robust suite
 
 This project is in **Active Development**. Core architecture is in place, featuring:
 - **Docker-First Development**: Consistent environments for all developers.
-- **Multi-Tenancy Removal**: Simplified architecture for single-tenant enterprise deployments.
-- **Workflow Engine**: New internal orchestration engine replacing external BPMN dependencies.
-- **Ollama Integration**: Seamless local LLM support.
+- **RBAC Implementation**: Role-based access control with System Admin, Developer, and User/Viewer roles.
+- **Internal Workflow Engine**: Custom graph-based orchestration engine replacing external BPMN dependencies.
+- **Multi-Provider LLM Support**: Integrated support for OpenAI, Anthropic, Azure OpenAI, Google Gemini, and Ollama.
+- **Model Management**: Auto-discovery and testing for local and cloud LLM models.
 
 ## 🛠️ Technology Stack
 

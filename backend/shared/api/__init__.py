@@ -15,12 +15,18 @@ from .llm_models import router as llm_models_router
 from .v1.endpoints.chains import router as chains_router
 
 from .mcp_gateway import router as mcp_gateway_router
+from .users import router as users_router
+from .roles import router as roles_router
+from .workflow import router as workflow_router
 
 # Create main API router
 api_router = APIRouter()
 
 # Include all sub-routers
 api_router.include_router(auth_router)
+api_router.include_router(users_router, prefix="/auth") 
+api_router.include_router(roles_router)
+api_router.include_router(workflow_router)
 api_router.include_router(api_keys_router)
 api_router.include_router(agent_router)
 api_router.include_router(agent_executor_router)

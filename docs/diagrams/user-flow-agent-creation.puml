@@ -1,0 +1,150 @@
+@startuml user-flow-agent-creation
+
+title Multi-Agent Orchestrator - Agent Creation Flow
+
+actor Developer as Dev
+participant "Web UI" as UI
+participant "FastAPI" as API
+participant "LLM Model\nService" as ModelSvc
+participant "Tool Service" as ToolSvc
+participant "Guardrails" as Guard
+database "PostgreSQL" as DB
+
+== Step 1: Navigate to Agent Creation ==
+
+Dev -> UI: Click "Create Agent"
+UI -> API: GET /api/llm-models
+API -> DB: Fetch Available Models
+DB --> API: Models List:\n- OpenAI GPT-4\n- Anthropic Claude\n- Google Gemini\n- Ollama models
+API --> UI: LLM Models
+UI -> API: GET /api/tools
+API -> DB: Fetch Available Tools
+DB --> API: Tools List
+API --> UI: Tools List
+UI -> UI: Display Creation Wizard
+
+== Step 2: Basic Information ==
+
+UI --> Dev: Show Form
+Dev -> UI: Enter:\n- Agent Name\n- Description\n- Role/Purpose
+
+UI -> UI: Basic Validation
+
+== Step 3: LLM Model Selection ==
+
+UI --> Dev: Show LLM Model Dropdown
+Dev -> UI: Select LLM Model\n(e.g., "gpt-4")
+UI --> Dev: Show Model Parameters:\n- Temperature (0.0-2.0)\n- Max Tokens\n- Top P
+Dev -> UI: Configure:\n- Temperature: 0.7\n- Max Tokens: 2000
+
+== Step 4: Tool Selection ==
+
+UI --> Dev: Show Available Tools:\n☐ web_search\n☐ calculator\n☐ wikipedia\n☐ datetime
+Dev -> UI: Select Tools:\n☑ web_search\n☑ datetime
+
+== Step 5: System Prompt (Initial) ==
+
+UI --> Dev: Show Prompt Template
+Dev -> UI: Enter System Prompt:\n"You are a helpful research assistant..."
+
+== Step 6: Prompt Refinement (Optional) ==
+
+alt Developer Wants AI Help
+    Dev -> UI: Click "Refine Prompt with AI"
+    UI -> API: POST /api/prompts/refine\n{role: "research assistant",\n tools: ["web_search"]}
+    
+    API -> ModelSvc: Generate Enhanced Prompt
+    ModelSvc -> ModelSvc: Use GPT-4 to Create:\n- Role definition\n- Tool usage instructions\n- Best practices
+    
+    ModelSvc --> API: Refined Prompt
+    API --> UI: Enhanced System Prompt
+    
+    UI --> Dev: Show Side-by-Side:\nOriginal | Enhanced
+    
+    alt Developer Accepts Refinement
+        Dev -> UI: Click "Accept"
+        UI -> UI: Update System Prompt
+    else Developer Rejects
+        Dev -> UI: Click "Keep Original"
+    end
+end
+
+== Step 7: Validation & Review ==
+
+UI --> Dev: Show Preview:\n- Name, Description\n- Selected Model\n- Selected Tools\n- System Prompt\n- Parameters
+        
+Dev -> UI: Click "Create Agent"
+
+UI -> API: POST /api/agents\n{\n  name, description,\n  llm_model_id,\n  system_prompt,\n  tools: [...],\n  temperature, max_tokens\n}
+
+== Backend Processing ==
+
+API -> Guard: Validate Agent Config
+Guard -> Guard: Check System Prompt\nfor Safety
+Guard -> Guard: Validate Parameters
+Guard --> API: Configuration Safe
+
+API -> DB: Check Name Uniqueness
+DB --> API: Name Available
+
+API -> DB: Create Agent Record
+DB --> API: agent_id
+
+API -> DB: Link Agent to Tools
+DB --> API: Tools Linked
+
+API -> DB: Audit Log (agent created)
+DB --> API: Logged
+
+== Step 8: Testing (Optional) ==
+
+API --> UI: Agent Created Successfully\n{agent_id}
+
+UI --> Dev: Show Success +\n"Test Agent Now?"
+
+alt Developer Wants to Test
+    Dev -> UI: Click "Test Agent"
+    UI -> UI: Open Test Panel
+    Dev -> UI: Enter Test Input:\n"What is the weather today?"
+    
+    UI -> API: POST /api/agents/{id}/execute\n{input: "What is the weather today?"}
+    API -> API: Execute Agent\n(full agent execution flow)
+    API --> UI: Agent Response
+    
+    UI --> Dev: Display:\n- Response\n- Tools Used\n- Token Count\n- Execution Time
+    
+    alt Response Not Satisfactory
+        Dev -> UI: Click "Edit Agent"
+        UI -> UI: Return to Edit Mode
+        note over Dev: Developer can adjust\nprompt or parameters
+    else Response Satisfactory
+        Dev -> UI: Click "Save & Close"
+    end
+else Skip Testing
+    Dev -> UI: Click "Done"
+end
+
+UI --> Dev: Navigate to Agents List\n(show new agent)
+
+== Agent Creation Complete ==
+
+note over UI
+  **Creation Wizard Features:**
+  - Step-by-step guided process
+  - Live model selection with parameters
+  - Drag-and-drop tool selection
+  - AI-powered prompt refinement
+  - Instant testing before saving
+  - Parameter validation
+end note
+
+note over Guard
+  **Validation Checks:**
+  - System prompt safety
+  - No prompt injection patterns
+  - Parameter ranges
+  - Tool compatibility
+  - Name uniqueness
+end note
+
+@enduml

@@ -128,7 +128,7 @@ async def test_get_user_by_email_found(auth_service_mocked_session):
     )
     
     # Mock the session.execute and result.scalar_one_or_none()
-    mock_result = AsyncMock()
+    mock_result = MagicMock()
     mock_result.unique.return_value.scalar_one_or_none.return_value = mock_user
     mock_session.execute.return_value = mock_result
     
@@ -142,7 +142,7 @@ async def test_get_user_by_email_not_found(auth_service_mocked_session):
     """Test retrieving a user by email when not found."""
     auth_service, mock_session = auth_service_mocked_session
     
-    mock_result = AsyncMock()
+    mock_result = MagicMock()
     mock_result.unique.return_value.scalar_one_or_none.return_value = None
     mock_session.execute.return_value = mock_result
     
@@ -166,7 +166,7 @@ async def test_get_user_by_id_found(auth_service_mocked_session):
         last_name="User"
     )
     
-    mock_result = AsyncMock()
+    mock_result = MagicMock()
     mock_result.unique.return_value.scalar_one_or_none.return_value = mock_user
     mock_session.execute.return_value = mock_result
     
@@ -180,7 +180,7 @@ async def test_get_user_by_id_not_found(auth_service_mocked_session):
     """Test retrieving a user by ID when not found."""
     auth_service, mock_session = auth_service_mocked_session
     
-    mock_result = AsyncMock()
+    mock_result = MagicMock()
     mock_result.unique.return_value.scalar_one_or_none.return_value = None
     mock_session.execute.return_value = mock_result
     

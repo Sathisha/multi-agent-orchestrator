@@ -125,6 +125,10 @@ main() {
         echo "⚠️  Skipping seeding - tables not verified"
     fi
     
+    # Register built-in tools
+    echo "🔧 Registering built-in tools..."
+    python3 scripts/register_builtin_tools.py || echo "⚠️  Tool registration failed (non-critical)"
+    
     echo "🛡️  Running pre-flight check..."
     if ! python3 -c "import main"; then
         echo "❌ Pre-flight check failed! Application code has errors."

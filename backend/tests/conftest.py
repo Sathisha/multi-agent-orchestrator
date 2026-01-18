@@ -79,6 +79,7 @@ postgresql.UUID = StringyUUID
 
 from main import app
 from shared.database.connection import Base, get_async_db
+import shared.models  # Ensure all models are registered
 from shared.config.settings import Settings
 from shared.database.connection import Base, get_async_db
 from shared.config.settings import Settings
@@ -97,7 +98,10 @@ def compile_jsonb(type_, compiler, **kw):
 # Strip ::jsonb cast in SQLite for testing
 @compiles(TextClause, "sqlite")
 def compile_text_clause(element, compiler, **kw):
-    return element.text.replace("::jsonb", "")
+    text_content = element.text.replace("::jsonb", "")
+    if "gen_random_uuid()" in text_content:
+        return text_content.replace("gen_random_uuid()", "NULL")
+    return text_content
 
 # Test database URL
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"

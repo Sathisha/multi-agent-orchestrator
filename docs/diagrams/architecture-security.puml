@@ -1,0 +1,148 @@
+@startuml architecture-security
+
+title Multi-Agent Orchestrator - Security Architecture
+
+skinparam sequenceMessageAlign center
+
+actor "User/Client" as Client
+participant "Kong Gateway" as Kong
+participant "Keycloak" as Keycloak
+participant "FastAPI\nBackend" as Backend
+participant "Casbin RBAC" as Casbin
+participant "Guardrails\nEngine" as Guardrails
+database "PostgreSQL" as DB
+
+== Authentication Flow ==
+
+Client -> Kong : Request with\nJWT Token or API Key
+activate Kong
+
+alt JWT Token Authentication
+    Kong -> Keycloak : Validate JWT Token
+    activate Keycloak
+    Keycloak -> Keycloak : Verify Signature
+    Keycloak -> DB : Check User Status
+    Keycloak --> Kong : Token Valid +\nUser Info
+    deactivate Keycloak
+else API Key Authentication
+    Kong -> DB : Validate API Key
+    DB --> Kong : API Key Valid +\nScopes
+else Session Cookie
+    Kong -> Backend : Verify Session
+    Backend -> DB : Check Session
+    DB --> Backend : Session Valid
+    Backend --> Kong : User Info
+end
+
+Kong --> Client : 401 Unauthorized\n(if auth fails)
+
+== Authorization Flow ==
+
+Kong -> Backend : Forward Request +\nUser Context
+activate Backend
+
+Backend -> Casbin : Check Permission\n(user, resource, action)
+activate Casbin
+
+Casbin -> DB : Load RBAC Policies
+DB --> Casbin : Policy Rules
+
+Casbin -> Casbin : Evaluate Rules
+
+alt System Admin Role
+    Casbin --> Backend : ALLOW (Full Access)
+else Developer Role  
+    Casbin -> Casbin : Check Resource Ownership
+    alt Owns Resource
+        Casbin --> Backend : ALLOW
+    else Doesn't Own
+        Casbin --> Backend : DENY
+    end
+else User/Viewer Role
+    Casbin -> Casbin : Check Read-Only\nPermission
+    alt Read-Only Access
+        Casbin --> Backend : ALLOW (Read Only)
+    else Write Access
+        Casbin --> Backend : DENY
+    end
+end
+
+deactivate Casbin
+
+Backend --> Client : 403 Forbidden\n(if denied)
+
+== Guardrails Validation ==
+
+Backend -> Guardrails : Validate Input
+activate Guardrails
+
+Guardrails -> Guardrails : Check for Injection\nAttacks
+
+Guardrails -> Guardrails : Content Safety\nChecks
+
+Guardrails --> Backend : Input Valid
+
+Backend -> Backend : Execute Business Logic
+Backend -> Backend : Generate Response
+
+Backend -> Guardrails : Validate Output
+Guardrails -> Guardrails : Check for Sensitive\nData Leaks
+
+Guardrails -> Guardrails : Content Safety\nChecks
+
+Guardrails --> Backend : Output Safe
+deactivate Guardrails
+
+Backend -> DB : Audit Log\n(Action, User, Resource,  Timestamp)
+DB --> Backend : Logged
+
+Backend --> Kong : Response
+deactivate Backend
+
+Kong --> Client : Success Response +\nSanitized Data
+deactivate Kong
+
+== Security Features ==
+
+note over Keycloak
+  **Identity Management:**
+  - JWT token generation (1hr expiry)
+  - Password hashing (Argon2)
+  - SSO support
+  - Multi-factor authentication (future)
+end note
+
+note over Casbin
+  **RBAC Policies:**
+  - System Admin: Full access
+  - Developer: Create/manage own resources
+  - User/Viewer: Execute & view only
+  
+  **Attribute-Based Rules:**
+  - Resource ownership
+  - Workspace isolation
+  - Time-based access
+end note
+
+note over Guardrails
+  **Input Validation:**
+  - SQL injection prevention
+  - XSS attack prevention
+  - Command injection prevention
+  - Size limits enforcement
+  
+  **Output Validation:**
+  - PII redaction
+  - Sensitive data filtering
+  - Content safety checks
+end note
+
+note over DB
+  **Security Features:**
+  - Encrypted at rest
+  - SSL/TLS connections
+  - Row-level security (future)
+  - Audit trail for all actions
+end note
+
+@enduml

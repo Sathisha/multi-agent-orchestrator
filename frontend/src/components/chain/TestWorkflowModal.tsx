@@ -16,7 +16,10 @@ import {
     Tab,
     Chip,
     Alert,
-    Divider
+    Divider,
+    Accordion,
+    AccordionSummary,
+    AccordionDetails
 } from '@mui/material';
 import {
     Close,
@@ -25,7 +28,8 @@ import {
     Refresh,
     CheckCircle,
     Error as ErrorIcon,
-    HourglassEmpty
+    HourglassEmpty,
+    ExpandMore
 } from '@mui/icons-material';
 import { Node, Edge } from 'reactflow';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
@@ -140,8 +144,8 @@ const TestWorkflowModal: React.FC<TestWorkflowModalProps> = ({ open, onClose, ch
         {
             enabled: !!executionId,
             refetchInterval: (data) => {
-                if (!data) return 2000;
-                return ['running', 'pending'].includes(data.status.toLowerCase()) ? 2000 : false;
+                if (!data) return 10000;
+                return ['running', 'pending'].includes(data.status.toLowerCase()) ? 10000 : false;
             },
             onSuccess: (data) => {
                 updateVisuals(data);
@@ -156,8 +160,8 @@ const TestWorkflowModal: React.FC<TestWorkflowModalProps> = ({ open, onClose, ch
         {
             enabled: !!executionId,
             refetchInterval: (data) => {
-                // Poll logs less frequently than status
-                return status && ['running', 'pending'].includes(status.status.toLowerCase()) ? 3000 : false;
+                // Poll logs at same frequency as status
+                return status && ['running', 'pending'].includes(status.status.toLowerCase()) ? 10000 : false;
             }
         }
     );
@@ -217,6 +221,80 @@ const TestWorkflowModal: React.FC<TestWorkflowModalProps> = ({ open, onClose, ch
     const handleReset = () => {
         setExecutionId(null);
         // Reset visuals done by useEffect
+    };
+
+    // Render Node Outputs Helper
+    const renderNodeOutputs = () => {
+        if (!status?.node_results || Object.keys(status.node_results).length === 0) {
+            return null;
+        }
+
+        const nodeEntries = Object.entries(status.node_results).filter(([nodeId]) => nodeId !== '__states__');
+
+        if (nodeEntries.length === 0) return null;
+
+        return (
+            <Box sx={{ mb: 2 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>Node Outputs</Typography>
+                {nodeEntries.map(([nodeId, result]: [string, any]) => {
+                    const nodeLabel = chain.nodes.find(n => n.node_id === nodeId)?.label || nodeId;
+                    return (
+                        <Accordion key={nodeId} defaultExpanded={false}>
+                            <AccordionSummary expandIcon={<ExpandMore />}>
+                                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                    {nodeLabel}
+                                </Typography>
+                            </AccordionSummary>
+                            <AccordionDetails>
+                                <Box sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                                    {result.input && (
+                                        <Box sx={{ mb: 2 }}>
+                                            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                                                Input:
+                                            </Typography>
+                                            <Box component="pre" sx={{
+                                                whiteSpace: 'pre-wrap',
+                                                bgcolor: '#f5f5f5',
+                                                p: 1,
+                                                borderRadius: 1,
+                                                mt: 0.5,
+                                                m: 0
+                                            }}>
+                                                {JSON.stringify(result.input, null, 2)}
+                                            </Box>
+                                        </Box>
+                                    )}
+                                    {result.output && (
+                                        <Box>
+                                            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                                                Output:
+                                            </Typography>
+                                            <Box component="pre" sx={{
+                                                whiteSpace: 'pre-wrap',
+                                                bgcolor: '#e8f5e9',
+                                                p: 1,
+                                                borderRadius: 1,
+                                                mt: 0.5,
+                                                m: 0
+                                            }}>
+                                                {typeof result.output === 'string'
+                                                    ? result.output
+                                                    : JSON.stringify(result.output, null, 2)}
+                                            </Box>
+                                        </Box>
+                                    )}
+                                    {result.timestamp && (
+                                        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                                            Completed: {new Date(result.timestamp).toLocaleString()}
+                                        </Typography>
+                                    )}
+                                </Box>
+                            </AccordionDetails>
+                        </Accordion>
+                    );
+                })}
+            </Box>
+        );
     };
 
     // Render Logs Helper
@@ -349,14 +427,25 @@ const TestWorkflowModal: React.FC<TestWorkflowModalProps> = ({ open, onClose, ch
                             )}
 
                             {activeTab === 1 && (
-                                <>
-                                    {renderLogs()}
+                                <Box sx={{ p: 2, overflowY: 'auto', flex: 1 }}>
+                                    {renderNodeOutputs()}
+
+                                    {logs && logs.length > 0 && (
+                                        <>
+                                            <Divider sx={{ my: 2 }} />
+                                            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                                                Execution Logs
+                                            </Typography>
+                                            {renderLogs()}
+                                        </>
+                                    )}
+
                                     {status?.error_message && (
-                                        <Alert severity="error" sx={{ m: 1 }}>
+                                        <Alert severity="error" sx={{ mt: 2 }}>
                                             {status.error_message}
                                         </Alert>
                                     )}
-                                </>
+                                </Box>
                             )}
                         </Box>
                     </Box>

@@ -10,6 +10,7 @@ from collections import defaultdict, deque
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.attributes import flag_modified
 
 from shared.models.chain import (
     Chain, ChainNode, ChainEdge, ChainExecution, ChainExecutionLog,
@@ -19,6 +20,7 @@ from shared.database.connection import get_database_session
 from shared.models.agent import Agent
 from shared.schemas.chain import ChainValidationResult
 from shared.services.base import BaseService
+from shared.services.agent_executor import AgentExecutorService
 
 logger = logging.getLogger(__name__)
 
@@ -306,6 +308,22 @@ class ChainOrchestratorService(BaseService):
         
         return result
     
+# Third-Party Dependencies
+
+# This document tracks all third-party libraries, frameworks, and Docker images used in the AI Agent Framework project.
+
+# **Last Updated:** January 18, 2026
+
+# ## Recent Changes
+
+# ### January 18, 2026 - Architecture Simplification & Google Gemini Integration
+# - **Backend**: Added Google Generative AI SDK (`google-genai>=1.0.0`) for Gemini model support
+# - **Backend**: Added built-in tools dependencies (requests, beautifulsoup4, pytz, jsonschema)
+# - **Architecture**: Removed Camunda/Zeebe BPMN dependencies (migrated to internal workflow engine)
+# - **Infrastructure**: Removed Elasticsearch dependency (no longer needed without Camunda)
+
+# ### January 6, 2026 - Dependency Synchronization
+# - **Backend**: Verified against `backend/requirements.txt`
     async def execute_chain(
         self,
         session: AsyncSession,
@@ -468,8 +486,11 @@ class ChainOrchestratorService(BaseService):
             execution.status = ChainExecutionStatus.COMPLETED
             execution.completed_at = datetime.now(timezone.utc)
             if execution.started_at:
+                start_dt = execution.started_at
+                if start_dt.tzinfo is None:
+                    start_dt = start_dt.replace(tzinfo=timezone.utc)
                 execution.duration_seconds = int(
-                    (execution.completed_at - execution.started_at).total_seconds()
+                    (execution.completed_at - start_dt).total_seconds()
                 )
             
             await session.commit()
@@ -485,8 +506,11 @@ class ChainOrchestratorService(BaseService):
             execution.error_details = {'exception_type': type(e).__name__}
             execution.completed_at = datetime.now(timezone.utc)
             if execution.started_at:
+                start_dt = execution.started_at
+                if start_dt.tzinfo is None:
+                    start_dt = start_dt.replace(tzinfo=timezone.utc)
                 execution.duration_seconds = int(
-                    (execution.completed_at - execution.started_at).total_seconds()
+                    (execution.completed_at - start_dt).total_seconds()
                 )
             
             await session.commit()
@@ -581,10 +605,20 @@ class ChainOrchestratorService(BaseService):
                     node_output = await self._execute_node(task_session, node, node_input, context)
                     
                     # Store Output
-                    # context is shared, but dict updates are atomic in GIL/asyncio usually safe enough here
+                    # context['node_outputs'] stores just the output for easy chaining
                     context['node_outputs'][node_id] = node_output
-                    execution.node_results[node_id] = node_output
+                    
+                    # execution.node_results stores full trace (input + output)
+                    execution.node_results[node_id] = {
+                        "input": node_input,
+                        "output": node_output,
+                        "timestamp": datetime.now(timezone.utc).isoformat()
+                    }
                     execution.completed_nodes.append(node_id)
+                    
+                    # Mark JSONB fields as modified so SQLAlchemy persists changes
+                    flag_modified(execution, "node_results")
+                    flag_modified(execution, "completed_nodes")
                     
                     # Log Success
                     await self._log_execution_event(
@@ -755,6 +789,11 @@ class ChainOrchestratorService(BaseService):
         execution.node_results['__states__'] = node_states
         execution.completed_nodes = list(execution.completed_nodes) # Ensure list
         
+        # Mark JSONB fields as modified for final commit
+        flag_modified(execution, "node_results")
+        flag_modified(execution, "active_edges")
+        flag_modified(execution, "completed_nodes")
+        
         await session.commit()
     def _evaluate_condition(self, condition: Dict[str, Any], source_output: Any) -> bool:
         """
@@ -790,8 +829,21 @@ class ChainOrchestratorService(BaseService):
             # Get actual value
             actual_value = source_output
             if isinstance(source_output, dict) and field:
-                # Support dot notation? For now simple key access
-                actual_value = source_output.get(field)
+                # Support dot notation
+                parts = field.split('.')
+                current = source_output
+                found = True
+                for part in parts:
+                    if isinstance(current, dict) and part in current:
+                        current = current[part]
+                    else:
+                        found = False
+                        break
+                
+                if found:
+                    actual_value = current
+                else:
+                    actual_value = None
             elif field:
                 # Field specified but output is not dict
                 actual_value = None
@@ -824,6 +876,27 @@ class ChainOrchestratorService(BaseService):
         else:
             return all(results)
 
+    def _resolve_value(self, value: Any, context: Dict[str, Any]) -> Any:
+        """Resolve value from context variables or node outputs."""
+        if isinstance(value, str) and "{{" in value and "}}" in value:
+            # Simple replacement for now (can be enhanced with regex or jinja2)
+            # Handle direct reference: {{node_id.field}}
+            if value.startswith("{{") and value.endswith("}}"):
+                path = value[2:-2].strip().split('.')
+                if len(path) == 2:
+                    node_id, field = path
+                    # Check node_outputs first
+                    node_output = context['node_outputs'].get(node_id, {})
+                    if isinstance(node_output, dict):
+                        return node_output.get(field)
+                    return None # Reference failed
+                elif len(path) == 1:
+                    # Referencing simpler things?
+                     pass
+            
+            # Handle string interpolation if needed, but for now stick to direct object mapping
+        return value
+
     def _prepare_node_input(
         self,
         node: ChainNode,
@@ -837,6 +910,9 @@ class ChainOrchestratorService(BaseService):
         
         Edges without conditions simply pass data through from predecessor to successor.
         """
+        # 1. Determine base input from connection flow
+        base_input = {}
+        
         # Find active predecessor nodes via incoming edges
         predecessors = []
         incoming_edges = incoming_edges_map.get(node.node_id, [])
@@ -849,17 +925,37 @@ class ChainOrchestratorService(BaseService):
         
         if not predecessors:
             # No active predecessors - use initial input
-            return context['input']
+            base_input = context['input']
             
         elif len(predecessors) == 1:
             # Single predecessor - pass through its output
-            return context['node_outputs'].get(predecessors[0], {})
+            base_input = context['node_outputs'].get(predecessors[0], {})
         else:
             # Multiple active predecessors - aggregate outputs
-            aggregated = {
+            base_input = {
                 'inputs': [context['node_outputs'].get(pred_id, {}) for pred_id in predecessors]
             }
-            return aggregated
+            
+        # 2. Apply Input Mapping if defined (overrides/augments base input)
+        input_map = node.config.get('input_map')
+        if input_map:
+            mapped_input = {}
+            for key, value in input_map.items():
+                mapped_input[key] = self._resolve_value(value, context)
+            
+            # If base_input is a dict, merge mapping INTO it (mapping takes precedence)
+            if isinstance(base_input, dict):
+                # We want a new dict with base keys + mapped keys
+                # If mapped key conflicts, it overwrites
+                return {**base_input, **mapped_input}
+            else:
+                # If base_input is string/list, we can't easily merge. 
+                # If input_map is present, it implies we want structured input.
+                # So we simply return the mapped_input, assuming user knows what they want.
+                # Unless we define a convention like 'base_content' key.
+                return mapped_input
+                
+        return base_input
 
     
     async def _execute_node(
@@ -897,9 +993,9 @@ class ChainOrchestratorService(BaseService):
         context: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Execute an agent node."""
+        logger.info(f"DEBUG: _execute_agent_node Input: {input_data.keys()}")
+        
         if not self.agent_executor:
-            # Import here to avoid circular dependency
-            from shared.services.agent_executor import AgentExecutorService
             self.agent_executor = AgentExecutorService(session)
         
         if not node.agent_id:
@@ -917,18 +1013,91 @@ class ChainOrchestratorService(BaseService):
         # Execute agent
         logger.info(f"Executing agent {agent.name} (node {node.node_id})")
         
+        # Prepare agent logic with support for Structured Output
+        output_schema = node.config.get('output_schema')
+        
         # Always create a new executor with the CURRENT session to support parallelism
         # self.agent_executor might hold a shared/stale session
         local_agent_executor = AgentExecutorService(session)
         
+        # Prepare input
+        processed_input = input_data
+        
+        # Inject output schema instruction if provided
+        if output_schema:
+            try:
+                import json
+                schema_str = json.dumps(output_schema, indent=2)
+                instruction = f"\n\nIMPORTANT: You MUST return your response in a valid JSON format matching this schema:\n{schema_str}\n\nDo not include any other text."
+                
+                # If input is string, append
+                if isinstance(processed_input, str):
+                    processed_input += instruction
+                # If input is dict, append to 'message' or 'content' key
+                elif isinstance(processed_input, dict):
+                    # Create a copy to avoid mutating original input_data
+                    processed_input = processed_input.copy()
+                    if 'message' in processed_input and isinstance(processed_input['message'], str):
+                        processed_input['message'] += instruction
+                    else:
+                        # Fallback: add to system_instruction if possible, or just log warning that we couldn't inject
+                        processed_input['_system_instruction_injection'] = instruction
+            except Exception as e:
+                logger.warning(f"Failed to inject output schema instruction: {e}")
+        
+        logger.info(f"[CHAIN] Executing agent node {node.node_id} (agent: {agent.name})")
+        logger.debug(f"[CHAIN] Agent node input_data: {input_data}")
+        
         execution_result = await local_agent_executor.execute_agent(
             agent_id=str(agent.id),
-            input_data=input_data,
+            input_data=processed_input,
             config=node.config or {}
         )
         
+        logger.info(f"[CHAIN] Agent execution completed. Status: {execution_result.status}")
+        logger.debug(f"[CHAIN] Execution result output_data: {execution_result.output_data}")
+        
         # Return agent output
-        return execution_result.output_data or {}
+        result_data = execution_result.output_data or {}
+        logger.debug(f"[CHAIN] Result data after extraction: {result_data}")
+        
+        # Check if SACP is enabled and parse JSON
+        if agent.config.get("use_standard_protocol") or agent.config.get("use_standard_response_format"):
+            content = result_data.get("content", "")
+            try:
+                import json
+                import re
+                
+                json_str = content
+                
+                # 1. Try to find markdown JSON block
+                match = re.search(r"```json\s*(.*?)\s*```", content, re.DOTALL)
+                if match:
+                    json_str = match.group(1)
+                else:
+                    # 2. Try to find first { and last }
+                    start_idx = content.find('{')
+                    end_idx = content.rfind('}')
+                    if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                        json_str = content[start_idx : end_idx + 1]
+                
+                # 3. Sanitize
+                json_str = json_str.strip()
+                
+                parsed = json.loads(json_str)
+                return parsed
+            except Exception as e:
+                logger.warning(f"Failed to parse SACP JSON response from agent {agent.name}: {e}")
+                # Fallback: Wrap in default structure per spec
+                return {
+                    "thought": "System Note: LLM failed to provide structured JSON output.",
+                    "status": "failure",
+                    "data": { "raw_output": content },
+                    "message": "The LLM returned an invalid response format."
+                }
+        
+        logger.info(f"[CHAIN] Agent node {node.node_id} returning output: {result_data}")
+        return result_data
     
     async def _execute_aggregator_node(
         self,

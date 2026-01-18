@@ -15,8 +15,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
+from jose import JWTError, jwt
 
 from ..database.connection import get_async_db
+from ..config.settings import get_settings
 import logging
 from ..services.auth import AuthService
 from ..services.rbac import RBACService
@@ -36,6 +38,11 @@ security = HTTPBearer()
 security_optional = HTTPBearer(auto_error=False)
 
 logger = logging.getLogger(__name__)
+
+# JWT settings
+settings = get_settings()
+SECRET_KEY = settings.security.secret_key if hasattr(settings, 'security') else "your-secret-key-change-in-production"
+ALGORITHM = "HS256"
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register_user(
@@ -155,44 +162,50 @@ async def get_current_user(
     """
     FastAPI dependency to get current authenticated user.
     
-    Validates JWT token and returns user object.
+    Validates JWT token and returns user object with roles attached.
     """
+    token = credentials.credentials
+    
+    try:
+        # Decode JWT token
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        
+        if user_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Get user from database
     auth_service = AuthService(db)
-    
-    # Decode token
-    payload = auth_service.decode_token(credentials.credentials)
-    
-    if not payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token",
-            headers={"WWW-Authenticate": "Bearer"}
-        )
-    
-    # Get user
-    user_id = payload.get("sub")
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token payload",
-            headers={"WWW-Authenticate": "Bearer"}
-        )
-    
     user = await auth_service.get_user_by_id(UUID(user_id))
     
-    if not user:
+    if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-            headers={"WWW-Authenticate": "Bearer"}
+            detail="User not found"
         )
     
     if not user.is_active:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User account is inactive",
-            headers={"WWW-Authenticate": "Bearer"}
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is inactive"
         )
+    
+    # Attach JWT payload data to user object for easy access
+    # This includes roles and permissions from the token
+    user._jwt_payload = payload
+    user._jwt_roles = payload.get("roles", [])
+    user._jwt_permissions = payload.get("permissions", [])
     
     return user
 

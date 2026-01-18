@@ -1,22 +1,28 @@
+import uuid
+from typing import Optional, Dict, Any
 from datetime import datetime
-from typing import Optional, List, Dict, Any
-from enum import Enum
 
-from sqlalchemy import String, Boolean, DateTime, text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import String, Boolean, Text, DateTime
+from sqlalchemy.dialects.postgresql import UUID as PGUUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql import text
 
 from shared.models.base import SystemEntity
 
-class UserStatus(str, Enum):
+
+class UserStatus:
+    """User status constants."""
     ACTIVE = "active"
     INACTIVE = "inactive"
     SUSPENDED = "suspended"
 
-class AuthProvider(str, Enum):
+
+class AuthProvider:
+    """Authentication provider constants."""
     LOCAL = "local"
-    GOOGLE = "google"
-    GITHUB = "github"
+    OAUTH = "oauth"
+    SAML = "saml"
+
 
 class User(SystemEntity):
     __tablename__ = "users"
@@ -31,8 +37,12 @@ class User(SystemEntity):
     auth_provider: Mapped[str] = mapped_column(String(50), nullable=False, default=AuthProvider.LOCAL)
     
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    is_superuser: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     user_metadata: Mapped[Dict[str, Any]] = mapped_column("user_metadata", JSONB, nullable=True, server_default=text("'{}'::jsonb"))
+    
+    # Relationships - specify foreign_keys to avoid ambiguity with UserRole.assigned_by
+    roles = relationship("UserRole", back_populates="user", cascade="all, delete-orphan", foreign_keys="[UserRole.user_id]")
     
     @property
     def full_name(self) -> str:
@@ -48,6 +58,11 @@ class User(SystemEntity):
     @property
     def is_system_admin(self) -> bool:
         """Check if user has system admin role."""
+        # Check is_superuser flag first
+        if self.is_superuser:
+            return True
+            
+        # Backward compatibility: admin@example.com is always super admin
         if self.email == "admin@example.com":
             return True
         
@@ -57,37 +72,26 @@ class User(SystemEntity):
             from sqlalchemy.orm import attributes
             if 'roles' in attributes.instance_dict(self):
                 for user_role in self.roles:
-                    if user_role.role and user_role.role.name == "admin":
+                    # Check for super_admin or admin role
+                    if user_role.role and user_role.role.name in ("super_admin", "admin"):
                         return True
         except Exception:
             pass
             
         return False
     
-    @is_system_admin.setter
-    def is_system_admin(self, value: bool):
-        """Dummy setter to avoid errors in seed scripts."""
-        pass
-    
-    @property
-    def last_login_at(self) -> Optional[datetime]:
-        """Compatibility property for UserResponse."""
-        return self.last_login
-
-    @property
-    def avatar_url(self) -> Optional[str]:
-        """Get avatar URL from metadata or return None."""
-        return self.user_metadata.get("avatar_url") if self.user_metadata else None
-    
-    # Relationships
-    roles = relationship("UserRole", back_populates="user", cascade="all, delete-orphan")
-    
-    def has_permission(self, resource_type: str, action: str) -> bool:
-        """Check if user has permission."""
-        # This needs full implementation with roles and permissions
-        for user_role in self.roles:
-            role = user_role.role
-            for permission in role.permissions:
-                if permission.resource == resource_type and permission.action == action:
-                    return True
+    def has_permission(self, permission: str) -> bool:
+        """
+        Check if user has a specific permission.
+        
+        This is a placeholder. Use PermissionService for actual permission checks.
+        """
+        # Super admins have all permissions
+        if self.is_system_admin:
+            return True
+            
+        # TODO: Implement actual permission checking via PermissionService
         return False
+    
+    def __repr__(self) -> str:
+        return f"<User(id={self.id}, email={self.email}, username={self.username})>"

@@ -1,0 +1,131 @@
+@startuml flow-workflow-orchestration
+
+title Multi-Agent Orchestrator - Workflow Execution Flow
+
+actor User as User
+participant "Web UI" as UI
+participant "FastAPI" as API
+participant "Workflow\nOrchestrator" as Orchestrator
+participant "Agent A" as AgentA
+participant "Agent B" as AgentB
+participant "Agent C" as AgentC
+database "PostgreSQL" as DB
+
+== Workflow Execution Request ==
+
+User -> UI: Click "Execute Workflow"
+UI -> UI: User provides input data
+UI -> API: POST /api/v1/chains/{id}/execute\n{input_data: {...}}
+API -> DB: Load Workflow Definition
+DB --> API: Workflow DAG:\n- Nodes (agents)\n- Edges (connections)\n- Data mappings
+
+== Workflow Orchestration ==
+
+API -> Orchestrator: Execute Workflow\n(workflow_def, input_data)
+Orchestrator -> DB: Create Execution Record\n(status: "running")
+DB --> Orchestrator: execution_id
+
+Orchestrator -> Orchestrator: Parse DAG\nIdentify Start Nodes
+
+== Phase 1: Parallel Execution ==
+
+note over Orchestrator
+  **Execution Strategy:**
+  - Topological sort for dependency order
+  - Parallel execution of independent nodes
+  - Data passing between connected nodes
+end note
+
+par Execute Independent Agents
+    Orchestrator -> AgentA: Execute with input_data
+    activate AgentA
+    AgentA -> AgentA: Process Input\n(LLM + Tools)
+    AgentA -> DB: Log Agent Execution
+    AgentA --> Orchestrator: output_a
+    deactivate AgentA
+and
+    Orchestrator -> AgentB: Execute with input_data
+    activate AgentB
+    AgentB -> AgentB: Process Input\n(LLM + Tools)
+    AgentB -> DB: Log Agent Execution
+    AgentB --> Orchestrator: output_b
+    deactivate AgentB
+end
+
+Orchestrator -> DB: Update Execution\n(nodes_completed: [A, B])
+
+== Phase 2: Dependent Execution ==
+
+Orchestrator -> Orchestrator: Check Dependencies\nAgent C depends on A + B
+
+Orchestrator -> Orchestrator: Merge Outputs:\noutput_data = {\n  "agent_a_result": output_a,\n  "agent_b_result": output_b\n}
+
+Orchestrator -> AgentC: Execute with merged data
+activate AgentC
+AgentC -> AgentC: Process Combined Input\n(LLM + Tools)
+AgentC -> DB: Log Agent Execution
+AgentC --> Orchestrator: final_output
+deactivate AgentC
+
+== Conditional Branching (Example) ==
+
+alt final_output contains "success"
+    Orchestrator -> Orchestrator: Route to Success Path
+    note over Orchestrator: Execute success handler agents end note
+else final_output contains "error"
+    Orchestrator -> Orchestrator: Route to Error Path
+    note over Orchestrator: Execute error handler agents
+    end note
+end
+
+== Workflow Completion ==
+
+Orchestrator -> DB: Update Execution\n(status: "completed",\n final_output, duration)
+Orchestrator -> DB: Store Execution Logs:\n- Node execution times\n- Outputs for audit
+DB --> Orchestrator: Saved
+
+Orchestrator --> API: Execution Result:\n{\n  execution_id,\n  status,\n  final_output,\n  node_results: [...]\n}
+API --> UI: Success Response
+UI -> UI: Display Results:\n- Final Output\n- Individual Node Outputs\n- Execution Timeline
+UI --> User: Show Workflow Results
+
+== Workflow Features ==
+
+note right of Orchestrator
+  **Internal Orchestration Engine:**
+  - Graph-based execution (not BPMN)
+  - Parallel execution of independent nodes
+  - Topological sort for dependencies
+  - Data passing between agents
+  - Conditional branching
+  - Error handling & retries
+  - Execution logging for audit
+end note
+
+note right of DB
+  **Execution Logs Include:**
+  - Timestamp for each node
+  - Input/output for each agent
+  - Execution duration
+  - Error messages (if any)
+  - Complete workflow trace
+end note
+
+== Error Handling ==
+
+alt Agent Execution Fails
+    AgentA -> Orchestrator: Execution Error
+    Orchestrator -> Orchestrator: Check Retry Policy
+    
+    alt Retry Enabled
+        Orchestrator -> AgentA: Retry Execution\n(with backoff)
+        AgentA --> Orchestrator: Success or Error
+    else No Retry or Max Retries Reached
+        Orchestrator -> DB: Update Execution\n(status: "failed",\n error_details)
+        Orchestrator --> API: Execution Failed
+        API --> UI: Error Response
+        UI --> User: Display Error +\nPartial Results
+    end
+end
+
+@enduml

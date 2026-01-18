@@ -24,7 +24,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.user import User, UserStatus
-from ..models.rbac import UserRole
+from ..models.rbac import Role, UserRole
 from ..models.tenant import Tenant, TenantUser
 from ..config.settings import get_settings
 from ..database.connection import get_async_db
@@ -174,15 +174,43 @@ class AuthService:
         return user
     
     async def create_user_tokens(self, user: User) -> Dict[str, str]:
-        """Create access and refresh tokens for a user."""
+        """Create access and refresh tokens for a user with roles and permissions."""
+        # Fetch user roles with permissions
+        
+        query = select(UserRole).options(
+            selectinload(UserRole.role).selectinload(Role.permissions)
+        ).where(UserRole.user_id == user.id)
+        
+        result = await self.session.execute(query)
+        user_roles = result.scalars().all()
+        
+        # Build roles list for JWT
+        roles = []
+        permissions_set = set()
+        
+        for user_role in user_roles:
+            if user_role.role:
+                roles.append({
+                    "id": str(user_role.role.id),
+                    "name": user_role.role.name,
+                    "permission_level": user_role.role.permission_level or 0
+                })
+                
+                # Collect all permissions from this role
+                for perm in user_role.role.permissions:
+                    permissions_set.add(f"{perm.resource}.{perm.action}")
+        
         token_data = {
             "sub": str(user.id),
             "email": user.email,
-            "username": user.username,
+            "user_id": str(user.id),
+            "is_superuser": user.is_superuser,
+            "roles": roles,
+            "permissions": list(permissions_set)
         }
         
-        access_token = self.create_access_token(token_data)
-        refresh_token = self.create_refresh_token({"sub": str(user.id)})
+        access_token = self.create_access_token(data=token_data)
+        refresh_token = self.create_refresh_token(data=token_data)
         
         return {
             "access_token": access_token,

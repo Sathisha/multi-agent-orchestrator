@@ -112,3 +112,28 @@ export const getAgentTemplates = async (): Promise<AgentTemplate[]> => {
     const response = await apiClient.get<AgentTemplate[]>('/agent-templates')
     return response.data
 }
+
+export interface AgentRoleResponse {
+    role_id: string;
+    role_name: string;
+    access_type: string;
+}
+
+export interface AgentRoleAssignRequest {
+    role_id: string;
+    access_type: string; // 'read', 'write', 'execute'
+}
+
+export const getAgentRoles = async (agentId: string): Promise<AgentRoleResponse[]> => {
+    const response = await apiClient.get<AgentRoleResponse[]>(`/agents/${agentId}/roles`)
+    return response.data
+}
+
+export const assignAgentRole = async (agentId: string, data: AgentRoleAssignRequest): Promise<AgentRoleResponse> => {
+    const response = await apiClient.post<AgentRoleResponse>(`/agents/${agentId}/roles`, data)
+    return response.data
+}
+
+export const revokeAgentRole = async (agentId: string, roleId: string): Promise<void> => {
+    await apiClient.delete(`/agents/${agentId}/roles/${roleId}`)
+}

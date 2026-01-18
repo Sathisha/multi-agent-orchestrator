@@ -1,0 +1,181 @@
+@startuml flow-authentication
+
+title Multi-Agent Orchestrator - Authentication & Authorization Flow
+
+actor User
+participant "Web UI" as UI
+participant "Kong Gateway" as Kong
+participant "Keycloak" as Keycloak
+participant "FastAPI" as API
+participant "Casbin RBAC" as Casbin
+database "PostgreSQL" as DB
+database "Redis" as Redis
+
+== User Login ==
+
+User -> UI: Navigate to /login
+UI --> User: Show Login Form
+
+User -> UI: Enter Credentials:\n- username\n- password
+
+UI -> Kong: POST /api/auth/login\n{username, password}
+Kong -> API: Forward Request
+
+API -> Keycloak: Authenticate\n(username, password)
+activate Keycloak
+
+Keycloak -> Keycloak: Hash Password\n(Argon2)
+Keycloak -> DB: Query User:\nSELECT * FROM users\nWHERE username = ?
+DB --> Keycloak: User Record
+
+alt Invalid Credentials
+    Keycloak --> API: 401 Unauthorized
+    API --> Kong: Authentication Failed
+    Kong --> UI: Error Response
+    UI --> User: Show Error:\n"Invalid credentials"
+else Valid Credentials
+    Keycloak -> Keycloak: Generate JWT Token:\n- user_id\n- username\n- roles: ["developer"]\n- exp: 1 hour
+    
+    Keycloak -> Redis: Store Session:\nSET session:{token_id}\n{user_id, login_time}
+    Redis --> Keycloak: Session Stored
+    
+    Keycloak --> API: {\n  access_token: "eyJhbG...",\n  token_type: "Bearer",\n  expires_in: 3600,\n  user: {id, username, roles}\n}
+    deactivate Keycloak
+    
+    API --> Kong: Authentication Success
+    Kong --> UI: JWT Token + User Info
+    
+    UI -> UI: Store Token:\n- localStorage or\n- httpOnly cookie
+    
+    UI --> User: Redirect to Dashboard
+end
+
+== Authenticated Request ==
+
+User -> UI: Click "Create Agent"
+UI -> Kong: GET /api/agents\nAuthorization: Bearer eyJhbG...
+
+Kong -> Kong: Extract JWT Token
+Kong -> Keycloak: Validate Token
+Keycloak -> Keycloak: Verify Signature\n& Expiration
+Keycloak --> Kong: Token Valid +\nUser Payload
+
+Kong -> API: Forward Request +\nUser Context
+
+== RBAC Authorization ==
+
+API -> API: Extract User:\n- user_id: 123\n- roles: ["developer"]
+
+API -> Casbin: enforce(\n  user_id=123,\n  resource="agents",\n  action="read"\n)
+
+Casbin -> DB: Load RBAC Policy:\nSELECT * FROM casbin_rule\nWHERE ptype='p'
+
+DB --> Casbin: Policy Rules:\n- p, role:developer, agents, read\n- p, role:developer, agents, write\n- g, 123, role:developer
+
+Casbin -> Casbin: Evaluate Policy:\nuser 123 has role developer\ndeveloper can read agents\n→ ALLOW
+
+Casbin --> API: Permission Granted
+
+API -> DB: SELECT * FROM agents\nWHERE user_id = 123
+DB --> API: User's Agents
+
+API --> Kong: Agent List
+Kong --> UI: Success Response
+UI --> User: Display Agents
+
+== Permission Denied Example ==
+
+User -> UI: Try to Delete\nAnother User's Agent
+UI -> Kong: DELETE /api/agents/999\nAuthorization: Bearer eyJhbG...
+
+Kong -> API: Forward Request +\nUser Context (user_id=123)
+
+API -> DB: Check Agent Ownership:\nSELECT user_id FROM agents\nWHERE id=999
+DB --> API: user_id: 456\n(different user)
+
+API -> Casbin: enforce(\n  user_id=123,\n  resource="agent:999",\n  action="delete",\n  owner=456\n)
+
+Casbin -> Casbin: Evaluate:\nuser 123 is developer\ndeveloper can only delete own agents\nagent 999 belongs to user 456\n→ DENY
+
+Casbin --> API: Permission Denied
+
+API --> Kong: 403 Forbidden
+Kong --> UI: Error Response
+UI --> User: Show Error:\n"You don't have permission\nto delete this agent"
+
+== Session Refresh ==
+
+note over UI
+  Before token expires (1 hour),
+  UI should refresh the token
+end note
+
+UI -> Kong: POST /api/auth/refresh\nRefresh-Token: {refresh_token}
+Kong -> API: Forward Request
+
+API -> Keycloak: Validate Refresh Token
+Keycloak -> Redis: GET session:{token_id}
+Redis --> Keycloak: Session Data
+
+alt Session Valid
+    Keycloak -> Keycloak: Generate New JWT
+    Keycloak -> Redis: Update Session
+    Keycloak --> API: New Access Token
+    API --> UI: {\n  access_token: "eyJ...",\n  expires_in: 3600\n}
+    UI -> UI: Update Stored Token
+else Session Expired
+    Keycloak --> API: 401 Session Expired
+    API --> UI: Re-authentication Required
+    UI --> User: Redirect to Login
+end
+
+== Logout ==
+
+User -> UI: Click "Logout"
+UI -> Kong: POST /api/auth/logout\nAuthorization: Bearer eyJhbG...
+Kong -> API: Forward Request
+
+API -> Keycloak: Revoke Token
+Keycloak -> Redis: DEL session:{token_id}
+Redis --> Keycloak: Session Deleted
+
+Keycloak --> API: Logout Success
+API --> Kong: Success
+Kong --> UI: 200 OK
+
+UI -> UI: Clear Token from Storage
+UI --> User: Redirect to Login Page
+
+note over Keycloak
+  **JWT Token Structure:**
+  {
+    "sub": "user_id",
+    "username": "john@example.com",
+    "roles": ["developer"],
+    "iat": 1234567890,
+    "exp": 1234571490
+  }
+end note
+
+note over Casbin
+  **RBAC Roles:**
+  - **System Admin**: Full access
+  - **Developer**: Create/manage own resources
+  - **User/Viewer**: Execute & view only
+  
+  **Policy Examples:**
+  - p, role:admin, *, *
+  - p, role:developer, agents, read
+  - p, role:developer, agents, write
+  - p, role:user, agents, execute
+end note
+
+note over Redis
+  **Session Storage:**
+  - Key: session:{token_id}
+  - Value: {user_id, login_time, metadata}
+  - TTL: 1 hour (matches JWT expiry)
+  - Used for token refresh and session management
+end note
+
+@enduml

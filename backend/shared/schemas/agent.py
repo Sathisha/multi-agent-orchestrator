@@ -43,6 +43,8 @@ class AgentConfig(BaseModel):
     mcp_servers: Optional[List[str]] = []
     memory_enabled: bool = False
     guardrails_enabled: bool = False
+    use_standard_response_format: bool = False
+    use_standard_protocol: bool = False
     
     model_config = {
         "protected_namespaces": ()

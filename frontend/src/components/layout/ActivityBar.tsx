@@ -13,10 +13,21 @@ import {
   Visibility as VisionIcon,
   People as PeopleIcon,
 } from '@mui/icons-material'
+import { PermissionGuard } from '../PermissionGuard'
 
 interface ActivityBarProps {
   onViewChange: (view: string) => void
   onToggleSidePanel: () => void
+}
+
+interface MenuItem {
+  id: string
+  icon: React.ElementType
+  label: string
+  path: string
+  role?: string
+  permission?: string
+  requireSuperAdmin?: boolean
 }
 
 const ActivityBar: React.FC<ActivityBarProps> = ({
@@ -26,17 +37,17 @@ const ActivityBar: React.FC<ActivityBarProps> = ({
   const navigate = useNavigate()
   const location = useLocation()
 
-  const menuItems = [
+  const menuItems: MenuItem[] = [
     { id: 'agents', icon: AgentIcon, label: 'Agents', path: '/agents' },
     { id: 'workflows', icon: WorkflowIcon, label: 'Workflows', path: '/chains' },
     { id: 'tools', icon: ToolsIcon, label: 'Tools', path: '/tools' },
     { id: 'models', icon: LLMIcon, label: 'LLM Models', path: '/models' },
-    { id: 'vision-test', icon: VisionIcon, label: 'Vision Test', path: '/vision-test' },
-    { id: 'monitoring', icon: MonitoringIcon, label: 'Monitoring', path: '/monitoring' },
-    { id: 'users', icon: PeopleIcon, label: 'Users', path: '/users' },
+    { id: 'vision-test', icon: VisionIcon, label: 'Vision Test', path: '/vision-test', role: 'standard_user' },
+    { id: 'monitoring', icon: MonitoringIcon, label: 'Monitoring', path: '/monitoring', role: 'standard_user' },
+    { id: 'users', icon: PeopleIcon, label: 'Users', path: '/users', requireSuperAdmin: true },
   ]
 
-  const handleItemClick = (item: typeof menuItems[0]) => {
+  const handleItemClick = (item: MenuItem) => {
     onViewChange(item.id)
     navigate(item.path)
   }
@@ -78,7 +89,7 @@ const ActivityBar: React.FC<ActivityBarProps> = ({
         const Icon = item.icon
         const active = isActive(item.path)
 
-        return (
+        const button = (
           <Tooltip key={item.id} title={item.label} placement="right">
             <IconButton
               onClick={() => handleItemClick(item)}
@@ -107,6 +118,22 @@ const ActivityBar: React.FC<ActivityBarProps> = ({
             </IconButton>
           </Tooltip>
         )
+
+        // Wrap in PermissionGuard if permissions are specified
+        if (item.requireSuperAdmin || item.role || item.permission) {
+          return (
+            <PermissionGuard
+              key={item.id}
+              requireSuperAdmin={item.requireSuperAdmin}
+              role={item.role}
+              permission={item.permission}
+            >
+              {button}
+            </PermissionGuard>
+          )
+        }
+
+        return button
       })}
 
       {/* Settings at bottom */}

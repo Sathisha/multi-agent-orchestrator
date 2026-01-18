@@ -7,7 +7,7 @@ These guidelines are derived from the project's steering documents and are inten
 ### 1. Docker-First Development
 - **Mandate**: All development, testing, and building MUST be performed within Docker containers.
 - **Rationale**: Ensures environment consistency, isolates dependencies, and simplifies setup.
-- **Action**: Use `docker-compose` commands (`make start`, `make test`, etc.) exclusively for running services and tests. Avoid installing Python or other project dependencies directly on the host machine.
+- **Action**: Use `docker-compose` commands (or their `make` wrappers) exclusively for building and testing. NEVER run `pytest` or build scripts directly on the host.
 
 ### 2. Security First
 - **Mandate**: Adhere to a "Defense in Depth" security strategy.

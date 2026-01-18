@@ -42,7 +42,7 @@ class ToolExecutorService:
         agent_config: Optional[AgentConfig] = None,
         max_iterations: int = 5,
         credentials: Optional[Dict[str, Any]] = None
-    ) -> List[Dict[str, Any]]:
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
         """
         Analyze user input and execute appropriate tools.
         
@@ -55,34 +55,43 @@ class ToolExecutorService:
             credentials: Optional custom credentials to use
             
         Returns:
-            List of tool execution results
+            Tuple of (List of tool execution results, Dict with token usage stats)
         """
         logger.info(f"Analyzing tools for input: {user_input[:100]}...")
         
+        total_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        
         if not available_tools:
             logger.debug("No tools available for this agent")
-            return []
+            return [], total_usage
         
         # Get tool schemas
         tools_info = await self._get_tools_info(available_tools)
         if not tools_info:
             logger.warning(f"Could not find any tools from: {available_tools}")
-            return []
+            return [], total_usage
         
         tool_executions = []
         
         for iteration in range(max_iterations):
             logger.debug(f"Tool execution iteration {iteration + 1}/{max_iterations}")
             
+            tool_decision = {"needs_tool": False}
+            iteration_usage = None
+            
             # Decide if tool is needed (LLM or Keyword)
             if self.llm_service and agent_config:
-                tool_decision = await self._decide_tool_use_with_llm(
+                tool_decision, iteration_usage = await self._decide_tool_use_with_llm(
                     user_input, 
                     tools_info, 
                     tool_executions,
                     agent_config,
                     credentials=credentials
                 )
+                if iteration_usage:
+                    total_usage["prompt_tokens"] += iteration_usage.get("prompt_tokens", 0)
+                    total_usage["completion_tokens"] += iteration_usage.get("completion_tokens", 0)
+                    total_usage["total_tokens"] += iteration_usage.get("total_tokens", 0)
             else:
                 tool_decision = await self._decide_tool_use(
                     user_input, 
@@ -118,11 +127,9 @@ class ToolExecutorService:
             # A more complex ReAct loop would update context here
             
             # If we have a successful result, check if we need another tool?
-            # For now, let's allow up to max_iterations.
-            # But usually we stop if the tool solved it?
             # The LLM router should decide in the next iteration.
             
-        return tool_executions
+        return tool_executions, total_usage
     
     async def _decide_tool_use_with_llm(
         self,
@@ -131,9 +138,10 @@ class ToolExecutorService:
         previous_executions: List[Dict[str, Any]],
         agent_config: AgentConfig,
         credentials: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
+    ) -> Tuple[Dict[str, Any], Optional[Dict[str, int]]]:
         """
         Use LLM to decide if a tool is needed and extract parameters.
+        Returns: (Decision Dict, Usage Dict)
         """
         try:
             # Construct context from previous executions
@@ -182,6 +190,14 @@ RESPONSE FORMAT:
                 {"role": "user", "content": prompt}
             ]
             response = await self.llm_service.generate_response(messages, agent_config, credentials=credentials)
+            
+            # Extract usage
+            usage_stats = {
+                "prompt_tokens": response.usage.prompt_tokens,
+                "completion_tokens": response.usage.completion_tokens,
+                "total_tokens": response.usage.total_tokens
+            }
+            
             content = response.content.strip()
             
             # Clean up content (remove markdown if present)
@@ -193,7 +209,7 @@ RESPONSE FORMAT:
             try:
                 decision = json.loads(content)
                 logger.debug(f"LLM Tool Decision: {decision}")
-                return decision
+                return decision, usage_stats
             except json.JSONDecodeError:
                 # Robust extraction: try finding { ... } in the output
                 match = re.search(r'(\{.*\})', content, re.DOTALL)
@@ -201,16 +217,16 @@ RESPONSE FORMAT:
                     try:
                         decision = json.loads(match.group(1))
                         logger.info(f"LLM Tool Decision (Extracted): {decision}")
-                        return decision
+                        return decision, usage_stats
                     except json.JSONDecodeError:
                         pass
                 
                 logger.error(f"Failed to parse LLM tool decision. Content: {content}")
-                return {"needs_tool": False}
+                return {"needs_tool": False}, usage_stats
                 
         except Exception as e:
             logger.error(f"LLM tool routing failed: {e}")
-            return {"needs_tool": False}
+            return {"needs_tool": False}, None
 
     async def _get_tools_info(self, tool_identifiers: List[str]) -> List[Dict[str, Any]]:
         """Get tool information for the given identifiers."""

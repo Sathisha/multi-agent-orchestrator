@@ -1,0 +1,143 @@
+@startuml flow-agent-execution
+
+title Multi-Agent Orchestrator - Agent Execution Flow
+
+actor User
+participant "Web UI" as UI
+participant "Kong Gateway" as Kong
+participant "FastAPI" as API
+participant "Casbin RBAC" as RBAC
+participant "Guardrails" as Guard
+participant "Agent Service" as AgentSvc
+participant "LLM Manager" as LLMManager
+participant "Tool Manager" as ToolMgr
+participant "Memory Service" as Memory
+database "PostgreSQL" as DB
+database "ChromaDB" as Vector
+cloud "LLM Provider\n(OpenAI/Anthropic/Gemini/Ollama)" as LLM
+
+== Agent Execution Request ==
+
+User -> UI: Click "Test Agent"\nEnter Input
+UI -> Kong: POST /api/agents/{id}/execute\n{input: "user query"}
+Kong -> API: Forward Request +\nJWT Token
+
+API -> RBAC: Check Permission\n(user, agent, execute)
+RBAC -> DB: Load Policies
+DB --> RBAC: RBAC Rules
+RBAC --> API: Permission Granted
+
+API -> Guard: Validate Input
+Guard -> Guard: Check for Injection Attacks
+Guard -> Guard: Content Safety Check
+Guard --> API: Input Valid
+
+== Agent Configuration Load ==
+
+API -> AgentSvc: Execute Agent
+AgentSvc -> DB: Load Agent Config\n(system_prompt, tools, llm_model_id)
+DB --> AgentSvc: Agent Configuration
+
+AgentSvc -> DB: Load LLM Model Config
+DB --> AgentSvc: LLM Model Details\n(provider, api_key, parameters)
+
+== Memory Retrieval ==
+
+AgentSvc -> Memory: Get Relevant Context\n(agent_id, session_id, query)
+Memory -> Vector: Semantic Search\n(query_embedding)
+Vector --> Memory: Related Memories
+Memory -> DB: Get Conversation History
+DB --> Memory: Recent Messages
+Memory --> AgentSvc: Context + History
+
+== LLM Request Preparation ==
+
+AgentSvc -> AgentSvc: Build Prompt:\n- System Prompt\n- Context from Memory\n- User Input\n- Available Tools
+
+AgentSvc -> LLMManager: Generate Response\n(prompt, model_config, tools)
+
+== First LLM Call ==
+
+LLMManager -> LLMManager: Add Rate Limiting\n(5 calls/min globally)
+LLMManager -> LLM: API Call with Tools\n(Retry with Tenacity)
+activate LLM
+LLM -> LLM: Process Request
+LLM --> LLMManager: Response with\nTool Calls
+deactivate LLM
+
+== Tool Execution (if needed) ==
+
+alt LLM Requests Tool Use
+    LLMManager --> AgentSvc: Tool Calls Requested
+    
+    loop For Each Tool Call
+        AgentSvc -> ToolMgr: Execute Tool\n(tool_name, parameters)
+        ToolMgr -> ToolMgr: Validate Parameters
+        ToolMgr -> ToolMgr: Execute Tool Logic\n(e.g., web_search, calculator)
+        ToolMgr --> AgentSvc: Tool Result
+    end
+    
+    == Second LLM Call (with Tool Results) ==
+    
+    AgentSvc -> AgentSvc: Add Tool Results\nto Messages
+    AgentSvc -> LLMManager: Generate Final Response
+    LLMManager -> LLM: API Call with\nTool Results
+    activate LLM
+    LLM -> LLM: Process Tool Results
+    LLM --> LLMManager: Final Response
+    deactivate LLM
+end
+
+LLMManager --> AgentSvc: Final LLM Response
+
+== Response Validation & Storage ==
+
+AgentSvc -> Guard: Validate Output
+Guard -> Guard: Check for Sensitive Data
+Guard -> Guard: Content Safety Check
+Guard --> AgentSvc: Output Safe
+
+AgentSvc -> Memory: Store Interaction\n(user_input, llm_response, tools_used)
+Memory -> Vector: Store as Embedding
+Vector --> Memory: Stored
+Memory -> DB: Save to History
+DB --> Memory: Saved
+
+AgentSvc -> DB: Log Execution\n(agent_id, input, output, tokens, cost, duration)
+DB --> AgentSvc: Execution Logged
+
+== Response to User ==
+
+AgentSvc --> API: Execution Result\n(response, tool_calls, metadata)
+API --> Kong: Success Response
+Kong --> UI: Agent Response
+UI --> User: Display Result +\nTool Usage
+
+note right of LLMManager
+  **Rate Limiting:**
+  - Global: 5 calls/min
+  - Waits for slot if limit reached
+  
+  **Retry Logic:**
+  - Exponential backoff
+  - Max 3 retries
+  - Handles rate limits & transient errors
+end note
+
+note right of Memory
+  **Memory System:**
+  - Short-term: Conversation history
+  - Long-term: Vector embeddings
+  - Semantic search for context
+  - Configurable:  OpenAI or Local embeddings
+end note
+
+note right of Guard
+  **Guardrails:**
+  - Input: Injection prevention
+  - Output: PII redaction
+  - Content safety
+  - Token/size limits
+end note
+
+@enduml

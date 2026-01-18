@@ -12,7 +12,7 @@ import {
     ArrowBack, Save, PlayArrow, Stop, Send, Settings as SettingsIcon,
     AutoGraph, Code, Description, Psychology, History, Extension,
     ContentCopy, Delete, Share, OpenInNew, MoreVert, InfoOutlined,
-    Done, Refresh, Bolt, Build, Close, CheckBox, CheckBoxOutlineBlank
+    Done, Refresh, Bolt, Build, Close, CheckBox, CheckBoxOutlineBlank, Security, Add as AddIcon
 } from '@mui/icons-material'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
 import {
@@ -25,6 +25,8 @@ import {
 } from '../api/agents'
 import { getModels, discoverOllamaModels, LLMModel, OllamaModel } from '../api/llmModels'
 import { getTools, Tool } from '../api/tools'
+import { getRoles } from '../api/users'
+import { getAgentRoles, assignAgentRole, revokeAgentRole, AgentRoleAssignRequest } from '../api/agents'
 import Editor from '@monaco-editor/react'
 
 interface TabPanelProps {
@@ -73,6 +75,11 @@ const AgentDetailWorkspace: React.FC = () => {
     const [isExecuting, setIsExecuting] = useState(false)
     const [currentExecutionId, setCurrentExecutionId] = useState<string | null>(null)
 
+    // Access Control state
+    const [assignRoleDialogOpen, setAssignRoleDialogOpen] = useState(false)
+    const [selectedRoleToAssign, setSelectedRoleToAssign] = useState('')
+    const [selectedAccessType, setSelectedAccessType] = useState('read')
+
     const { data: configuredModels, isLoading: isLoadingConfigured } = useQuery<LLMModel[]>('llm_models', getModels)
     const { data: ollamaModels, isLoading: isLoadingOllama } = useQuery<OllamaModel[]>('discovered_ollama_models', discoverOllamaModels, {
         retry: 1,
@@ -80,6 +87,12 @@ const AgentDetailWorkspace: React.FC = () => {
         staleTime: 1000 * 60 * 5 // 5 minutes
     })
     const { data: allTools } = useQuery<Tool[]>('tools', getTools)
+    const { data: roles } = useQuery('roles', getRoles)
+    const { data: agentRoles } = useQuery(
+        ['agentRoles', agentId],
+        () => getAgentRoles(agentId!),
+        { enabled: !!agentId }
+    )
 
     const { data: agent, isLoading, isError } = useQuery(
         ['agent', agentId],
@@ -293,6 +306,41 @@ const AgentDetailWorkspace: React.FC = () => {
         }
     }
 
+    const assignRoleMutation = useMutation(
+        (data: AgentRoleAssignRequest) => assignAgentRole(agentId!, data),
+        {
+            onSuccess: () => {
+                queryClient.invalidateQueries(['agentRoles', agentId])
+                setAssignRoleDialogOpen(false)
+                setSnackbar({ open: true, message: 'Role assigned successfully', severity: 'success' })
+            },
+            onError: (error: any) => {
+                setSnackbar({ open: true, message: `Failed to assign role: ${error.message || 'Unknown error'}`, severity: 'error' })
+            }
+        }
+    )
+
+    const revokeRoleMutation = useMutation(
+        (roleId: string) => revokeAgentRole(agentId!, roleId),
+        {
+            onSuccess: () => {
+                queryClient.invalidateQueries(['agentRoles', agentId])
+                setSnackbar({ open: true, message: 'Role revoked successfully', severity: 'success' })
+            },
+            onError: (error: any) => {
+                setSnackbar({ open: true, message: `Failed to revoke role: ${error.message || 'Unknown error'}`, severity: 'error' })
+            }
+        }
+    )
+
+    const handleAssignRole = () => {
+        if (!selectedRoleToAssign) return
+        assignRoleMutation.mutate({
+            role_id: selectedRoleToAssign,
+            access_type: selectedAccessType
+        })
+    }
+
     const getAgentIcon = (type: string) => {
         switch (type?.toUpperCase()) {
             case 'CONVERSATIONAL': return <Psychology sx={{ fontSize: 32 }} />;
@@ -428,6 +476,7 @@ const AgentDetailWorkspace: React.FC = () => {
                     <Tab icon={<AutoGraph sx={{ fontSize: 18 }} />} iconPosition="start" label="Prompt Engineering" />
                     <Tab icon={<Bolt sx={{ fontSize: 18 }} />} iconPosition="start" label="Chat & Test" />
                     <Tab icon={<SettingsIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Configuration" />
+                    <Tab icon={<Security sx={{ fontSize: 18 }} />} iconPosition="start" label="Access Control" />
                 </Tabs>
             </Box>
 
@@ -898,7 +947,101 @@ const AgentDetailWorkspace: React.FC = () => {
                         </Grid>
                     </Grid>
                 </TabPanel>
+
+                <TabPanel value={activeTab} index={4}>
+                    <Box sx={{ maxWidth: '800px', mx: 'auto' }}>
+                        <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>Role-Based Access Control</Typography>
+
+                        <Paper sx={{ p: 0, bgcolor: '#252526', border: '1px solid #2d2d30', overflow: 'hidden', mb: 3 }}>
+                            {agentRoles && agentRoles.length > 0 ? (
+                                <List>
+                                    {agentRoles.map((ar: any, idx: number) => (
+                                        <ListItem key={ar.role_id} divider={idx !== agentRoles.length - 1}>
+                                            <ListItemIcon>
+                                                <Security sx={{ color: '#007acc' }} />
+                                            </ListItemIcon>
+                                            <ListItemText
+                                                primary={ar.role_name}
+                                                secondary={`Access: ${ar.access_type.toUpperCase()}`}
+                                                primaryTypographyProps={{ color: '#ccc' }}
+                                                secondaryTypographyProps={{ color: '#888' }}
+                                            />
+                                            <IconButton
+                                                onClick={() => revokeRoleMutation.mutate(ar.role_id)}
+                                                disabled={revokeRoleMutation.isLoading}
+                                                sx={{ color: '#f44336' }}
+                                            >
+                                                <Delete />
+                                            </IconButton>
+                                        </ListItem>
+                                    ))}
+                                </List>
+                            ) : (
+                                <Box sx={{ p: 3, textAlign: 'center', color: '#888' }}>
+                                    No roles assigned to this agent.
+                                </Box>
+                            )}
+                            <Box sx={{ p: 2, bgcolor: 'rgba(0,0,0,0.1)', borderTop: '1px solid #2d2d30' }}>
+                                <Button
+                                    startIcon={<AddIcon />}
+                                    onClick={() => setAssignRoleDialogOpen(true)}
+                                    variant="contained"
+                                    sx={{ bgcolor: '#007acc' }}
+                                >
+                                    Assign Role
+                                </Button>
+                            </Box>
+                        </Paper>
+
+                        <Alert severity="info" sx={{ bgcolor: 'rgba(2, 136, 209, 0.1)', color: '#81d4fa' }}>
+                            Users with "Super Admin" role have full access regardless of these settings.
+                        </Alert>
+                    </Box>
+                </TabPanel>
             </Box>
+
+            <Dialog open={assignRoleDialogOpen} onClose={() => setAssignRoleDialogOpen(false)}>
+                <DialogTitle sx={{ bgcolor: '#252526', color: '#ccc' }}>Assign Role to Agent</DialogTitle>
+                <DialogContent sx={{ bgcolor: '#1e1e1e', pt: 2, minWidth: 400 }}>
+                    <FormControl fullWidth sx={{ mb: 2, mt: 1 }}>
+                        <InputLabel>Role</InputLabel>
+                        <Select
+                            value={selectedRoleToAssign}
+                            label="Role"
+                            onChange={(e) => setSelectedRoleToAssign(e.target.value)}
+                        >
+                            {roles?.map((role: any) => (
+                                <MenuItem key={role.id} value={role.id}>
+                                    {role.name} ({role.description})
+                                </MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                    <FormControl fullWidth>
+                        <InputLabel>Access Type</InputLabel>
+                        <Select
+                            value={selectedAccessType}
+                            label="Access Type"
+                            onChange={(e) => setSelectedAccessType(e.target.value)}
+                        >
+                            <MenuItem value="read">Read (View Only)</MenuItem>
+                            <MenuItem value="write">Write (Edit & Execute)</MenuItem>
+                            <MenuItem value="execute">Execute Only</MenuItem>
+                        </Select>
+                    </FormControl>
+                </DialogContent>
+                <DialogActions sx={{ bgcolor: '#252526' }}>
+                    <Button onClick={() => setAssignRoleDialogOpen(false)} sx={{ color: '#888' }}>Cancel</Button>
+                    <Button
+                        onClick={handleAssignRole}
+                        variant="contained"
+                        disabled={!selectedRoleToAssign || assignRoleMutation.isLoading}
+                        sx={{ bgcolor: '#007acc' }}
+                    >
+                        Assign
+                    </Button>
+                </DialogActions>
+            </Dialog>
 
             <Snackbar
                 open={snackbar.open}
