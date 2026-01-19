@@ -41,16 +41,18 @@ wait_for_db() {
     exit 1
 }
 
-# Function to initialize database
-init_database() {
-    echo "🔄 Initializing database tables..."
+# Function to run database migrations
+run_migrations() {
+    echo "🔄 Running database migrations with Alembic..."
     
-    python3 init_db.py
+    # Run Alembic migrations
+    alembic upgrade head
     
     if [ $? -eq 0 ]; then
-        echo "✅ Database initialization completed successfully"
+        echo "✅ Database migrations completed successfully"
+        return 0
     else
-        echo "❌ Database initialization failed"
+        echo "❌ Database migrations failed"
         exit 1
     fi
 }
@@ -97,8 +99,8 @@ main() {
     echo "⏳ Waiting 2 seconds for database to fully initialize..."
     sleep 2
     
-    # Initialize database tables
-    init_database
+    # Run database migrations
+    run_migrations
     
     # Verify tables exist before seeding
     if verify_tables; then

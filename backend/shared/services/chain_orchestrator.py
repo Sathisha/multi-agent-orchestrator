@@ -1057,6 +1057,17 @@ class ChainOrchestratorService(BaseService):
         logger.info(f"[CHAIN] Agent execution completed. Status: {execution_result.status}")
         logger.debug(f"[CHAIN] Execution result output_data: {execution_result.output_data}")
         
+        # Check if execution failed
+        if execution_result.status == "FAILED" or execution_result.status == "failed":
+            error_output = {
+                "error": True,
+                "error_message": execution_result.error_message or "Agent execution failed",
+                "status": "failed"
+            }
+            logger.warning(f"[CHAIN] Agent node {node.node_id} failed: {execution_result.error_message}")
+            logger.info(f"[CHAIN] Agent node {node.node_id} returning error output: {error_output}")
+            return error_output
+        
         # Return agent output
         result_data = execution_result.output_data or {}
         logger.debug(f"[CHAIN] Result data after extraction: {result_data}")

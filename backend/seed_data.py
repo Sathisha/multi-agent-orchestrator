@@ -39,7 +39,7 @@ async def create_admin_user():
         )
         
         # Set as system admin
-        user.is_system_admin = True
+        user.is_superuser = True
         await session.commit()
         
         print("✓ Created admin user: admin@example.com / admin")
