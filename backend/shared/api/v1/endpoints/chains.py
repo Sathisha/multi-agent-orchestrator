@@ -1,7 +1,7 @@
 """API endpoints for Chain Orchestration."""
 
 import logging
-from typing import List, Optional
+from typing import List, Optional, Union, Dict, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
@@ -581,12 +581,18 @@ async def get_chain_executions(
         )
 
 
-@router.get("/executions/{execution_id}", response_model=ChainExecutionResponse)
+@router.get("/executions/{execution_id}", response_model=Union[ChainExecutionResponse, Dict[str, Any]])
 async def get_execution(
     execution_id: UUID,
+    view: str = Query("detailed", enum=["detailed", "simple"], description="Response view format"),
     session: AsyncSession = Depends(get_async_db)
 ):
-    """Get detailed execution information."""
+    """
+    Get detailed execution information.
+    
+    - **detailed**: Returns full execution history, node results, and states (default).
+    - **simple**: Returns only the final output data (optimized for 3rd party consumption).
+    """
     try:
         result = await session.execute(
             select(ChainExecution).where(ChainExecution.id == execution_id)
@@ -598,6 +604,31 @@ async def get_execution(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Execution {execution_id} not found"
             )
+        
+        if view == "simple":
+            # Just return output_data if it's already simple
+            if not execution.output_data or not execution.chain_id:
+                return execution.output_data or {}
+                
+            # Fetch chain nodes to map node_ids to labels
+            nodes_result = await session.execute(
+                select(ChainNode).where(ChainNode.chain_id == execution.chain_id)
+            )
+            nodes = nodes_result.scalars().all()
+            node_map = {n.node_id: n.label for n in nodes}
+            
+            # Create a more user-friendly output dict
+            simple_output = {}
+            raw_output = execution.output_data
+            
+            for key, value in raw_output.items():
+                # Try to map key (node_id) to label
+                # If key is 'model' or 'content' (direct output), keep as is
+                # If key matches a node_id, use the label
+                new_key = node_map.get(key, key)
+                simple_output[new_key] = value
+                
+            return simple_output
         
         return ChainExecutionResponse.model_validate(execution)
         

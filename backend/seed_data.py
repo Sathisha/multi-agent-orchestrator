@@ -63,11 +63,18 @@ async def create_sample_agents(user_id: uuid.UUID):
                 type=AgentType.CONVERSATIONAL,
                 status=AgentStatus.ACTIVE,
                 version="1.0",
-                system_prompt="You are a helpful customer support assistant. Be polite, professional, and solve customer issues efficiently.",
+                system_prompt="""You are a helpful customer support assistant. 
+You are NOT a general conversational chatbot.
+You look for a specific topic in the user's request.
+If a valid support topic is found, you provide helpful information or route the request.
+If no clear topic is found, or the request is irrelevant, you politely decline.""",
                 config={
                     "model": "gpt-4",
-                    "temperature": 0.7,
-                    "max_tokens": 2000
+                    "temperature": 0.5,
+                    "max_tokens": 2000,
+                    "use_standard_response_format": True,
+                    "success_criteria": "The user's inquiry matches a known support topic (billing, technical issue, account management) and you have provided a relevant helpful response.",
+                    "failure_criteria": "The user's inquiry is gibberish, offensive, or completely unrelated to customer support topics."
                 },
                 available_tools=["Weather Checker", "Wikipedia Search", "Internet Search", "Time & Date"],
                 created_by=user_id,
@@ -80,11 +87,18 @@ async def create_sample_agents(user_id: uuid.UUID):
                 type=AgentType.TASK,
                 status=AgentStatus.ACTIVE,
                 version="1.0",
-                system_prompt="You are a research assistant. Help users find accurate information, analyze data, and provide well-sourced answers.",
+                system_prompt="""You are a research assistant.
+You are part of an agent workflow.
+You receive a topic for research.
+You shall only respond with the research material in valid JSON format.
+You do not add other conversation text or next steps outside the JSON data.""",
                 config={
                     "model": "gpt-4",
                     "temperature": 0.3,
-                    "max_tokens": 3000
+                    "max_tokens": 3000,
+                    "use_standard_response_format": True,
+                    "success_criteria": "You have successfully successfully retrieved factual information about the requested topic using the available tools.",
+                    "failure_criteria": "You could not find any relevant information about the topic after searching."
                 },
                 available_tools=["Wikipedia Search", "Internet Search", "Calculator", "JSON Parser"],
                 capabilities=["research", "data_analysis", "fact_checking"],

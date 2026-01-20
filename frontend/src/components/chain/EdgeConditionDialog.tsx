@@ -89,6 +89,9 @@ const EdgeConditionDialog: React.FC<EdgeConditionDialogProps> = ({
                                     onChange={(e) => handleConditionChange(index, 'field', e.target.value)}
                                 >
                                     <MenuItem value="content">Content</MenuItem>
+                                    <MenuItem value="status">Status</MenuItem>
+                                    <MenuItem value="data">Data (JSON)</MenuItem>
+                                    <MenuItem value="message">Message</MenuItem>
                                     <MenuItem value="metadata">Metadata</MenuItem>
                                 </Select>
                             </FormControl>

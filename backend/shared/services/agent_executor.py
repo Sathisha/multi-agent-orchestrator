@@ -533,8 +533,21 @@ class AgentExecutorService(BaseService):
             if memory_context:
                 system_prompt += f"\nContext from memory: {', '.join(memory_context)}"
             
+            # Inject Success/Failure Criteria
+            success_criteria = agent.config.get("success_criteria")
+            failure_criteria = agent.config.get("failure_criteria")
+            
+            if success_criteria or failure_criteria:
+                 system_prompt += "\n\n### EVALUATION CRITERIA\n"
+                 if success_criteria:
+                     system_prompt += f"SUCCESS CRITERIA:\n{success_criteria}\n\n"
+                     system_prompt += "If the success criteria are met, set the 'status' field in your JSON response to 'success'.\n"
+                 if failure_criteria:
+                     system_prompt += f"FAILURE CRITERIA:\n{failure_criteria}\n\n"
+                     system_prompt += "If the failure criteria are met, set the 'status' field in your JSON response to 'failure'.\n"
+
             # Inject Standard Agent Communication Protocol if enabled
-            if agent.config.get("use_standard_protocol") or agent.config.get("use_standard_response_format"):
+            if agent.config.get("use_standard_protocol") or agent.config.get("use_standard_response_format") or success_criteria or failure_criteria:
                 system_prompt += f"\n\n{SACP_INSTRUCTION}"
             
             # Add tool results to context if available

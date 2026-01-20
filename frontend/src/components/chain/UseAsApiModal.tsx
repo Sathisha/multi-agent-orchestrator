@@ -18,6 +18,7 @@ import {
 import { ContentCopy as CopyIcon, Add as AddIcon } from '@mui/icons-material'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
 import { getAPIKeys, createAPIKey, CreateAPIKeyRequest, CreateAPIKeyResponse } from '../../api/api_keys'
+import { login, AuthResponse } from '../../api/auth'
 import { Chain } from '../../types/chain'
 
 interface UseAsApiModalProps {
@@ -56,6 +57,13 @@ const UseAsApiModal: React.FC<UseAsApiModalProps> = ({ open, onClose, chain }) =
     const [tabValue, setTabValue] = useState(0)
     const [newKeyName, setNewKeyName] = useState('')
     const [createdKey, setCreatedKey] = useState<string | null>(null)
+    const [authType, setAuthType] = useState<'apikey' | 'jwt'>('apikey')
+    const [email, setEmail] = useState('')
+    const [password, setPassword] = useState('')
+
+    const [generatedToken, setGeneratedToken] = useState<string | null>(null)
+    const [tokenError, setTokenError] = useState<string | null>(null)
+    const [executionId, setExecutionId] = useState('')
     const queryClient = useQueryClient()
 
     const { data: apiKeysData } = useQuery(
@@ -71,6 +79,19 @@ const UseAsApiModal: React.FC<UseAsApiModalProps> = ({ open, onClose, chain }) =
         }
     })
 
+    const loginMutation = useMutation<AuthResponse, Error, void>(
+        () => login({ email, password }),
+        {
+            onSuccess: (data) => {
+                setGeneratedToken(data.access_token)
+                setTokenError(null)
+            },
+            onError: (error) => {
+                setTokenError(error.message || 'Login failed')
+            }
+        }
+    )
+
     const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
         setTabValue(newValue)
     }
@@ -83,30 +104,52 @@ const UseAsApiModal: React.FC<UseAsApiModalProps> = ({ open, onClose, chain }) =
         })
     }
 
+    const handleGenerateToken = () => {
+        if (!email || !password) return
+        loginMutation.mutate()
+    }
+
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text)
     }
 
     const endpointUrl = `${window.location.protocol}//${window.location.host}/api/v1/chains/${chain.id}/execute`
-    const exampleKey = createdKey || (apiKeysData?.api_keys[0] ? '<YOUR_API_KEY>' : '<YOUR_API_KEY>')
-    const keyPrefix = createdKey ? createdKey : (apiKeysData?.api_keys[0] ? apiKeysData.api_keys[0].key_prefix : '...');
+    const statusUrl = `${window.location.protocol}//${window.location.host}/api/v1/chains/executions/${executionId || '<EXECUTION_ID>'}/status`
+    const resultUrl = `${window.location.protocol}//${window.location.host}/api/v1/chains/executions/${executionId || '<EXECUTION_ID>'}`
+    const simpleResultUrl = `${window.location.protocol}//${window.location.host}/api/v1/chains/executions/${executionId || '<EXECUTION_ID>'}?view=simple`
+
+    // Auth header logic
+    const isJwt = authType === 'jwt'
+    const authHeaderName = isJwt ? 'Authorization' : 'X-API-Key'
+    const authHeaderValue = isJwt
+        ? (generatedToken ? `Bearer ${generatedToken}` : 'Bearer <YOUR_JWT_TOKEN>')
+        : (createdKey || (apiKeysData?.api_keys[0] ? apiKeysData.api_keys[0].key_prefix : '<YOUR_API_KEY>'))
 
     // Code examples
     const curlExample = `curl -X POST "${endpointUrl}" \\
   -H "Content-Type: application/json" \\
-  -H "X-API-Key: ${exampleKey}" \\
+  -H "${authHeaderName}: ${authHeaderValue}" \\
   -d '{
     "input_data": {
       "query": "Hello world"
     }
   }'`
 
+    const statusCurlExample = `curl -X GET "${statusUrl}" \\
+  -H "${authHeaderName}: ${authHeaderValue}" | python3 -m json.tool`
+
+    const resultCurlExample = `curl -X GET "${resultUrl}" \\
+  -H "${authHeaderName}: ${authHeaderValue}" | python3 -m json.tool`
+
+    const simpleResultCurlExample = `curl -X GET "${simpleResultUrl}" \\
+  -H "${authHeaderName}: ${authHeaderValue}" | python3 -m json.tool`
+
     const pythonExample = `import requests
 
 url = "${endpointUrl}"
 headers = {
     "Content-Type": "application/json",
-    "X-API-Key": "${exampleKey}"
+    "${authHeaderName}": "${authHeaderValue}"
 }
 data = {
     "input_data": {
@@ -120,7 +163,7 @@ print(response.json())`
     const jsExample = `const url = "${endpointUrl}";
 const headers = {
     "Content-Type": "application/json",
-    "X-API-Key": "${exampleKey}"
+    "${authHeaderName}": "${authHeaderValue}"
 };
 const body = {
     "input_data": {
@@ -163,61 +206,118 @@ fetch(url, {
                     </Typography>
                 </Paper>
 
-                {/* API Key Section */}
+                {/* Authentication Type Toggle */}
                 <Paper variant="outlined" sx={{ p: 2, mb: 3, bgcolor: '#fafafa' }}>
-                    <Typography variant="subtitle2" gutterBottom>Authentication</Typography>
+                    <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+                        <Tabs value={authType} onChange={(e, v) => setAuthType(v)} aria-label="auth type tabs">
+                            <Tab label="API Key" value="apikey" />
+                            <Tab label="JWT Token" value="jwt" />
+                        </Tabs>
+                    </Box>
 
-                    {createdKey ? (
-                        <Alert severity="success" sx={{ mb: 2 }}>
-                            <Typography variant="body2" fontWeight="bold">New API Key Created!</Typography>
-                            <Box sx={{ display: 'flex', alignItems: 'center', mt: 1, bgcolor: 'white', p: 1, borderRadius: 1, border: '1px solid #dee2e6' }}>
-                                <Typography sx={{ fontFamily: 'monospace', flexGrow: 1, wordBreak: 'break-all' }}>
-                                    {createdKey}
-                                </Typography>
-                                <IconButton size="small" onClick={() => copyToClipboard(createdKey)}>
-                                    <CopyIcon fontSize="small" />
-                                </IconButton>
-                            </Box>
-                            <Typography variant="caption" display="block" sx={{ mt: 1, color: 'text.secondary' }}>
-                                Save this key now! You won't be able to see it again.
-                            </Typography>
-                        </Alert>
+                    {authType === 'apikey' ? (
+                        <>
+                            <Typography variant="subtitle2" gutterBottom>API Key Management</Typography>
+                            {createdKey ? (
+                                <Alert severity="success" sx={{ mb: 2 }}>
+                                    <Typography variant="body2" fontWeight="bold">New API Key Created!</Typography>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', mt: 1, bgcolor: 'white', p: 1, borderRadius: 1, border: '1px solid #dee2e6' }}>
+                                        <Typography sx={{ fontFamily: 'monospace', flexGrow: 1, wordBreak: 'break-all' }}>
+                                            {createdKey}
+                                        </Typography>
+                                        <IconButton size="small" onClick={() => copyToClipboard(createdKey)}>
+                                            <CopyIcon fontSize="small" />
+                                        </IconButton>
+                                    </Box>
+                                    <Typography variant="caption" display="block" sx={{ mt: 1, color: 'text.secondary' }}>
+                                        Save this key now! You won't be able to see it again.
+                                    </Typography>
+                                </Alert>
+                            ) : (
+                                <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                                    <TextField
+                                        size="small"
+                                        placeholder="New Key Name (e.g. My App)"
+                                        value={newKeyName}
+                                        onChange={(e) => setNewKeyName(e.target.value)}
+                                        sx={{ width: 200 }}
+                                    />
+                                    <Button
+                                        variant="contained"
+                                        startIcon={<AddIcon />}
+                                        onClick={handleCreateKey}
+                                        disabled={!newKeyName.trim() || createKeyMutation.isLoading}
+                                    >
+                                        Generate Key
+                                    </Button>
+                                </Box>
+                            )}
+
+                            {!createdKey && apiKeysData?.api_keys && apiKeysData.api_keys.length > 0 && (
+                                <Box sx={{ mt: 2 }}>
+                                    <Typography variant="caption" color="text.secondary">
+                                        Existing Keys ({apiKeysData.api_keys.length}):
+                                    </Typography>
+                                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 0.5 }}>
+                                        {apiKeysData.api_keys.slice(0, 3).map(k => (
+                                            <Paper key={k.id} variant="outlined" sx={{ px: 1, py: 0.5, bgcolor: 'white', fontSize: '0.75rem' }}>
+                                                {k.name} (...{k.key_prefix.slice(-4)})
+                                            </Paper>
+                                        ))}
+                                        {apiKeysData.api_keys.length > 3 && (
+                                            <Typography variant="caption" sx={{ alignSelf: 'center' }}>+ {apiKeysData.api_keys.length - 3} more</Typography>
+                                        )}
+                                    </Box>
+                                </Box>
+                            )}
+                        </>
                     ) : (
-                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
-                            <TextField
-                                size="small"
-                                placeholder="New Key Name (e.g. My App)"
-                                value={newKeyName}
-                                onChange={(e) => setNewKeyName(e.target.value)}
-                                sx={{ width: 200 }}
-                            />
-                            <Button
-                                variant="contained"
-                                startIcon={<AddIcon />}
-                                onClick={handleCreateKey}
-                                disabled={!newKeyName.trim() || createKeyMutation.isLoading}
-                            >
-                                Generate Key
-                            </Button>
-                        </Box>
-                    )}
-
-                    {!createdKey && apiKeysData?.api_keys && apiKeysData.api_keys.length > 0 && (
-                        <Box sx={{ mt: 2 }}>
-                            <Typography variant="caption" color="text.secondary">
-                                Existing Keys ({apiKeysData.api_keys.length}):
+                        <>
+                            <Typography variant="subtitle2" gutterBottom>Generate Temporary JWT Token</Typography>
+                            <Typography variant="caption" color="text.secondary" paragraph>
+                                Use your credentials to generate a bearer token for testing. Tokens expire after 30 minutes.
                             </Typography>
-                            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 0.5 }}>
-                                {apiKeysData.api_keys.slice(0, 3).map(k => (
-                                    <Paper key={k.id} variant="outlined" sx={{ px: 1, py: 0.5, bgcolor: 'white', fontSize: '0.75rem' }}>
-                                        {k.name} (...{k.key_prefix.slice(-4)})
-                                    </Paper>
-                                ))}
-                                {apiKeysData.api_keys.length > 3 && (
-                                    <Typography variant="caption" sx={{ alignSelf: 'center' }}>+ {apiKeysData.api_keys.length - 3} more</Typography>
-                                )}
-                            </Box>
-                        </Box>
+
+                            {generatedToken ? (
+                                <Alert severity="success">
+                                    <Typography variant="body2" fontWeight="bold">Token Generated!</Typography>
+                                    <Typography variant="caption" display="block" sx={{ mt: 1 }}>
+                                        The code snippets below have been updated with your token.
+                                    </Typography>
+                                    <Button
+                                        size="small"
+                                        sx={{ mt: 1 }}
+                                        onClick={() => setGeneratedToken(null)}
+                                    >
+                                        Generate New Token
+                                    </Button>
+                                </Alert>
+                            ) : (
+                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, maxWidth: 400 }}>
+                                    {tokenError && <Alert severity="error">{tokenError}</Alert>}
+                                    <TextField
+                                        label="Email"
+                                        size="small"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                    />
+                                    <TextField
+                                        label="Password"
+                                        type="password"
+                                        size="small"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                    />
+                                    <Button
+                                        variant="contained"
+                                        onClick={handleGenerateToken}
+                                        disabled={!email || !password || loginMutation.isLoading}
+                                    >
+                                        {loginMutation.isLoading ? 'Generating...' : 'Generate Token'}
+                                    </Button>
+                                </Box>
+                            )}
+                        </>
                     )}
                 </Paper>
 
@@ -230,42 +330,110 @@ fetch(url, {
                         <Tab label="JavaScript" />
                     </Tabs>
 
-                    <Box sx={{ position: 'relative' }}>
-                        <Tooltip title="Copy Code">
-                            <IconButton
-                                sx={{ position: 'absolute', right: 8, top: 8, zIndex: 1 }}
-                                onClick={() => {
-                                    const code = tabValue === 0 ? curlExample : tabValue === 1 ? pythonExample : jsExample
-                                    copyToClipboard(code)
-                                }}
-                            >
-                                <CopyIcon />
-                            </IconButton>
-                        </Tooltip>
-
-                        <TabPanel value={tabValue} index={0}>
+                    <TabPanel value={tabValue} index={0}>
+                        <Box sx={{ mb: 2 }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                                <Typography variant="caption" color="text.secondary">Execute Workflow</Typography>
+                                <Tooltip title="Copy Code">
+                                    <IconButton size="small" onClick={() => copyToClipboard(curlExample)}>
+                                        <CopyIcon fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                            </Box>
                             <Box component="pre" sx={{ margin: 0, overflow: 'auto', p: 1.5, bgcolor: '#1e1e1e', color: '#d4d4d4', borderRadius: 1, fontSize: '13px' }}>
                                 {curlExample}
                             </Box>
-                        </TabPanel>
-                        <TabPanel value={tabValue} index={1}>
+                        </Box>
+                        <Box>
+                            <Typography variant="subtitle2" sx={{ mb: 1, mt: 3 }}>Check Status</Typography>
+                            <Typography variant="caption" color="text.secondary" paragraph>
+                                Check the status of a running execution. Paste the Execution ID from the execution response below.
+                            </Typography>
+                            <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+                                <TextField
+                                    size="small"
+                                    placeholder="Paste Execution ID here"
+                                    value={executionId}
+                                    onChange={(e) => setExecutionId(e.target.value)}
+                                    fullWidth
+                                    sx={{ bgcolor: 'white' }}
+                                />
+                            </Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                                <Typography variant="caption" color="text.secondary">Status Check Command</Typography>
+                                <Tooltip title="Copy Code">
+                                    <IconButton size="small" onClick={() => copyToClipboard(statusCurlExample)}>
+                                        <CopyIcon fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                            </Box>
+                            <Box component="pre" sx={{ margin: 0, overflow: 'auto', p: 1.5, bgcolor: '#1e1e1e', color: '#d4d4d4', borderRadius: 1, fontSize: '13px' }}>
+                                {statusCurlExample}
+                            </Box>
+
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5, mt: 3 }}>
+                                <Typography variant="caption" color="text.secondary">Get Execution Output</Typography>
+                                <Tooltip title="Copy Code">
+                                    <IconButton size="small" onClick={() => copyToClipboard(resultCurlExample)}>
+                                        <CopyIcon fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                            </Box>
+                            <Box component="pre" sx={{ margin: 0, overflow: 'auto', p: 1.5, bgcolor: '#1e1e1e', color: '#d4d4d4', borderRadius: 1, fontSize: '13px' }}>
+                                {resultCurlExample}
+                            </Box>
+
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5, mt: 3 }}>
+                                <Typography variant="caption" color="text.secondary">Get Simple Output (JSON)</Typography>
+                                <Tooltip title="Copy Code">
+                                    <IconButton size="small" onClick={() => copyToClipboard(simpleResultCurlExample)}>
+                                        <CopyIcon fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                            </Box>
+                            <Box component="pre" sx={{ margin: 0, overflow: 'auto', p: 1.5, bgcolor: '#1e1e1e', color: '#d4d4d4', borderRadius: 1, fontSize: '13px' }}>
+                                {simpleResultCurlExample}
+                            </Box>
+                        </Box>
+                    </TabPanel>
+                    <TabPanel value={tabValue} index={1}>
+                        <Box sx={{ position: 'relative' }}>
+                            <Tooltip title="Copy Code">
+                                <IconButton
+                                    sx={{ position: 'absolute', right: 0, top: -40, zIndex: 1 }}
+                                    onClick={() => copyToClipboard(pythonExample)}
+                                >
+                                    <CopyIcon />
+                                </IconButton>
+                            </Tooltip>
                             <Box component="pre" sx={{ margin: 0, overflow: 'auto', p: 1.5, bgcolor: '#1e1e1e', color: '#d4d4d4', borderRadius: 1, fontSize: '13px' }}>
                                 {pythonExample}
                             </Box>
-                        </TabPanel>
-                        <TabPanel value={tabValue} index={2}>
+                        </Box>
+                    </TabPanel>
+                    <TabPanel value={tabValue} index={2}>
+                        <Box sx={{ position: 'relative' }}>
+                            <Tooltip title="Copy Code">
+                                <IconButton
+                                    sx={{ position: 'absolute', right: 0, top: -40, zIndex: 1 }}
+                                    onClick={() => copyToClipboard(jsExample)}
+                                >
+                                    <CopyIcon />
+                                </IconButton>
+                            </Tooltip>
                             <Box component="pre" sx={{ margin: 0, overflow: 'auto', p: 1.5, bgcolor: '#1e1e1e', color: '#d4d4d4', borderRadius: 1, fontSize: '13px' }}>
                                 {jsExample}
                             </Box>
-                        </TabPanel>
-                    </Box>
+                        </Box>
+                    </TabPanel>
+
                 </Paper>
 
             </DialogContent>
             <DialogActions>
                 <Button onClick={onClose}>Close</Button>
             </DialogActions>
-        </Dialog>
+        </Dialog >
     )
 }
 

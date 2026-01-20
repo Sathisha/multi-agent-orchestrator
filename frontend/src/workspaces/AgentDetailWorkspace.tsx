@@ -58,6 +58,8 @@ const AgentDetailWorkspace: React.FC = () => {
     const [model, setModel] = useState('gpt-4')
     const [temperature, setTemperature] = useState(0.7)
     const [maxTokens, setMaxTokens] = useState(2000)
+    const [successCriteria, setSuccessCriteria] = useState('')
+    const [failureCriteria, setFailureCriteria] = useState('')
     const [capabilities, setCapabilities] = useState({
         context_memory_enabled: true,
         knowledge_base_retrieval: true,
@@ -108,6 +110,8 @@ const AgentDetailWorkspace: React.FC = () => {
                 setModel(data.config?.model || data.config?.model_name || 'gpt-4')
                 setTemperature(data.config?.temperature || 0.7)
                 setMaxTokens(data.config?.max_tokens || 2000)
+                setSuccessCriteria(data.config?.success_criteria || '')
+                setFailureCriteria(data.config?.failure_criteria || '')
                 setCapabilities(data.config?.capabilities || {
                     context_memory_enabled: true,
                     knowledge_base_retrieval: true,
@@ -203,7 +207,9 @@ const AgentDetailWorkspace: React.FC = () => {
                 temperature,
                 max_tokens: maxTokens,
                 capabilities,
-                available_tools: selectedTools
+                available_tools: selectedTools,
+                success_criteria: successCriteria,
+                failure_criteria: failureCriteria
             },
             available_tools: selectedTools
         })
@@ -645,6 +651,47 @@ const AgentDetailWorkspace: React.FC = () => {
                                 }}
                             />
                         </Box>
+
+                        <Grid container spacing={2} sx={{ mb: 2, mt: 2 }}>
+                            <Grid item xs={12} md={6}>
+                                <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#4caf50', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Done sx={{ fontSize: 16 }} /> SUCCESS CRITERIA
+                                </Typography>
+                                <TextField
+                                    fullWidth
+                                    multiline
+                                    rows={3}
+                                    placeholder="Define what constitutes a successful execution (e.g., 'Correctly extracted the Order ID')"
+                                    value={successCriteria}
+                                    onChange={(e) => { setSuccessCriteria(e.target.value); setHasUnsavedChanges(true) }}
+                                    sx={{
+                                        '& .MuiOutlinedInput-root': {
+                                            bgcolor: 'rgba(255, 255, 255, 0.02)',
+                                            fontSize: '0.875rem'
+                                        }
+                                    }}
+                                />
+                            </Grid>
+                            <Grid item xs={12} md={6}>
+                                <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#f44336', mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Close sx={{ fontSize: 16 }} /> FAILURE CRITERIA
+                                </Typography>
+                                <TextField
+                                    fullWidth
+                                    multiline
+                                    rows={3}
+                                    placeholder="Define what constitutes a failed execution (e.g., 'Could not find the document')"
+                                    value={failureCriteria}
+                                    onChange={(e) => { setFailureCriteria(e.target.value); setHasUnsavedChanges(true) }}
+                                    sx={{
+                                        '& .MuiOutlinedInput-root': {
+                                            bgcolor: 'rgba(255, 255, 255, 0.02)',
+                                            fontSize: '0.875rem'
+                                        }
+                                    }}
+                                />
+                            </Grid>
+                        </Grid>
                     </Box>
                 </TabPanel>
 
