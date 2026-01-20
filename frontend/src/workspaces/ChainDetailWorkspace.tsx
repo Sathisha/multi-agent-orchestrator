@@ -147,10 +147,10 @@ const ChainDetailWorkspace: React.FC = () => {
                         }
 
                         if (!status) {
-                            if (data.current_node_id === node.id) {
-                                status = 'running'
-                            } else if (data.completed_nodes?.includes(node.id)) {
+                            if (data.completed_nodes?.includes(node.id)) {
                                 status = 'completed'
+                            } else if (data.current_node_id === node.id) {
+                                status = 'running'
                             } else if (data.status === 'failed' && data.current_node_id === node.id) {
                                 status = 'failed'
                             }

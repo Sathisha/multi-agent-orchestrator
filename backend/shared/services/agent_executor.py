@@ -467,7 +467,18 @@ class AgentExecutorService(BaseService):
                         custom_creds["api_key"] = target_model.api_key
                         logger.info(f"[EXEC-LOGIC] Using API key from model {target_model.id}")
                     if target_model.api_base:
-                        custom_creds["base_url"] = target_model.api_base
+                        # Handle Ollama connection - prioritize internal networking if available
+                        base_url = target_model.api_base
+                        # Only apply to Ollama provider
+                        if raw_provider.lower() == "ollama":
+                            import os
+                            env_ollama_url = os.environ.get("OLLAMA_BASE_URL")
+                            # If we are in Docker and the DB says localhost, switch to the internal service
+                            if base_url and ("localhost" in base_url or "127.0.0.1" in base_url) and env_ollama_url:
+                                base_url = env_ollama_url
+                                logger.info(f"[EXEC-LOGIC] Switched Ollama URL from localhost to {base_url}")
+                        
+                        custom_creds["base_url"] = base_url
                     
                     # Handle specific credential keys for different providers
                     if raw_provider.lower() == "openai" and target_model.api_key:

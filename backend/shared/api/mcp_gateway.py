@@ -21,20 +21,19 @@ from ..logging.config import get_logger
 
 logger = get_logger(__name__)
 
-router = APIRouter(prefix="/api/v1/mcp", tags=["MCP Gateway"])
+router = APIRouter(prefix="/api/v1/mcp-servers", tags=["MCP Gateway"])
 security = HTTPBearer()
 
 
-@router.post("/servers/", response_model=MCPServerResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=MCPServerResponse, status_code=status.HTTP_201_CREATED)
 async def create_mcp_server(
     server_request: MCPServerRequest,
-    current_user: User = Depends(get_current_user_with_tenant),
+    current_user: User = Depends(get_current_user),
     mcp_service: MCPGatewayService = Depends(MCPGatewayService)
 ):
     """Create a new MCP server configuration."""
     try:
         server = await mcp_service.create_mcp_server(
-            tenant_id=current_user.tenant_id,
             user_id=current_user.id,
             server_request=server_request
         )
@@ -65,19 +64,18 @@ async def create_mcp_server(
         )
 
 
-@router.get("/servers/", response_model=List[MCPServerResponse])
+@router.get("/", response_model=List[MCPServerResponse])
 async def list_mcp_servers(
     status: Optional[MCPServerStatus] = Query(None, description="Filter by server status"),
     category: Optional[str] = Query(None, description="Filter by category"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of servers to return"),
     offset: int = Query(0, ge=0, description="Number of servers to skip"),
-    current_user: User = Depends(get_current_user_with_tenant),
+    current_user: User = Depends(get_current_user),
     mcp_service: MCPGatewayService = Depends(MCPGatewayService)
 ):
     """List MCP servers with optional filtering."""
     try:
         servers = await mcp_service.list_mcp_servers(
-            tenant_id=current_user.tenant_id,
             user_id=current_user.id,
             status=status,
             category=category,
@@ -99,16 +97,15 @@ async def list_mcp_servers(
         )
 
 
-@router.get("/servers/{server_id}", response_model=MCPServerResponse)
+@router.get("/{server_id}", response_model=MCPServerResponse)
 async def get_mcp_server(
     server_id: UUID,
-    current_user: User = Depends(get_current_user_with_tenant),
+    current_user: User = Depends(get_current_user),
     mcp_service: MCPGatewayService = Depends(MCPGatewayService)
 ):
     """Get an MCP server by ID."""
     try:
         server = await mcp_service.get_mcp_server(
-            tenant_id=current_user.tenant_id,
             user_id=current_user.id,
             server_id=server_id
         )
@@ -136,17 +133,16 @@ async def get_mcp_server(
         )
 
 
-@router.put("/servers/{server_id}", response_model=MCPServerResponse)
+@router.put("/{server_id}", response_model=MCPServerResponse)
 async def update_mcp_server(
     server_id: UUID,
     server_request: MCPServerRequest,
-    current_user: User = Depends(get_current_user_with_tenant),
+    current_user: User = Depends(get_current_user),
     mcp_service: MCPGatewayService = Depends(MCPGatewayService)
 ):
     """Update an existing MCP server."""
     try:
         server = await mcp_service.update_mcp_server(
-            tenant_id=current_user.tenant_id,
             user_id=current_user.id,
             server_id=server_id,
             server_request=server_request
@@ -178,16 +174,15 @@ async def update_mcp_server(
         )
 
 
-@router.delete("/servers/{server_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{server_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_mcp_server(
     server_id: UUID,
-    current_user: User = Depends(get_current_user_with_tenant),
+    current_user: User = Depends(get_current_user),
     mcp_service: MCPGatewayService = Depends(MCPGatewayService)
 ):
     """Delete an MCP server."""
     try:
         deleted = await mcp_service.delete_mcp_server(
-            tenant_id=current_user.tenant_id,
             user_id=current_user.id,
             server_id=server_id
         )
@@ -219,28 +214,33 @@ async def delete_mcp_server(
         )
 
 
-@router.post("/servers/{server_id}/connect")
+@router.post("/{server_id}/connect")
 async def connect_to_server(
     server_id: UUID,
-    current_user: User = Depends(get_current_user_with_tenant),
+    current_user: User = Depends(get_current_user),
     mcp_service: MCPGatewayService = Depends(MCPGatewayService)
 ):
-    """Manually connect to an MCP server."""
+    """Manually connect (introspect) to an MCP server."""
     try:
-        connection_result = await mcp_service.connect_to_server(
-            tenant_id=current_user.tenant_id,
+        # We use introspection as the "connect" action now
+        server = await mcp_service.introspect_existing_server(
             user_id=current_user.id,
             server_id=server_id
         )
         
         logger.info(
-            "MCP server connection attempted via API",
+            "MCP server connection/introspection successful",
             server_id=str(server_id),
-            status=connection_result["connection_status"],
             user_id=str(current_user.id)
         )
         
-        return connection_result
+        return {
+            "server_id": str(server.id),
+            "server_name": server.name,
+            "connection_status": "connected",
+            "message": "Successfully connected and introspected server",
+            "connected_at": server.last_connected_at.isoformat() if server.last_connected_at else None
+        }
         
     except ValueError as e:
         raise HTTPException(
@@ -254,153 +254,81 @@ async def connect_to_server(
             error=str(e),
             user_id=str(current_user.id)
         )
+        # Return error status but as 200 so UI can show it gracefully? 
+        # Or 500? Existing was 500.
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to connect to MCP server"
+            detail=f"Failed to connect to MCP server: {str(e)}"
         )
 
 
-@router.get("/servers/{server_id}/discover")
-async def discover_server_tools(
-    server_id: UUID,
-    force_refresh: bool = Query(False, description="Force refresh of tool discovery cache"),
-    current_user: User = Depends(get_current_user_with_tenant),
-    mcp_service: MCPGatewayService = Depends(MCPGatewayService)
-):
-    """Discover available tools on an MCP server."""
-    try:
-        discovery_result = await mcp_service.discover_tools(
-            tenant_id=current_user.tenant_id,
-            user_id=current_user.id,
-            server_id=server_id,
-            force_refresh=force_refresh
-        )
-        
-        logger.info(
-            "MCP server tools discovered via API",
-            server_id=str(server_id),
-            tool_count=len(discovery_result.get("tools", [])),
-            user_id=str(current_user.id)
-        )
-        
-        return discovery_result
-        
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-    except Exception as e:
-        logger.error(
-            "Failed to discover MCP server tools",
-            server_id=str(server_id),
-            error=str(e),
-            user_id=str(current_user.id)
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to discover MCP server tools"
-        )
-
-
-@router.post("/servers/{server_id}/tools/{tool_name}/call")
-async def call_mcp_tool(
-    server_id: UUID,
-    tool_name: str,
-    inputs: Dict[str, Any],
-    context: Optional[Dict[str, Any]] = None,
-    current_user: User = Depends(get_current_user_with_tenant),
-    mcp_service: MCPGatewayService = Depends(MCPGatewayService)
-):
-    """Call a tool on an MCP server."""
-    try:
-        call_result = await mcp_service.call_mcp_tool(
-            tenant_id=current_user.tenant_id,
-            user_id=current_user.id,
-            server_id=server_id,
-            tool_name=tool_name,
-            inputs=inputs,
-            context=context
-        )
-        
-        logger.info(
-            "MCP tool called via API",
-            server_id=str(server_id),
-            tool_name=tool_name,
-            status=call_result["status"],
-            user_id=str(current_user.id)
-        )
-        
-        return call_result
-        
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-    except Exception as e:
-        logger.error(
-            "Failed to call MCP tool",
-            server_id=str(server_id),
-            tool_name=tool_name,
-            error=str(e),
-            user_id=str(current_user.id)
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to call MCP tool"
-        )
-
-
-@router.get("/servers/{server_id}/health")
-async def check_server_health(
+@router.post("/{server_id}/introspect", response_model=MCPServerResponse)
+async def introspect_server(
     server_id: UUID,
     current_user: User = Depends(get_current_user),
     mcp_service: MCPGatewayService = Depends(MCPGatewayService)
 ):
-    """Check the health status of an MCP server."""
+    """Trigger full introspection of an MCP server."""
     try:
-        server = await mcp_service.get_mcp_server(
+        server = await mcp_service.introspect_existing_server(
             user_id=current_user.id,
             server_id=server_id
         )
-        
-        if not server:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="MCP server not found"
-            )
-        
-        health_status = {
-            "server_id": str(server_id),
-            "server_name": server.name,
-            "status": server.status,
-            "last_connected_at": server.last_connected_at.isoformat() if server.last_connected_at else None,
-            "last_health_check_at": server.last_health_check_at.isoformat() if server.last_health_check_at else None,
-            "error_count": server.error_count,
-            "last_error": server.last_error,
-            "success_rate": server.success_rate,
-            "total_requests": server.total_requests,
-            "successful_requests": server.successful_requests,
-            "failed_requests": server.failed_requests,
-            "average_response_time": server.average_response_time
-        }
-        
-        return health_status
-        
-    except HTTPException:
-        raise
+        return server
     except Exception as e:
-        logger.error(
-            "Failed to check MCP server health",
-            server_id=str(server_id),
-            error=str(e),
-            user_id=str(current_user.id)
+        logger.error(f"Failed to introspect server {server_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{server_id}/resources/read")
+async def read_resource(
+    server_id: UUID,
+    uri: str = Query(..., description="URI of the resource to read"),
+    current_user: User = Depends(get_current_user),
+    mcp_service: MCPGatewayService = Depends(MCPGatewayService)
+):
+    """Read a specific resource from an MCP server."""
+    try:
+        # Get server first to check protocol/url
+        server = await mcp_service.get_mcp_server(current_user.id, server_id)
+        if not server:
+            raise HTTPException(status_code=404, detail="Server not found")
+            
+        result = await mcp_service.mcp_client.read_resource(
+            url=server.base_url,
+            transport=server.protocol,
+            uri=uri
         )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to check MCP server health"
+        return result
+    except Exception as e:
+        logger.error(f"Failed to read resource {uri}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{server_id}/prompts/{prompt_name}/get")
+async def get_prompt(
+    server_id: UUID,
+    prompt_name: str,
+    arguments: Dict[str, str] = {},
+    current_user: User = Depends(get_current_user),
+    mcp_service: MCPGatewayService = Depends(MCPGatewayService)
+):
+    """Get a prompt from an MCP server."""
+    try:
+        server = await mcp_service.get_mcp_server(current_user.id, server_id)
+        if not server:
+             raise HTTPException(status_code=404, detail="Server not found")
+             
+        result = await mcp_service.mcp_client.get_prompt(
+            url=server.base_url,
+            transport=server.protocol,
+            name=prompt_name,
+            args=arguments
         )
+        return result
+    except Exception as e:
+        logger.error(f"Failed to get prompt {prompt_name}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/protocols/")

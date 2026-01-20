@@ -13,7 +13,6 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Tuple
 from uuid import UUID, uuid4
 
-import aiohttp
 import websockets
 from sqlalchemy import select, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +23,7 @@ from ..models.tool import MCPServer, MCPServerStatus, Tool, ToolType, ToolStatus
 from ..models.tool import MCPServerRequest, MCPServerResponse
 from ..models.audit import AuditLog, AuditEventType
 from ..logging.config import get_logger
+from ..services.mcp_client_service import MCPClientService
 
 logger = get_logger(__name__)
 
@@ -51,6 +51,7 @@ class MCPGatewayService:
         self._health_check_tasks = {}  # Background health check tasks
         self._discovery_cache = {}  # Tool discovery cache
         self._session_pool = {}  # HTTP session pool
+        self.mcp_client = MCPClientService()
     
     async def create_mcp_server(
         self,
@@ -88,13 +89,41 @@ class MCPGatewayService:
                 resource_id=str(mcp_server.id),
                 details={
                     "server_name": mcp_server.name,
-                    "url": mcp_server.url,
+                    "url": mcp_server.base_url,
                     "protocol": mcp_server.protocol
                 }
             )
             
-            # Start background connection attempt
-            asyncio.create_task(self._connect_to_server(mcp_server))
+            # Introspect server immediately
+            try:
+                discovery_result = await self.mcp_client.connect_and_discover(
+                    url=mcp_server.base_url,
+                    transport=mcp_server.protocol or "http", # default to http
+                    auth_config=mcp_server.auth_config,
+                    env_vars=mcp_server.env_vars
+                )
+                
+                # Update server with discovered capabilities
+                mcp_server.status = MCPServerStatus.CONNECTED
+                mcp_server.capabilities = discovery_result.get("capabilities", [])
+                mcp_server.server_info = discovery_result.get("server_info", {})
+                mcp_server.resources = discovery_result.get("resources", [])
+                mcp_server.prompts = discovery_result.get("prompts", [])
+                mcp_server.last_connected_at = datetime.utcnow()
+                
+                # Sync tools
+                # We need to sync tools to the Tool table as well for them to be usable by agents
+                await self._sync_discovered_tools(session, mcp_server, discovery_result.get("tools", []))
+                
+                session.add(mcp_server)
+                await session.commit()
+                
+            except Exception as e:
+                logger.error(f"Failed to introspect new server: {e}")
+                mcp_server.status = MCPServerStatus.ERROR
+                mcp_server.last_error = str(e)
+                session.add(mcp_server)
+                await session.commit()
             
             logger.info(
                 "MCP server created successfully",
@@ -104,6 +133,45 @@ class MCPGatewayService:
             )
             
             return MCPServerResponse.model_validate(mcp_server)
+
+    async def introspect_existing_server(self, user_id: UUID, server_id: UUID) -> MCPServerResponse:
+        """Manually trigger introspection for an existing server"""
+        async with get_database_session() as session:
+            result = await session.execute(
+                select(MCPServer).where(MCPServer.id == server_id)
+            )
+            server = result.scalar_one_or_none()
+            if not server:
+                raise ValueError("Server not found")
+                
+            try:
+                discovery_result = await self.mcp_client.connect_and_discover(
+                    url=server.base_url,
+                    transport=server.protocol,
+                    auth_config=server.auth_config,
+                    env_vars=server.env_vars
+                )
+                
+                server.status = MCPServerStatus.CONNECTED
+                server.capabilities = discovery_result.get("capabilities", [])
+                server.server_info = discovery_result.get("server_info", {})
+                server.resources = discovery_result.get("resources", [])
+                server.prompts = discovery_result.get("prompts", [])
+                server.last_connected_at = datetime.utcnow()
+                server.last_error = None
+                
+                await self._sync_discovered_tools(session, server, discovery_result.get("tools", []))
+                
+                session.add(server)
+                await session.commit()
+                await session.refresh(server)
+                return MCPServerResponse.model_validate(server)
+            except Exception as e:
+                server.status = MCPServerStatus.ERROR
+                server.last_error = str(e)
+                session.add(server)
+                await session.commit()
+                raise e
     
     async def get_mcp_server(
         self,
@@ -328,8 +396,15 @@ class MCPGatewayService:
             if server.status != MCPServerStatus.CONNECTED:
                 raise MCPConnectionError(f"MCP server is not connected (status: {server.status})")
             
-            # Discover tools
-            discovered_tools = await self._discover_server_tools(server)
+            # Discover tools (and other capabilities)
+            # Re-introspect completely since we are here
+            discovery_result = await self.mcp_client.connect_and_discover(
+                url=server.base_url,
+                transport=server.protocol,
+                auth_config=server.auth_config,
+                env_vars=server.env_vars
+            )
+            discovered_tools = {"tools": discovery_result.get("tools", [])}
             
             # Update cache
             self._discovery_cache[cache_key] = {
@@ -376,7 +451,31 @@ class MCPGatewayService:
             start_time = time.time()
             
             try:
-                result = await self._call_server_tool(server, tool_name, inputs, context)
+                # Use mcp_client service
+                tool_result = await self.mcp_client.call_tool(
+                    url=server.base_url,
+                    transport=server.protocol,
+                    name=tool_name,
+                    args=inputs
+                )
+                
+                # Format result
+                # mcp returns CallToolResult with content list
+                result_content = []
+                if hasattr(tool_result, 'content'):
+                    for content in tool_result.content:
+                        if content.type == 'text':
+                            result_content.append(content.text)
+                        elif content.type == 'image':
+                            result_content.append(f"[Image: {content.mimeType}]")
+                        elif content.type == 'resource':
+                             result_content.append(f"[Resource: {content.resource.uri}]")
+                else:
+                     # Fallback if structure is different or raw dict
+                     result_content.append(str(tool_result))
+                     
+                result = "\n".join(result_content)
+                
                 execution_time = int((time.time() - start_time) * 1000)
                 
                 # Update server statistics

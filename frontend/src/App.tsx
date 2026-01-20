@@ -12,6 +12,9 @@ import ChainDetailWorkspace from './workspaces/ChainDetailWorkspace'
 import LLMModelsWorkspace from './workspaces/LLMModelsWorkspace'
 import VisionTestWorkspace from './workspaces/VisionTestWorkspace'
 import UserManagementWorkspace from './workspaces/UserManagementWorkspace'
+import MCPServerListWorkspace from './workspaces/MCPServerListWorkspace'
+import MCPServerDetailWorkspace from './workspaces/MCPServerDetailWorkspace'
+import ChatWorkspace from './workspaces/ChatWorkspace'
 import LoginPage from './components/auth/LoginPage'
 import ProtectedRoute from './routes/ProtectedRoute'
 
@@ -36,6 +39,9 @@ function App() {
           <Route path="/monitoring" element={<MonitoringWorkspace />} />
           <Route path="/models" element={<LLMModelsWorkspace />} />
           <Route path="/vision-test" element={<VisionTestWorkspace />} />
+          <Route path="/mcp" element={<MCPServerListWorkspace />} />
+          <Route path="/mcp/:serverId" element={<MCPServerDetailWorkspace />} />
+          <Route path="/chat" element={<ChatWorkspace />} />
           <Route path="/users" element={<UserManagementWorkspace />} />
         </Route>
       </Route>

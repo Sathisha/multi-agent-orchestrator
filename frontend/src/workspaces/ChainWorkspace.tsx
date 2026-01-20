@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
@@ -20,6 +21,8 @@ import {
     DialogTitle,
     DialogContent,
     DialogActions,
+    Switch,
+    FormControlLabel,
 } from '@mui/material'
 import {
     Add as AddIcon,
@@ -29,8 +32,8 @@ import {
     PlayArrow as PlayArrowIcon,
     Visibility as VisibilityIcon,
 } from '@mui/icons-material'
-import { listChains, createChain, deleteChain } from '../api/chains'
-import { ChainListItem, ChainStatus } from '../types/chain'
+import { listChains, createChain, deleteChain, updateChain } from '../api/chains'
+import { ChainListItem, ChainCreateRequest, ChainStatus } from '../types/chain'
 
 const ChainWorkspace: React.FC = () => {
     const navigate = useNavigate()
@@ -41,7 +44,7 @@ const ChainWorkspace: React.FC = () => {
     const [newChainDescription, setNewChainDescription] = useState('')
 
     // Fetch chains
-    const { data: chains = [], isLoading } = useQuery<ChainListItem[]>(
+    const { data: chains = [], isLoading, refetch } = useQuery<ChainListItem[]>(
         'chains',
         () => listChains()
     )
@@ -62,7 +65,7 @@ const ChainWorkspace: React.FC = () => {
                 setNewChainName('')
                 setNewChainDescription('')
                 // Navigate to the new chain
-                navigate(`/chains/${newChain.id}`)
+                navigate(`/ chains / ${newChain.id} `)
             },
         }
     )
@@ -84,11 +87,11 @@ const ChainWorkspace: React.FC = () => {
 
     const getStatusColor = (status: string) => {
         switch (status) {
-            case 'active':
+            case ChainStatus.ACTIVE:
                 return 'success'
-            case 'draft':
+            case ChainStatus.DRAFT:
                 return 'default'
-            case 'archived':
+            case ChainStatus.ARCHIVED:
                 return 'error'
             default:
                 return 'default'
@@ -101,11 +104,27 @@ const ChainWorkspace: React.FC = () => {
         }
     }
 
-    const handleDeleteChain = (chainId: string, chainName: string) => {
-        if (window.confirm(`Are you sure you want to delete "${chainName}"?`)) {
-            deleteMutation.mutate(chainId)
+    const handleDeleteChain = async (id: string, name: string) => {
+        if (window.confirm(`Are you sure you want to delete workflow "${name}" ? `)) {
+            try {
+                await deleteChain(id)
+                refetch()
+            } catch (error) {
+                console.error('Failed to delete chain:', error)
+            }
         }
     }
+
+    const handleToggleStatus = async (chain: ChainListItem, event: React.ChangeEvent<HTMLInputElement>) => {
+        event.stopPropagation(); // Prevent row click
+        const newStatus = event.target.checked ? ChainStatus.ACTIVE : ChainStatus.DRAFT;
+        try {
+            await updateChain(chain.id, { status: newStatus });
+            refetch();
+        } catch (error) {
+            console.error('Failed to update chain status:', error);
+        }
+    };
 
     return (
         <Box sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -187,7 +206,7 @@ const ChainWorkspace: React.FC = () => {
                                     key={chain.id}
                                     hover
                                     sx={{ cursor: 'pointer' }}
-                                    onClick={() => navigate(`/chains/${chain.id}`)}
+                                    onClick={() => navigate(`/ chains / ${chain.id} `)}
                                 >
                                     <TableCell>
                                         <Typography variant="body1" fontWeight="medium">
@@ -214,9 +233,22 @@ const ChainWorkspace: React.FC = () => {
                                             : 'Never'}
                                     </TableCell>
                                     <TableCell align="right" onClick={(e) => e.stopPropagation()}>
+                                        <FormControlLabel
+                                            control={
+                                                <Switch
+                                                    checked={chain.status === ChainStatus.ACTIVE}
+                                                    onChange={(e) => handleToggleStatus(chain, e)}
+                                                    size="small"
+                                                    color="success"
+                                                />
+                                            }
+                                            label={chain.status === ChainStatus.ACTIVE ? 'Active' : 'Draft'}
+                                            labelPlacement="start"
+                                            sx={{ mr: 2 }}
+                                        />
                                         <IconButton
                                             size="small"
-                                            onClick={() => navigate(`/chains/${chain.id}`)}
+                                            onClick={() => navigate(`/ chains / ${chain.id} `)}
                                             title="View/Edit"
                                         >
                                             <EditIcon fontSize="small" />

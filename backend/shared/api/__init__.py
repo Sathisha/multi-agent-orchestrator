@@ -13,8 +13,10 @@ from .tool_registry import router as tool_registry_router
 from .audit import router as audit_router
 from .llm_models import router as llm_models_router
 from .v1.endpoints.chains import router as chains_router
+from .v1.endpoints.chat import router as chat_router
 
 from .mcp_gateway import router as mcp_gateway_router
+from .mcp_bridge_discovery import router as mcp_bridge_discovery_router
 from .users import router as users_router
 from .roles import router as roles_router
 from .workflow import router as workflow_router
@@ -33,8 +35,10 @@ api_router.include_router(agent_executor_router)
 api_router.include_router(tool_registry_router)
 api_router.include_router(llm_models_router)
 api_router.include_router(chains_router)
+api_router.include_router(chat_router)
 api_router.include_router(audit_router)
 api_router.include_router(mcp_gateway_router)
+api_router.include_router(mcp_bridge_discovery_router)
 
 # Monitoring
 from .monitoring import router as monitoring_router

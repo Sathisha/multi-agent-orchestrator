@@ -38,7 +38,7 @@ async def refine_agent_prompt(
         if not model_config:
             model_config = AgentConfig(
                 name="prompt_refiner",
-                model="tinyllama",
+                model="llama3.2",
                 temperature=0.3,
                 max_tokens=1500,
                 llm_provider=LLMProvider.OLLAMA

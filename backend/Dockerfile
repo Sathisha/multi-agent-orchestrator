@@ -23,7 +23,7 @@ COPY requirements.txt .
 # This is sufficient since the backend delegates all GPU work to Ollama/external APIs
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu && \
-    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir --use-deprecated=legacy-resolver -r requirements.txt && \
     pip cache purge
 
 # Application layer - rebuilds when code changes

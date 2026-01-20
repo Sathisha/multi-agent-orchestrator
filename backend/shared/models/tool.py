@@ -134,8 +134,17 @@ class MCPServer(BaseEntity):
     base_url: Mapped[str] = mapped_column(String(255), nullable=False)
     version: Mapped[str] = mapped_column(String(50), default="1.0.0")
     status: Mapped[MCPServerStatus] = mapped_column(String(50), default=MCPServerStatus.DISCONNECTED)
+    
+    # Configuration
     auth_config: Mapped[Dict[str, Any]] = mapped_column(JSONB, default=text("'{}'::jsonb"))
+    env_vars: Mapped[Dict[str, str]] = mapped_column(JSONB, default=text("'{}'::jsonb"))
+    protocol: Mapped[str] = mapped_column(String(50), default="websocket") # http, sse, websocket, stdio
+    
+    # Discovery
     capabilities: Mapped[List[str]] = mapped_column(JSONB, default=text("'[]'::jsonb"))
+    resources: Mapped[List[Dict[str, Any]]] = mapped_column(JSONB, default=text("'[]'::jsonb"))
+    prompts: Mapped[List[Dict[str, Any]]] = mapped_column(JSONB, default=text("'[]'::jsonb"))
+    server_info: Mapped[Dict[str, Any]] = mapped_column(JSONB, default=text("'{}'::jsonb"))
     
     last_connected_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True), nullable=True)
     error_count: Mapped[int] = mapped_column(Integer, default=0)
@@ -154,6 +163,8 @@ class MCPServerRequest(BaseModel):
     base_url: str
     version: Optional[str] = "1.0.0"
     auth_config: Optional[Dict[str, Any]] = {}
+    env_vars: Optional[Dict[str, str]] = {}
+    protocol: Optional[str] = "websocket"
 
 class MCPServerResponse(BaseModel):
     id: UUID
@@ -162,7 +173,14 @@ class MCPServerResponse(BaseModel):
     base_url: str
     version: str
     status: MCPServerStatus
+    protocol: str
     capabilities: List[str]
+    resources: List[Dict[str, Any]] = []
+    prompts: List[Dict[str, Any]] = []
+    server_info: Dict[str, Any] = {}
+    env_vars: Dict[str, str] = {}
+    auth_config: Dict[str, Any] = {} # be careful exposing this? maybe sanitize
+    
     last_connected_at: Optional[Any]
     error_count: int
     tool_count: Optional[int] = 0

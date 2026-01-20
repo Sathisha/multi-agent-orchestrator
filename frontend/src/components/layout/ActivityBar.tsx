@@ -12,6 +12,8 @@ import {
   Link as ChainIcon,
   Visibility as VisionIcon,
   People as PeopleIcon,
+  Extension as MCPIcon,
+  Chat as ChatIcon,
 } from '@mui/icons-material'
 import { PermissionGuard } from '../PermissionGuard'
 
@@ -42,6 +44,8 @@ const ActivityBar: React.FC<ActivityBarProps> = ({
     { id: 'workflows', icon: WorkflowIcon, label: 'Workflows', path: '/chains' },
     { id: 'tools', icon: ToolsIcon, label: 'Tools', path: '/tools' },
     { id: 'models', icon: LLMIcon, label: 'LLM Models', path: '/models' },
+    { id: 'mcp', icon: MCPIcon, label: 'MCP Servers', path: '/mcp' },
+    { id: 'chat', icon: ChatIcon, label: 'Chat', path: '/chat' },
     { id: 'vision-test', icon: VisionIcon, label: 'Vision Test', path: '/vision-test', role: 'standard_user' },
     { id: 'monitoring', icon: MonitoringIcon, label: 'Monitoring', path: '/monitoring', role: 'standard_user' },
     { id: 'users', icon: PeopleIcon, label: 'Users', path: '/users', requireSuperAdmin: true },

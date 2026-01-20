@@ -14,6 +14,27 @@ services:
       - ai-agent-network
     restart: always
 
+  # MCP Bridge Service (Adapter for Stdio-based Tools)
+  mcp-bridge:
+    build:
+      context: ./infrastructure/docker/mcp-bridge
+      dockerfile: Dockerfile
+    container_name: ai-agent-framework-mcp-bridge
+    ports:
+      - "8090:8000"
+    volumes:
+      # Mount workspace/data for filesystem server access
+      - ./data:/app/data
+    networks:
+      - ai-agent-network
+    restart: unless-stopped
+    logging:
+      driver: "fluentd"
+      options:
+        fluentd-address: "localhost:24224"
+        tag: "docker.{{.Name}}"
+        fluentd-async: "true"
+
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
@@ -243,7 +264,7 @@ services:
       while ! ollama list > /dev/null 2>&1; do sleep 1; done;
       echo 'Pulling default models...';
       ollama pull nomic-embed-text;
-      ollama pull tinyllama;
+      ollama pull llama3.2;
       wait \$pid
       "
 

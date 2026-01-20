@@ -18,7 +18,7 @@ class AgentTemplateService:
             agent_type=AgentType.CHATBOT,
             default_config=AgentConfig(
                 name="Basic Chatbot",
-                model="tinyllama",
+                model="llama3.2",
                 system_prompt="You are a helpful assistant. Answer questions clearly and concisely.",
                 temperature=0.7,
                 max_tokens=1000,
@@ -90,7 +90,7 @@ class AgentTemplateService:
             agent_type=AgentType.CUSTOM,
             default_config=AgentConfig(
                 name="Custom Agent",
-                model="tinyllama",
+                model="llama3.2",
                 system_prompt="You are an AI assistant.",
                 temperature=0.7,
                 max_tokens=1000,

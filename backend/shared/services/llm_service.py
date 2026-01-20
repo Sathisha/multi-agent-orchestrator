@@ -585,7 +585,7 @@ class LLMService:
         # Adjust model name for different providers
         if provider_type == LLMProviderType.OLLAMA:
             # Use a default Ollama model
-            adjusted_request.model = "tinyllama"
+            adjusted_request.model = "llama3.2"
         elif provider_type == LLMProviderType.OPENAI:
             # Use a default OpenAI model
             adjusted_request.model = "gpt-3.5-turbo"

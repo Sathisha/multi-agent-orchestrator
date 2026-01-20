@@ -21,7 +21,9 @@ const VSCodeLayout: React.FC = () => {
     if (path.startsWith('/models')) return 'models'
     if (path.startsWith('/vision-test')) return 'vision-test'
     if (path.startsWith('/monitoring')) return 'monitoring'
+    if (path.startsWith('/monitoring')) return 'monitoring'
     if (path.startsWith('/users')) return 'users'
+    if (path.startsWith('/chat')) return 'chat'
     return 'agents'
   }
 
@@ -61,7 +63,7 @@ const VSCodeLayout: React.FC = () => {
               <Box sx={{ display: 'flex', height: '100%' }}>
                 <Allotment vertical={false}>
                   {/* Side Panel */}
-                  {sidePanelOpen && (
+                  {sidePanelOpen && activeView !== 'chat' && (
                     <Allotment.Pane minSize={200} maxSize={600} preferredSize={300}>
                       <SidePanel
                         activeView={activeView}
