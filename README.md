@@ -15,16 +15,31 @@ A comprehensive platform that enables developers to create, orchestrate, and dep
 - **Extensible Architecture**: Plugin system for custom tools and MCP server integrations.
 - **Self-Hosting**: Complete data sovereignty with Docker-first deployment.
 
-## 📸 Screenshots
+## 📸 Architecture & Flow Diagrams
 
-![Dashboard](docs/images/dashboard.png)
-_Interactive Dashboard for managing agents and workflows_
+![Architecture Overview](docs/diagrams/architecture-overview.png)
+_Overall system architecture with all major components_
 
-![Workflow Orchestrator](docs/images/workflow_orchestrator.png)
+![Workflow Orchestration Flow](docs/diagrams/flow-workflow-orchestration.png)
 _Visual Workflow Orchestrator for complex agent chains_
 
-![Agent Management](docs/images/agent_management.png)
-_Comprehensive Agent Management interface_
+![Agent Execution Flow](docs/diagrams/flow-agent-execution.png)
+_Agent execution sequence and lifecycle_
+
+### Interactive Multi-Agent Workflows
+
+The platform supports sophisticated multi-agent workflows with conditional routing and conversational interactions. Here's an example of the **Interactive Smartphone Buying Guide**:
+
+![Interactive Workflow](docs/diagrams/interactive-workflow.png)
+_Question-driven workflow with conditional routing to specialized agents_
+
+**Key Features:**
+- **Question-Driven**: Qualifier agent asks clarifying questions before providing recommendations
+- **Conditional Routing**: Router agent analyzes user preferences and routes to the appropriate specialist
+- **Specialized Agents**: Each specialist (Budget, Camera, Gaming, Business) provides targeted expertise
+- **Personalized Output**: Summarizer compiles specialist recommendations into tailored advice
+- **Conversational Flow**: Multi-turn interactions with context preservation across messages
+
 
 ## 🛡️ Enterprise-Grade Capabilities
 

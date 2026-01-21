@@ -1,0 +1,94 @@
+@startuml interactive-workflow
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontSize 12
+skinparam defaultFontName Arial
+
+' Define colors
+skinparam activity {
+  BackgroundColor #E3F2FD
+  BorderColor #1976D2
+  FontColor #000000
+}
+
+skinparam decision {
+  BackgroundColor #FFF3E0
+  BorderColor #F57C00
+  FontColor #000000
+}
+
+skinparam note {
+  BackgroundColor #F5F5F5
+  BorderColor #9E9E9E
+}
+
+title Interactive Smartphone Buying Guide Workflow
+
+start
+
+:User Input;
+note right
+  User says:
+  "I want to buy
+  a smartphone"
+end note
+
+:Qualifier Agent
+Asks Questions;
+note right
+  Questions asked
+  ONE AT A TIME:
+  • Budget?
+  • Use case?
+  • Brand preference?
+  • Must-have features?
+end note
+
+:Router Agent
+Analyzes Preferences;
+
+if (User Priority?) then (Budget < $600)
+  :Budget Specialist;
+  note right
+    • Best value phones
+    • Price comparisons
+    • Current deals
+  end note
+elseif (Camera) then
+  :Camera Specialist;
+  note right
+    • Camera specs
+    • Photo quality
+    • Video capabilities
+  end note
+elseif (Gaming) then
+  :Gaming Specialist;
+  note right
+    • Performance benchmarks
+    • Display refresh rate
+    • Cooling systems
+  end note
+elseif (Business) then
+  :Business Specialist;
+  note right
+    • Security features
+    • Battery life
+    • Productivity tools
+  end note
+endif
+
+:Summarizer Agent
+Compiles Recommendations;
+note right
+  • Top choice
+  • Why it's perfect
+  • Alternatives
+  • Next steps
+end note
+
+:Final Personalized
+Recommendation;
+
+stop
+
+@enduml
