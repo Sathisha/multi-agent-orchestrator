@@ -527,7 +527,8 @@ async def execute_chain(
             input_data=request.input_data,
             execution_name=request.execution_name,
             variables=request.variables,
-            correlation_id=request.correlation_id
+            correlation_id=request.correlation_id,
+            model_override=request.model_override
         )
         
         # Schedule background execution

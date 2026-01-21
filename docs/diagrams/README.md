@@ -14,13 +14,26 @@ Install the [PlantUML extension](https://marketplace.visualstudio.com/items?item
 Visit [PlantUML Online Server](http://www.plantuml.com/plantuml/uml/) and paste the diagram code.
 
 ### Option 3: Export to PNG/SVG
-Using the VS Code extension or command line:
+
+#### Recommended: Using Make (Docker-based)
+```bash
+# Generate all diagrams as PNG files
+make diagrams
+```
+
+#### Alternative: Using PlantUML CLI (requires PlantUML installation)
 ```bash
 # Export to PNG
 plantuml -tpng diagram.puml
 
 # Export to SVG (recommended for documentation)
 plantuml -tsvg diagram.puml
+```
+
+#### Alternative: Using the batch script
+```bash
+# Windows
+.\scripts\generate-diagrams.bat
 ```
 
 ## Diagram Categories

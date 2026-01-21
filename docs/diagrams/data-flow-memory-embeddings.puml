@@ -4,11 +4,11 @@ title Multi-Agent Orchestrator - Memory & Embeddings Data Flow
 
 participant "Agent Service" as AgentSvc
 participant "Memory Service" as MemorySvc
-participant "Embedding\nProvider" as EmbedProvider
-database "PostgreSQL\n(Conversations)" as PostgreSQL
-database "ChromaDB\n(Vectors)" as ChromaDB
-cloud "OpenAI\nEmbeddings API" as OpenAIEmbed
-participant "SentenceTransformers\n(Local)" as LocalEmbed
+participant "Embedding Provider" as EmbedProvider
+participant "PostgreSQL" as PostgreSQL
+participant "ChromaDB" as ChromaDB
+participant "OpenAI Embeddings" as OpenAIEmbed
+participant "SentenceTransformers" as LocalEmbed
 
 == Configuration ==
 

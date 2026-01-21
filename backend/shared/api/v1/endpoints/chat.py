@@ -41,7 +41,8 @@ async def create_session(
     new_session = ChatSession(
         user_id=current_user.id,
         chain_id=request.chain_id,
-        title=request.title or f"Chat with {chain.name}"
+        title=request.title or f"Chat with {chain.name}",
+        session_metadata=request.session_metadata
     )
     session.add(new_session)
     await session.commit()
@@ -69,7 +70,7 @@ async def list_sessions(
     query = select(ChatSession).where(
         ChatSession.user_id == current_user.id,
         ChatSession.is_archived == False
-    ).order_by(desc(ChatSession.updated_at)).offset(skip).limit(limit)
+    ).options(selectinload(ChatSession.messages)).order_by(desc(ChatSession.updated_at)).offset(skip).limit(limit)
     
     result = await session.execute(query)
     sessions = result.scalars().all()
@@ -149,6 +150,11 @@ async def send_message(
         "chat_history": formatted_history
     }
     
+    # Extract model override from session metadata
+    model_override = None
+    if chat_session.session_metadata:
+        model_override = chat_session.session_metadata.get("model_override")
+
     try:
         # Execute Chain Synchronously (wait for response)
         # Using a timeout of 60 seconds for chat interactions (adjust as needed)
@@ -157,7 +163,8 @@ async def send_message(
             chain_id=chat_session.chain_id,
             input_data=chain_input,
             execution_name=f"Chat Execution {user_msg.id}",
-            timeout_seconds=300
+            timeout_seconds=300,
+            model_override=model_override
         )
         
         # Check execution status
@@ -170,19 +177,23 @@ async def send_message(
         # Heuristic to find the response text
         response_text = None
         if isinstance(output_data, dict):
-            # 1. Try nested data fields first (common in our agent framework)
-            # This handles cases where status='failure' but we have partial output in 'data'
-            data_dict = output_data.get("data")
-            if isinstance(data_dict, dict):
-                # Prioritize 'message' (final human readable answer)
-                if "message" in data_dict and isinstance(data_dict["message"], str):
-                    response_text = data_dict["message"]
-                # Then 'result' (structured outcome)
-                elif "result" in data_dict and isinstance(data_dict["result"], str):
-                    response_text = data_dict["result"]
-                # Fallback to 'raw_output' (if parsing failed or no structured answer)
-                elif "raw_output" in data_dict and isinstance(data_dict["raw_output"], str):
-                    response_text = data_dict["raw_output"]
+            # 0. SACP Top-level 'message' check (Standard Agent Communication Protocol)
+            if "message" in output_data and isinstance(output_data["message"], str):
+                 response_text = output_data["message"]
+
+            # 1. Try nested data fields if top-level SACP message not found
+            if not response_text:
+                data_dict = output_data.get("data")
+                if isinstance(data_dict, dict):
+                    # Prioritize 'message' (final human readable answer)
+                    if "message" in data_dict and isinstance(data_dict["message"], str):
+                        response_text = data_dict["message"]
+                    # Then 'result' (structured outcome)
+                    elif "result" in data_dict and isinstance(data_dict["result"], str):
+                        response_text = data_dict["result"]
+                    # Fallback to 'raw_output' (if parsing failed or no structured answer)
+                    elif "raw_output" in data_dict and isinstance(data_dict["raw_output"], str):
+                        response_text = data_dict["raw_output"]
 
             # 2. Try top-level common fields if nested lookup failed
             if not response_text:

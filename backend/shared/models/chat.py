@@ -21,6 +21,7 @@ class ChatSession(SystemEntity):
     chain_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("chains.id", ondelete="CASCADE"), nullable=False, index=True)
     title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     is_archived: Mapped[bool] = mapped_column(default=False)
+    session_metadata: Mapped[Dict[str, Any]] = mapped_column("metadata", JSONB, nullable=True, server_default=text("'{}'::jsonb"))
     
     messages = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan", order_by="ChatMessage.created_at")
 

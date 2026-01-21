@@ -36,6 +36,8 @@ api_router.include_router(tool_registry_router)
 api_router.include_router(llm_models_router)
 api_router.include_router(chains_router)
 api_router.include_router(chat_router)
+from .agent_templates import router as agent_templates_router
+api_router.include_router(agent_templates_router)
 api_router.include_router(audit_router)
 api_router.include_router(mcp_gateway_router)
 api_router.include_router(mcp_bridge_discovery_router)

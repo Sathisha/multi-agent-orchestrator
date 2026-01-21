@@ -410,19 +410,24 @@ class AgentExecutorService(BaseService):
 
             logger.debug(f"[EXEC-LOGIC] Preparing messages for execution {context.execution_id}")
             
-            # Create agent config from agent.config dict
+            # Create agent config from agent.config dict, effectively handling overrides from context.config
             from ..models.agent import AgentConfig, LLMProvider
             
-            raw_provider = agent.config.get("llm_provider", "ollama")
+            # Base config from agent definition
+            base_config = agent.config or {}
+            # Override with context config (runtime overrides)
+            merged_config = {**base_config, **context.config}
+            
+            raw_provider = merged_config.get("llm_provider", "ollama")
             # Defensive check: if frontend for some reason sent "unknown", fallback to "ollama"
             if raw_provider == "unknown":
                 raw_provider = "ollama"
                 
             agent_config = AgentConfig(
                 name=agent.name,
-                model=agent.config.get("model_name", "llama3.2:latest"),
-                temperature=agent.config.get("temperature", 0.7),
-                max_tokens=agent.config.get("max_tokens", 2000),
+                model=merged_config.get("model_name", "llama3.2:latest"),
+                temperature=merged_config.get("temperature", 0.7),
+                max_tokens=merged_config.get("max_tokens", 2000),
                 llm_provider=raw_provider
             )
 
@@ -455,10 +460,16 @@ class AgentExecutorService(BaseService):
                 
                 normalized_target_provider = normalize_provider(raw_provider)
                 
-                # Find matching model by normalized provider and name
+                # Find matching model by normalized provider and name (case insensitive)
                 target_model = next((m for m in llm_models 
                                    if normalize_provider(m.provider) == normalized_target_provider 
-                                   and m.name == agent_config.model), None)
+                                   and m.name.strip().lower() == agent_config.model.strip().lower()), None)
+                
+                # If exact match fails, try partial match for model name?
+                if not target_model:
+                     target_model = next((m for m in llm_models 
+                                   if normalize_provider(m.provider) == normalized_target_provider 
+                                   and agent_config.model.strip().lower() in m.name.strip().lower()), None)
                 
                 if target_model:
                     logger.info(f"[EXEC-LOGIC] Found matching model: {target_model.name} (provider: {target_model.provider}, id: {target_model.id})")
@@ -570,16 +581,36 @@ class AgentExecutorService(BaseService):
                 system_prompt += tool_context
             
             # Extract user message - if it's a dict with 'message', use that
+            # Also handle chat_history if present
             user_input = context.input_data
-            if isinstance(user_input, dict) and "message" in user_input:
-                user_content = str(user_input["message"])
+            user_content = ""
+            chat_history = []
+            
+            if isinstance(user_input, dict):
+                # Extract Message
+                if "message" in user_input:
+                    user_content = str(user_input["message"])
+                elif "input" in user_input:
+                     user_content = str(user_input["input"])
+                else:
+                    user_content = str(user_input)
+                
+                # Extract History
+                if "chat_history" in user_input and isinstance(user_input["chat_history"], list):
+                    chat_history = user_input["chat_history"]
+                    logger.debug(f"[EXEC-LOGIC] Found {len(chat_history)} history messages in input")
             else:
                 user_content = str(user_input)
 
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_content}
-            ]
+            messages = [{"role": "system", "content": system_prompt}]
+            
+            # Add History
+            for hist_msg in chat_history:
+                if isinstance(hist_msg, dict) and "role" in hist_msg and "content" in hist_msg:
+                    messages.append({"role": hist_msg["role"], "content": hist_msg["content"]})
+            
+            # Add Current Message
+            messages.append({"role": "user", "content": user_content})
             
             logger.info(f"[EXEC-LOGIC] Calling LLM service for execution {context.execution_id} (timeout: {context.timeout_seconds}s)")
             

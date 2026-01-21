@@ -21,6 +21,11 @@ export interface ChatSession {
 export interface ChatSessionCreateRequest {
     chain_id: string
     title?: string
+    model_override?: {
+        model_name: string
+        llm_provider: string
+        api_base?: string
+    }
 }
 
 export interface ChatMessageCreateRequest {

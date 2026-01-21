@@ -4,6 +4,7 @@ from shared.models.rbac import Role, Permission, UserRole
 from shared.models.chat import ChatSession, ChatMessage
 from shared.models.resource_roles import AgentRole, WorkflowRole
 from shared.models.agent import Agent, AgentConfig
+from shared.models.chain import Chain, ChainNode, ChainEdge, ChainExecution, ChainExecutionLog
 from shared.models.workflow import Workflow, WorkflowExecution
 from shared.models.tool import Tool, MCPServer
 from shared.models.audit import AuditLog

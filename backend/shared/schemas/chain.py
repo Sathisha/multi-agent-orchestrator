@@ -139,6 +139,7 @@ class ChainExecuteRequest(BaseModel):
     execution_name: Optional[str] = Field(None, description="Name for this execution")
     variables: Optional[Dict[str, Any]] = Field(None, description="Initial variables")
     correlation_id: Optional[str] = Field(None, description="Correlation ID for tracking")
+    model_override: Optional[Dict[str, Any]] = Field(None, description="Global model override for all agents in the chain")
 
 
 class ChainExecutionResponse(BaseModel):

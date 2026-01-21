@@ -359,7 +359,8 @@ class ChainOrchestratorService(BaseService):
         input_data: Dict[str, Any],
         execution_name: Optional[str] = None,
         variables: Optional[Dict[str, Any]] = None,
-        correlation_id: Optional[str] = None
+        correlation_id: Optional[str] = None,
+        model_override: Optional[Dict[str, Any]] = None
     ) -> ChainExecution:
         """Create execution record without running it."""
         # Validate chain first
@@ -369,13 +370,18 @@ class ChainOrchestratorService(BaseService):
                 f"Chain validation failed: {', '.join(validation_result.errors)}"
             )
         
+        # Prepare variables, injecting model override if present
+        exec_variables = variables or {}
+        if model_override:
+            exec_variables['_model_override'] = model_override
+
         # Create execution record
         execution = ChainExecution(
             chain_id=chain_id,
             execution_name=execution_name,
             status=ChainExecutionStatus.RUNNING, # Ideally QUEUED, but keeping RUNNING for now
             input_data=input_data,
-            variables=variables or {},
+            variables=exec_variables,
             node_results={},
             started_at=datetime.now(timezone.utc),
             completed_nodes=[],
@@ -436,13 +442,14 @@ class ChainOrchestratorService(BaseService):
         execution_name: Optional[str] = None,
         variables: Optional[Dict[str, Any]] = None,
         correlation_id: Optional[str] = None,
+        model_override: Optional[Dict[str, Any]] = None,
         timeout_seconds: int = 300
     ) -> ChainExecution:
         """Execute chain synchronously (legacy/backward compatibility)."""
         logger.info(f"Starting synchronous chain execution for chain {chain_id}")
         
         execution = await self.create_execution(
-            session, chain_id, input_data, execution_name, variables, correlation_id
+            session, chain_id, input_data, execution_name, variables, correlation_id, model_override
         )
         
         # Load components for execution
@@ -778,8 +785,11 @@ class ChainOrchestratorService(BaseService):
              execution.output_data = context['node_outputs'][end_nodes[0].node_id]
         else:
             # Fallback: get last completed node
-            # Or just empty
-             execution.output_data = {}  # Could improve heuristics here
+            if execution.completed_nodes:
+                last_node_id = execution.completed_nodes[-1]
+                execution.output_data = context['node_outputs'].get(last_node_id, {})
+            else:
+                execution.output_data = {}
         
         # Save execution state
         execution.active_edges = list(active_edges)
@@ -814,7 +824,41 @@ class ChainOrchestratorService(BaseService):
         If source_output is not a dict, 'field' access works if field is empty or special val?
         Assume source_output is typically a dict (JSON).
         """
-        if not condition or not condition.get("rules"):
+        if not condition:
+            return True
+
+        # Handle simplified/legacy condition format (from seed_data.py)
+        if "type" in condition:
+            cond_type = condition["type"]
+            if cond_type == "json_contains":
+                field = condition.get("field")
+                expected_value = condition.get("value")
+                
+                # Resolve value logic (duplicated from rules loop for now)
+                actual_value = source_output
+                if isinstance(source_output, dict) and field:
+                    parts = field.split('.')
+                    current = source_output
+                    found = True
+                    for part in parts:
+                        if isinstance(current, dict) and part in current:
+                            current = current[part]
+                        else:
+                            found = False
+                            break
+                    if found:
+                        actual_value = current
+                    else:
+                        actual_value = None
+                elif field:
+                    actual_value = None
+                    
+                # Strict comparison for boolean, string looseness for others?
+                # Matching logic from rules:
+                return str(actual_value) == str(expected_value)
+            return False
+
+        if not condition.get("rules"):
             return True
             
         rules = condition.get("rules", [])
@@ -1048,10 +1092,20 @@ class ChainOrchestratorService(BaseService):
         logger.info(f"[CHAIN] Executing agent node {node.node_id} (agent: {agent.name})")
         logger.debug(f"[CHAIN] Agent node input_data: {input_data}")
         
+        # Check for model override in variables
+        model_override = context.get('variables', {}).get('_model_override')
+        
+        # Prepare execution config
+        execution_config = node.config or {}
+        if model_override:
+            # Merge override into config (override wins). Ensure we don't mutate the original node.config
+            execution_config = {**execution_config, **model_override}
+            logger.info(f"[CHAIN] Applying model override to agent execution: {model_override}")
+
         execution_result = await local_agent_executor.execute_agent(
             agent_id=str(agent.id),
             input_data=processed_input,
-            config=node.config or {}
+            config=execution_config
         )
         
         logger.info(f"[CHAIN] Agent execution completed. Status: {execution_result.status}")

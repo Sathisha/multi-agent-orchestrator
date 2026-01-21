@@ -24,6 +24,7 @@ class ChatMessageResponse(ChatMessageBase):
 class ChatSessionBase(BaseModel):
     title: Optional[str] = None
     chain_id: UUID
+    session_metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, serialization_alias="metadata")
 
 class ChatSessionCreate(ChatSessionBase):
     pass

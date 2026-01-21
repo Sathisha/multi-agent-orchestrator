@@ -55,7 +55,10 @@ const ChatWorkspace: React.FC = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true)
     const [createDialogOpen, setCreateDialogOpen] = useState(false)
     const [selectedChainId, setSelectedChainId] = useState<string>('')
+    const [selectedModelId, setSelectedModelId] = useState<string>('')
+    const [optimisticMessage, setOptimisticMessage] = useState<string | null>(null)
     const messagesEndRef = useRef<HTMLDivElement | null>(null)
+    const inputRef = useRef<HTMLInputElement>(null)
 
     // Queries
     const { data: sessions = [], isLoading: isLoadingSessions } = useQuery(
@@ -68,18 +71,23 @@ const ChatWorkspace: React.FC = () => {
         () => listChains()
     )
 
+    const { data: llmModels = [] } = useQuery(
+        'llmModels',
+        () => fetch('/api/v1/llm-models').then(res => res.json())
+    )
+
     const { data: currentSession, isLoading: isLoadingSession } = useQuery(
         ['chatSession', selectedSessionId],
         () => selectedSessionId ? getSession(selectedSessionId) : Promise.resolve(null),
         {
             enabled: !!selectedSessionId,
-            refetchInterval: 5000 // Poll for updates? Maybe not needed if we wait for response
+            refetchInterval: false // Disable polling - we'll refetch on mutation success
         }
     )
 
     // Mutations
     const createSessionMutation = useMutation(
-        (chainId: string) => createSession({ chain_id: chainId }),
+        (payload: any) => createSession(payload),
         {
             onSuccess: (newSession) => {
                 queryClient.invalidateQueries('chatSessions')
@@ -94,7 +102,10 @@ const ChatWorkspace: React.FC = () => {
         {
             onSuccess: (newMessage) => {
                 queryClient.invalidateQueries(['chatSession', selectedSessionId])
-                setInputMessage('')
+                setOptimisticMessage(null) // Clear optimistic message
+            },
+            onError: () => {
+                setOptimisticMessage(null) // Clear on error too
             }
         }
     )
@@ -103,6 +114,16 @@ const ChatWorkspace: React.FC = () => {
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }, [currentSession?.messages, sendMessageMutation.isLoading])
+
+    // Effect to refocus input after sending
+    useEffect(() => {
+        if (!sendMessageMutation.isLoading && inputRef.current) {
+            // Small timeout to ensure the disabled state is removed before focusing
+            setTimeout(() => {
+                inputRef.current?.focus()
+            }, 50)
+        }
+    }, [sendMessageMutation.isLoading])
 
     // Effect to check URL param
     useEffect(() => {
@@ -120,7 +141,16 @@ const ChatWorkspace: React.FC = () => {
 
     const handleSendMessage = () => {
         if (!inputMessage.trim() || !selectedSessionId) return
-        sendMessageMutation.mutate(inputMessage)
+
+        // Store message for optimistic display
+        const messageToSend = inputMessage
+        setOptimisticMessage(messageToSend)
+
+        // Clear input immediately for better UX
+        setInputMessage('')
+
+        // Send the message
+        sendMessageMutation.mutate(messageToSend)
     }
 
     const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -132,7 +162,22 @@ const ChatWorkspace: React.FC = () => {
 
     const handleCreateSession = () => {
         if (selectedChainId) {
-            createSessionMutation.mutate(selectedChainId)
+            // Find the selected model object to get config details
+            const selectedModel = llmModels.find((m: any) => m.id === selectedModelId)
+
+            const payload: any = { chain_id: selectedChainId }
+
+            if (selectedModel) {
+                payload.metadata = {
+                    model_override: {
+                        model_name: selectedModel.name,
+                        llm_provider: selectedModel.provider,
+                        api_base: selectedModel.api_base
+                    }
+                }
+            }
+
+            createSessionMutation.mutate(payload)
         }
     }
 
@@ -245,7 +290,29 @@ const ChatWorkspace: React.FC = () => {
                             </Box>
                         ))}
 
-                        {/* Optimistic / Loading State */}
+                        {/* Optimistic User Message */}
+                        {optimisticMessage && (
+                            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, alignItems: 'flex-start' }}>
+                                <Paper
+                                    elevation={1}
+                                    sx={{
+                                        p: 2,
+                                        maxWidth: '70%',
+                                        bgcolor: theme.palette.primary.dark,
+                                        color: '#fff',
+                                        borderRadius: 2,
+                                        opacity: 0.8
+                                    }}
+                                >
+                                    <ReactMarkdown>{optimisticMessage}</ReactMarkdown>
+                                </Paper>
+                                <Avatar sx={{ bgcolor: theme.palette.secondary.main, width: 32, height: 32 }}>
+                                    <PersonIcon fontSize="small" />
+                                </Avatar>
+                            </Box>
+                        )}
+
+                        {/* Loading State */}
                         {sendMessageMutation.isLoading && (
                             <Box sx={{ display: 'flex', justifyContent: 'flex-start', gap: 1 }}>
                                 <Avatar sx={{ bgcolor: theme.palette.primary.main, width: 32, height: 32 }}>
@@ -274,6 +341,7 @@ const ChatWorkspace: React.FC = () => {
                         <Box sx={{ display: 'flex', gap: 1 }}>
                             <TextField
                                 fullWidth
+                                inputRef={inputRef}
                                 variant="outlined"
                                 placeholder="Type your message..."
                                 value={inputMessage}
@@ -314,6 +382,24 @@ const ChatWorkspace: React.FC = () => {
                             {chains.map((chain) => (
                                 <MenuItem key={chain.id} value={chain.id}>
                                     {chain.name} ({chain.status})
+                                </MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+
+                    <FormControl fullWidth sx={{ mt: 2 }}>
+                        <InputLabel>LLM Model (Optional)</InputLabel>
+                        <Select
+                            value={selectedModelId}
+                            label="LLM Model (Optional)"
+                            onChange={(e) => setSelectedModelId(e.target.value)}
+                        >
+                            <MenuItem value="">
+                                <em>Use workflow default</em>
+                            </MenuItem>
+                            {llmModels.map((model: any) => (
+                                <MenuItem key={model.id} value={model.id}>
+                                    {model.name} ({model.provider})
                                 </MenuItem>
                             ))}
                         </Select>

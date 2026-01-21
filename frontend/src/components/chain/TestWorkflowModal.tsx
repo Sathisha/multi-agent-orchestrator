@@ -19,7 +19,12 @@ import {
     Divider,
     Accordion,
     AccordionSummary,
-    AccordionDetails
+    AccordionDetails,
+    FormControl,
+    InputLabel,
+    Select,
+    MenuItem,
+    Stack
 } from '@mui/material';
 import {
     Close,
@@ -35,6 +40,7 @@ import { Node, Edge } from 'reactflow';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 
 import { executeChain, getExecution, getExecutionLogs, cancelExecution } from '../../api/chains';
+import { getModels } from '../../api/llmModels';
 import { Chain, ChainExecutionStatusResponse, ChainExecutionLog, ChainExecution } from '../../types/chain';
 import ChainCanvas from './ChainCanvas';
 
@@ -57,6 +63,10 @@ const TestWorkflowModal: React.FC<TestWorkflowModalProps> = ({ open, onClose, ch
     const [inputData, setInputData] = useState('');
     const [executionId, setExecutionId] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState(0);
+    const [selectedModelId, setSelectedModelId] = useState<string>('');
+
+    // Fetch LLM Models for override
+    const { data: llmModels } = useQuery('llmModels', getModels);
 
     // Canvas State
     const [nodes, setNodes] = useState<Node[]>([]);
@@ -110,7 +120,23 @@ const TestWorkflowModal: React.FC<TestWorkflowModalProps> = ({ open, onClose, ch
                 data = { input: data };
             }
 
-            return await executeChain(chain.id, { input_data: data });
+            // Prepare execution payload
+            const payload: any = { input_data: data };
+
+            // Add model override if selected
+            if (selectedModelId && llmModels) {
+                const selectedModel = llmModels.find(m => m.id === selectedModelId);
+                if (selectedModel) {
+                    payload.model_override = {
+                        model_name: selectedModel.name,
+                        llm_provider: selectedModel.provider,
+                        // Pass other config if needed, e.g. api_base
+                        ...(selectedModel.api_base ? { api_base: selectedModel.api_base } : {})
+                    };
+                }
+            }
+
+            return await executeChain(chain.id, payload);
         },
         {
             onSuccess: (data: ChainExecution) => {
@@ -411,18 +437,48 @@ const TestWorkflowModal: React.FC<TestWorkflowModalProps> = ({ open, onClose, ch
                         <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                             {activeTab === 0 && (
                                 <Box sx={{ p: 2, overflowY: 'auto' }}>
-                                    <Typography variant="subtitle2" gutterBottom>Execution Input</Typography>
-                                    <TextField
-                                        fullWidth
-                                        multiline
-                                        rows={10}
-                                        value={inputData}
-                                        onChange={(e) => setInputData(e.target.value)}
-                                        disabled={!!executionId}
-                                        placeholder="Enter plain text or JSON..."
-                                        helperText="Enter any text (will be wrapped as {input: 'text'}) or valid JSON object."
-                                        sx={{ fontFamily: 'monospace' }}
-                                    />
+                                    <Stack spacing={2}>
+                                        <Box>
+                                            <Typography variant="subtitle2" gutterBottom>Model Override (Optional)</Typography>
+                                            <FormControl fullWidth size="small">
+                                                <InputLabel id="model-override-label">Override Agent Models</InputLabel>
+                                                <Select
+                                                    labelId="model-override-label"
+                                                    value={selectedModelId}
+                                                    label="Override Agent Models"
+                                                    onChange={(e) => setSelectedModelId(e.target.value)}
+                                                    disabled={!!executionId}
+                                                >
+                                                    <MenuItem value="">
+                                                        <em>None (Use Agent Defaults)</em>
+                                                    </MenuItem>
+                                                    {llmModels?.map((model) => (
+                                                        <MenuItem key={model.id} value={model.id}>
+                                                            {model.name} ({model.provider})
+                                                        </MenuItem>
+                                                    ))}
+                                                </Select>
+                                            </FormControl>
+                                            <Typography variant="caption" color="text.secondary">
+                                                Select a model to force all agents in this workflow to use it during this test.
+                                            </Typography>
+                                        </Box>
+
+                                        <Box>
+                                            <Typography variant="subtitle2" gutterBottom>Execution Input</Typography>
+                                            <TextField
+                                                fullWidth
+                                                multiline
+                                                rows={10}
+                                                value={inputData}
+                                                onChange={(e) => setInputData(e.target.value)}
+                                                disabled={!!executionId}
+                                                placeholder="Enter plain text or JSON..."
+                                                helperText="Enter any text (will be wrapped as {input: 'text'}) or valid JSON object."
+                                                sx={{ fontFamily: 'monospace' }}
+                                            />
+                                        </Box>
+                                    </Stack>
                                 </Box>
                             )}
 

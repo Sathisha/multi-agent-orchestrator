@@ -12,9 +12,9 @@ participant "Agent Service" as AgentSvc
 participant "LLM Manager" as LLMManager
 participant "Tool Manager" as ToolMgr
 participant "Memory Service" as Memory
-database "PostgreSQL" as DB
-database "ChromaDB" as Vector
-cloud "LLM Provider\n(OpenAI/Anthropic/Gemini/Ollama)" as LLM
+participant "PostgreSQL" as DB
+participant "ChromaDB" as VectorDB
+participant "LLM Provider" as LLM
 
 == Agent Execution Request ==
 
@@ -44,8 +44,8 @@ DB --> AgentSvc: LLM Model Details\n(provider, api_key, parameters)
 == Memory Retrieval ==
 
 AgentSvc -> Memory: Get Relevant Context\n(agent_id, session_id, query)
-Memory -> Vector: Semantic Search\n(query_embedding)
-Vector --> Memory: Related Memories
+Memory -> VectorDB: Semantic Search\n(query_embedding)
+VectorDB --> Memory: Related Memories
 Memory -> DB: Get Conversation History
 DB --> Memory: Recent Messages
 Memory --> AgentSvc: Context + History
@@ -98,8 +98,8 @@ Guard -> Guard: Content Safety Check
 Guard --> AgentSvc: Output Safe
 
 AgentSvc -> Memory: Store Interaction\n(user_input, llm_response, tools_used)
-Memory -> Vector: Store as Embedding
-Vector --> Memory: Stored
+Memory -> VectorDB: Store as Embedding
+VectorDB --> Memory: Stored
 Memory -> DB: Save to History
 DB --> Memory: Saved
 

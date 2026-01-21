@@ -7,14 +7,14 @@ participant "LLM Manager" as LLMManager
 participant "Rate Limiter" as RateLimiter
 participant "Token Counter" as TokenCounter
 participant "Provider Router" as Router
-participant "Retry Handler\n(Tenacity)" as Retry
-database "PostgreSQL\n(API Keys)" as DB
-database "Redis\n(Rate Limits\n& Cache)" as Redis
-cloud "OpenAI" as OpenAI
-cloud "Anthropic" as Anthropic
-cloud "Google Gemini" as Gemini
-cloud "Azure OpenAI" as Azure
-participant "Ollama\n(Local)" as Ollama
+participant "Retry Handler" as Retry
+participant "PostgreSQL" as DB
+participant "Redis" as Redis
+participant "OpenAI" as OpenAI
+participant "Anthropic" as Anthropic
+participant "Google Gemini" as Gemini
+participant "Azure OpenAI" as Azure
+participant "Ollama" as Ollama
 
 == Request Preparation ==
 

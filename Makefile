@@ -6,7 +6,7 @@
 # ============================================================================
 GITHUB_REPOSITORY_OWNER ?= sathisha
 
-.PHONY: help build deploy stop clean test logs shell docker-publish
+.PHONY: help build deploy stop clean test logs shell docker-publish diagrams
 
 # ============================================================================
 # HELP
@@ -28,6 +28,7 @@ help:
 	@echo "  test-e2e         - Run end-to-end tests"
 	@echo ""
 	@echo "📚 Documentation:"
+	@echo "  diagrams         - Generate PlantUML diagrams"
 	@echo "  api-docs         - Export OpenAPI specification"
 	@echo "  api-docs-serve   - Serve API docs locally"
 	@echo ""
@@ -118,6 +119,16 @@ test-e2e:
 	@echo "🧪 Running end-to-end tests..."
 	@docker-compose exec -T backend bash -c "export PYTHONPATH=/app:/app/backend && pytest tests/e2e/ -v"
 	@echo "✅ E2E tests completed!"
+
+# ============================================================================
+# DOCUMENTATION
+# ============================================================================
+
+# Generate PlantUML diagrams
+diagrams:
+	@echo "📊 Generating PlantUML diagrams..."
+	@docker run --rm -v "$(shell cd)\\docs\\diagrams:/data" plantuml/plantuml:latest -tpng "/data/*.puml"
+	@echo "✅ Diagrams generated in docs/diagrams/"
 
 # ============================================================================
 # API DOCUMENTATION

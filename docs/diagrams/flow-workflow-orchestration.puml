@@ -43,7 +43,7 @@ par Execute Independent Agents
     AgentA -> DB: Log Agent Execution
     AgentA --> Orchestrator: output_a
     deactivate AgentA
-and
+else
     Orchestrator -> AgentB: Execute with input_data
     activate AgentB
     AgentB -> AgentB: Process Input\n(LLM + Tools)
@@ -71,11 +71,10 @@ deactivate AgentC
 
 alt final_output contains "success"
     Orchestrator -> Orchestrator: Route to Success Path
-    note over Orchestrator: Execute success handler agents end note
+    note over Orchestrator: Execute success handler agents
 else final_output contains "error"
     Orchestrator -> Orchestrator: Route to Error Path
     note over Orchestrator: Execute error handler agents
-    end note
 end
 
 == Workflow Completion ==
