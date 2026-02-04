@@ -19,7 +19,7 @@ from ..services.compliance import (
     DataResidencyViolationException
 )
 
-router = APIRouter(prefix="/api/v1/compliance", tags=["compliance"])
+router = APIRouter(prefix="/compliance", tags=["compliance"])
 
 
 # Request/Response models

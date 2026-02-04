@@ -24,7 +24,7 @@ from ..schemas.api_key import (
     APIKeyUpdateRequest, APIKeyUsageResponse, APIKeyListResponse
 )
 
-router = APIRouter(prefix="/api/v1/api-keys", tags=["api-keys"])
+router = APIRouter(prefix="/api-keys", tags=["api-keys"])
 
 
 @router.post("/", response_model=APIKeyCreateResponse, status_code=status.HTTP_201_CREATED)

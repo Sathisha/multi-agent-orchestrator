@@ -42,6 +42,8 @@ api_router.include_router(audit_router)
 api_router.include_router(mcp_gateway_router)
 api_router.include_router(mcp_bridge_discovery_router)
 
+from .rag import router as rag_router
+api_router.include_router(rag_router)
 # Monitoring
 from .monitoring import router as monitoring_router
 api_router.include_router(monitoring_router)

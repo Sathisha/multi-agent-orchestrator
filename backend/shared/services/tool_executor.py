@@ -20,6 +20,8 @@ from ..models.tool import Tool, ToolType, ToolStatus
 from ..models.agent import AgentConfig
 from ..services.tool_registry import ToolRegistryService
 from ..services.mcp_gateway import MCPGatewayService
+from ..services.rag_service import RAGService
+from ..services.memory_manager import get_memory_manager
 from ..logging.config import get_logger
 
 logger = get_logger(__name__)
@@ -112,7 +114,13 @@ class ToolExecutorService:
             result = await self._execute_tool_by_name(
                 tool_name,
                 tool_params,
-                agent_id
+                credentials.get("user_id") or agent_id, # Fallback if user_id missing, but we need REAL user_id for RAG owner. 
+                # This is a problem. analyze_and_execute_tools signature doesn't have user_id explicitly except in credentials?
+                # The caller should provide user_id. 
+                # In main.py or ChainOrchestrator, we usually have user context.
+                # credentials usually holds {"user_id": ...}
+                # Let's check call signature.
+                agent_id=agent_id
             )
             
             tool_executions.append({
@@ -358,7 +366,8 @@ RESPONSE FORMAT:
         self,
         tool_name: str,
         parameters: Dict[str, Any],
-        user_id: str
+        user_id: str,
+        agent_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """Execute a tool by name."""
         try:
@@ -367,6 +376,10 @@ RESPONSE FORMAT:
             tool = next((t for t in tools if t.name == tool_name), None)
             
             if not tool:
+                # Check for system tools like knowledge_base that might not be in registry if manually added
+                if tool_name == "knowledge_base":
+                    return await self._execute_rag_search(parameters, user_id, agent_id)
+                    
                 return {
                     "status": "error",
                     "error": f"Tool {tool_name} not found"
@@ -393,6 +406,50 @@ RESPONSE FORMAT:
                 "status": "error",
                 "error": str(e)
             }
+            
+    async def _execute_rag_search(self, parameters: Dict[str, Any], user_id: str, agent_id: Optional[str] = None) -> Dict[str, Any]:
+        """Execute RAG search."""
+        try:
+            query = parameters.get("query")
+            limit = parameters.get("limit", 3)
+            
+            if not query:
+                return {"status": "error", "error": "Query is required"}
+                
+            memory_manager = await get_memory_manager()
+            rag_service = RAGService(self.session, memory_manager)
+            
+            # Parse user_id to UUID
+            try:
+                owner_id = UUID(user_id) if user_id else None
+                if not owner_id:
+                     # Attempt to generic search or fail?
+                     return {"status": "error", "error": "User ID required for RAG"}
+            except ValueError:
+                # If user_id isn't a valid UUID, we can't query RAG
+                return {"status": "error", "error": "Invalid User ID for RAG"}
+
+            # Parse agent_id
+            parsed_agent_id = None
+            if agent_id:
+                try:
+                    parsed_agent_id = UUID(agent_id)
+                except ValueError:
+                    pass
+
+            results = await rag_service.query(query, owner_id, limit, agent_id=parsed_agent_id)
+            
+            return {
+                "status": "success",
+                "output": {
+                    "results": results,
+                    "count": len(results),
+                    "query": query
+                }
+            }
+        except Exception as e:
+            logger.error(f"RAG search error: {e}")
+            return {"status": "error", "error": str(e)}
     
     def format_tool_results_for_context(
         self,

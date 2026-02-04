@@ -11,7 +11,7 @@ from ..services.quota import ResourceQuotaService, ResourceType, QuotaViolationE
 from ..services.billing import BillingService, ResourceMonitoringService
 from ..models.tenant import ResourceQuotas
 
-router = APIRouter(prefix="/api/v1/quotas", tags=["quotas"])
+router = APIRouter(prefix="/quotas", tags=["quotas"])
 
 
 class QuotaUpdateRequest(BaseModel):

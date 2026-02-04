@@ -7,7 +7,7 @@ from ..services.llm_providers import LLMError, LLMProviderType
 from ..services.auth import get_current_user
 from ..models.user import User
 
-router = APIRouter(prefix="/api/v1/llm-providers", tags=["llm-providers"])
+router = APIRouter(prefix="/llm-providers", tags=["llm-providers"])
 
 
 class CredentialsRequest(BaseModel):

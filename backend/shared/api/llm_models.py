@@ -15,7 +15,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/llm-models", tags=["llm-models"])
+router = APIRouter(prefix="/llm-models", tags=["llm-models"])
 
 @router.post("/", response_model=LLMModelResponse, status_code=status.HTTP_201_CREATED)
 async def create_llm_model(

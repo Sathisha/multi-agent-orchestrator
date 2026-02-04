@@ -29,8 +29,8 @@ async def register_builtin_tools():
         registered_count = 0
         failed_count = 0
         
-        # Use a hardcoded UUID for the system user to satisfy validation
-        SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000000"
+        # Use None for system tools (no specific owner)
+        SYSTEM_USER_ID = None
         
         for tool_data in BUILTIN_TOOLS:
             try:

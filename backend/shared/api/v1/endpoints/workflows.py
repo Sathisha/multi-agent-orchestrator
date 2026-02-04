@@ -8,7 +8,7 @@ from shared.database.connection import get_async_db
 from shared.services.workflow_orchestrator import get_workflow_orchestrator_service, WorkflowOrchestratorService
 from shared.models.workflow import WorkflowStatus, ExecutionStatus
 
-router = APIRouter(prefix="/api/v1/workflows", tags=["Workflows"])
+router = APIRouter(prefix="/workflows", tags=["Workflows"])
 
 # Pydantic models for request/response
 class WorkflowCreateRequest(BaseModel):

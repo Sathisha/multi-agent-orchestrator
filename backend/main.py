@@ -102,7 +102,7 @@ app.add_middleware(AuditMiddleware)
 # app.add_middleware(ComplianceMiddleware)
 
 # Include API routers
-app.include_router(api_router)
+app.include_router(api_router, prefix="/api/v1")
 
 
 # Add Prometheus metrics endpoint (use monitoring service metrics)

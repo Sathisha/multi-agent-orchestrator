@@ -30,7 +30,7 @@ from shared.services.chain_orchestrator import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/chains", tags=["Chains"])
+router = APIRouter(prefix="/chains", tags=["Chains"])
 
 
 # Global service instance

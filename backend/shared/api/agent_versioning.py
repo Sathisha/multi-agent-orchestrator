@@ -11,7 +11,7 @@ from ..models.user import User
 from ..services.auth import get_current_user
 from ..database.connection import get_async_db
 
-router = APIRouter(prefix="/api/v1/agents", tags=["agent-versioning"])
+router = APIRouter(prefix="/agents", tags=["agent-versioning"])
 
 
 class CreateVersionRequest(BaseModel):

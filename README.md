@@ -4,14 +4,16 @@ A comprehensive platform that enables developers to create, orchestrate, and dep
 
 ## 🚀 Key Features
 
-- **VS Code-Style Interface**: Familiar developer experience with workspaces for agents, workflows, tools, and monitoring.
+- **VS Code-Style Interface**: Familiar developer experience with workspaces for agents, workflows, tools, MCP servers, and knowledge bases.
 - **Advanced Workflow Orchestration**: Create complex, multi-agent workflows with branching, parallel execution, and conditional logic.
 - **API-First Design**: Execute workflows programmatically via securely authenticated REST APIs.
 - **Enterprise Security**: Built-in RBAC (Casbin), guardrails, audit trails, and compliance features.
+- **RAG (Retrieval-Augmented Generation)**: Knowledge base with PDF upload, web scraping, and vector search for context-aware agents.
+- **MCP Integration**: Model Context Protocol support for dynamic tool, resource, and prompt discovery from external servers.
 - **LLM Management**: Centralized management for OpenAI, Anthropic, Azure OpenAI, Gemini, and local Ollama models.
 - **Ollama Integration**: Auto-discovery and easy import of local Ollama models.
 - **Model Testing**: Built-in playground to test and validate different LLM models and configurations.
-- **Agent Capabilities**: Configurable agents with specific LLM selection and tool integration.
+- **Agent Capabilities**: Configurable agents with specific LLM selection, tool integration, and knowledge base access.
 - **Extensible Architecture**: Plugin system for custom tools and MCP server integrations.
 - **Self-Hosting**: Complete data sovereignty with Docker-first deployment.
 
@@ -82,17 +84,22 @@ Designed for mission-critical applications, the platform includes a robust suite
 This project is in **Active Development**. Core architecture is in place, featuring:
 - **Docker-First Development**: Consistent environments for all developers.
 - **RBAC Implementation**: Role-based access control with System Admin, Developer, and User/Viewer roles.
-- **Internal Workflow Engine**: Custom graph-based orchestration engine replacing external BPMN dependencies.
+- **Internal Workflow Engine**: Custom graph-based orchestration engine with parallel execution and conditional routing.
 - **Multi-Provider LLM Support**: Integrated support for OpenAI, Anthropic, Azure OpenAI, Google Gemini, and Ollama.
 - **Model Management**: Auto-discovery and testing for local and cloud LLM models.
+- **RAG System**: Knowledge base with PDF and web content ingestion, vector storage with ChromaDB.
+- **MCP Integration**: Dynamic discovery and execution of tools, resources, and prompts from MCP servers.
+- **Single-Tenant Architecture**: Multi-tenancy removed for simplified deployment and maintenance.
+- **Interactive Workflows**: Conversational multi-agent workflows with context preservation.
 
 ## 🛠️ Technology Stack
 
-- **Backend**: Python 3.11+, FastAPI, SQLAlchemy, PostgreSQL, Redis
+- **Backend**: Python 3.11+, FastAPI, SQLAlchemy, PostgreSQL, Redis, ChromaDB
 - **Frontend**: React 18+, TypeScript, Material-UI, Monaco Editor, React Flow
 - **Infrastructure**: Docker, Docker Compose, Kong Gateway
 - **Security**: Keycloak, Casbin, Custom Guardrails Engine
 - **Monitoring**: Prometheus, Apache Superset, Structured Logging
+- **AI/ML**: LangChain, SentenceTransformers, OpenAI/Anthropic/Gemini SDKs, Ollama
 
 ## ⚙️ Configuration
 
@@ -102,6 +109,13 @@ The memory system can be configured using environment variables:
 - `MEMORY_EMBEDDING_MODEL`: e.g., "text-embedding-3-small" (default) or "all-MiniLM-L6-v2".
 - `OPENAI_API_KEY`: Required if using the OpenAI provider.
 - `MEMORY_VECTOR_DB_PATH`: Path to the vector database (default: `./data/chroma`).
+
+### RAG & Knowledge Base
+The RAG system supports multiple content sources:
+- **PDF Documents**: Upload and process PDF files with automatic text extraction
+- **Web Content**: Scrape and index content from URLs
+- **Vector Storage**: ChromaDB for semantic search and context retrieval
+- **Chunking**: Configurable text splitting for optimal embedding performance
 
 ## 📁 Project Structure
 
@@ -224,7 +238,11 @@ The OpenAPI specification is automatically updated via GitHub Actions when backe
 
 ## 📚 Documentation
 
+- [📘 **User Guide**](docs/USER_GUIDE.md): **Start Here!** Step-by-step guide for creating agents, workflows, and using RAG.
 - [Workflow Usage Guide](docs/workflow_usage.md): Comprehensive guide on creating and using workflows, including API usage.
+- [Tools Documentation](docs/TOOLS.md): Detailed guide on built-in tools and custom tool development.
+- [Tools Quickstart](docs/TOOLS_QUICKSTART.md): Quick reference for using tools in agents.
+- [Available Tools](docs/AVAILABLE_TOOLS.md): Complete list of all built-in tools with examples.
 - [Deployment Guide](DEPLOYMENT.md): Detailed deployment instructions.
 - [Docker Images](DOCKER_IMAGES.md): Information about the Docker images and containers used.
 

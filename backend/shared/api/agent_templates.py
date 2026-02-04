@@ -8,7 +8,7 @@ from ..services.agent_templates import AgentTemplateService
 from shared.schemas.agent_template import AgentTemplate
 from shared.models.agent import AgentConfig, AgentType, LLMProvider
 
-router = APIRouter(prefix="/api/v1/agent-templates", tags=["agent-templates"])
+router = APIRouter(prefix="/agent-templates", tags=["agent-templates"])
 
 
 class TemplateConfigRequest(BaseModel):

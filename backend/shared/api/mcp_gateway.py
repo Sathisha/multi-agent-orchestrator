@@ -21,7 +21,7 @@ from ..logging.config import get_logger
 
 logger = get_logger(__name__)
 
-router = APIRouter(prefix="/api/v1/mcp-servers", tags=["MCP Gateway"])
+router = APIRouter(prefix="/mcp-servers", tags=["MCP Gateway"])
 security = HTTPBearer()
 
 

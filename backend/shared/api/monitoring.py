@@ -18,7 +18,7 @@ from ..models.user import User
 
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/v1/monitoring", tags=["monitoring"])
+router = APIRouter(prefix="/monitoring", tags=["monitoring"])
 
 
 @router.get("/health")

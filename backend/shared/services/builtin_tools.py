@@ -488,6 +488,56 @@ BUILTIN_TOOLS = [
 ]
 
 
+# Knowledge Base Tool (System Tool - Intercepted by Executor)
+KNOWLEDGE_BASE_TOOL = {
+    "name": "knowledge_base",
+    "description": "Query your personal Knowledge Base (RAG) to find information from uploaded documents and websites. Use this when you need specific external information.",
+    "version": "1.0.0",
+    "tool_type": "custom",
+    "code": """
+def execute(inputs: dict, context=None) -> dict:
+    '''This tool is intercepted by the system to perform RAG.'''
+    return {"error": "This tool should be handled by the system executor."}
+""",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "The question or query to search for in the knowledge base"
+            },
+            "limit": {
+                "type": "integer",
+                "description": "Number of results (default: 3)",
+                "default": 3
+            }
+        },
+        "required": ["query"]
+    },
+    "output_schema": {
+        "type": "object",
+        "properties": {
+            "results": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "content": {"type": "string"},
+                        "score": {"type": "number"},
+                        "source": {"type": "string"}
+                    }
+                }
+            }
+        }
+    },
+    "category": "knowledge",
+    "tags": ["rag", "memory", "search", "knowledge"],
+    "timeout_seconds": 60
+}
+
+BUILTIN_TOOLS.append(KNOWLEDGE_BASE_TOOL)
+
+
 def get_builtin_tools():
     """Get all built-in tools."""
     return BUILTIN_TOOLS

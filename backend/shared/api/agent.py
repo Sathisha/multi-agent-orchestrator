@@ -16,7 +16,7 @@ from ..models.agent import Agent, AgentType, AgentStatus, AgentDeployment, Agent
 from ..middleware.permissions import require_permission
 from ..api.auth import get_current_user
 
-router = APIRouter(prefix="/api/v1/agents", tags=["agents"])
+router = APIRouter(prefix="/agents", tags=["agents"])
 
 # Pydantic models for API requests/responses
 class AgentCreateRequest(BaseModel):

@@ -33,7 +33,7 @@ from ..models.api_key import APIKey
 from typing import Union
 from fastapi import Header
 
-router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
+router = APIRouter(prefix="/auth", tags=["authentication"])
 security = HTTPBearer()
 security_optional = HTTPBearer(auto_error=False)
 

@@ -11,3 +11,4 @@ from shared.models.audit import AuditLog
 from shared.models.llm_model import LLMModel
 from shared.models.api_key import APIKey
 from shared.models.tenant import Tenant, TenantUser
+from shared.models.rag import RAGSource, AgentRAGSource, RAGSourceRole

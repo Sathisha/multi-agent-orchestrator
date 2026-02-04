@@ -19,6 +19,7 @@ const VSCodeLayout: React.FC = () => {
     if (path.startsWith('/chains') || path.startsWith('/workflows')) return 'workflows'
     if (path.startsWith('/tools')) return 'tools'
     if (path.startsWith('/models')) return 'models'
+    if (path.startsWith('/knowledge')) return 'knowledge'
     if (path.startsWith('/vision-test')) return 'vision-test'
     if (path.startsWith('/monitoring')) return 'monitoring'
     if (path.startsWith('/monitoring')) return 'monitoring'

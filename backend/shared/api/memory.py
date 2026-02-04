@@ -89,7 +89,7 @@ class MemoryStatisticsResponse(BaseResponse):
 
 
 # Create router
-router = APIRouter(prefix="/api/v1/memory", tags=["Memory Management"])
+router = APIRouter(prefix="/memory", tags=["Memory Management"])
 
 
 @router.post("/store", response_model=MemoryResponse)

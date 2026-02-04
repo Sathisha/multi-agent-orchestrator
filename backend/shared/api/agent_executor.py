@@ -16,7 +16,7 @@ from ..models.user import User
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/agent-executor", tags=["agent-executor"])
+router = APIRouter(prefix="/agent-executor", tags=["agent-executor"])
 
 
 class ExecuteAgentRequest(BaseModel):

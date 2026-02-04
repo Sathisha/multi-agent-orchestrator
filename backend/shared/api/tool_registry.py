@@ -21,7 +21,7 @@ from ..logging.config import get_logger
 
 logger = get_logger(__name__)
 
-router = APIRouter(prefix="/api/v1/tools", tags=["Tool Registry"])
+router = APIRouter(prefix="/tools", tags=["Tool Registry"])
 security = HTTPBearer()
 
 

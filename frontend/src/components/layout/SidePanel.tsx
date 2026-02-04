@@ -6,6 +6,7 @@ import WorkflowExplorer from '../explorers/WorkflowExplorer'
 import ToolsExplorer from '../explorers/ToolsExplorer'
 import MonitoringExplorer from '../explorers/MonitoringExplorer'
 import ModelsExplorer from '../explorers/ModelsExplorer'
+import RAGExplorer from '../explorers/RAGExplorer'
 
 interface SidePanelProps {
   activeView: string
@@ -23,6 +24,9 @@ const SidePanel: React.FC<SidePanelProps> = ({ activeView, onClose }) => {
         return 'TOOLS'
       case 'models':
         return 'LLM MODELS'
+      case 'rag':
+      case 'knowledge':
+        return 'KNOWLEDGE BASE'
       case 'monitoring':
         return 'MONITORING'
       case 'users':
@@ -42,6 +46,9 @@ const SidePanel: React.FC<SidePanelProps> = ({ activeView, onClose }) => {
         return <ToolsExplorer />
       case 'models':
         return <ModelsExplorer />
+      case 'rag':
+      case 'knowledge':
+        return <RAGExplorer />
       case 'monitoring':
         return <MonitoringExplorer />
       case 'users':

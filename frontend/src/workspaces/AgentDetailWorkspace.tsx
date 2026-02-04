@@ -12,7 +12,7 @@ import {
     ArrowBack, Save, PlayArrow, Stop, Send, Settings as SettingsIcon,
     AutoGraph, Code, Description, Psychology, History, Extension,
     ContentCopy, Delete, Share, OpenInNew, MoreVert, InfoOutlined,
-    Done, Refresh, Bolt, Build, Close, CheckBox, CheckBoxOutlineBlank, Security, Add as AddIcon
+    Done, Refresh, Bolt, Build, Close, CheckBox, CheckBoxOutlineBlank, Security, Add as AddIcon, MenuBook
 } from '@mui/icons-material'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
 import {
@@ -27,6 +27,7 @@ import { getModels, discoverOllamaModels, LLMModel, OllamaModel } from '../api/l
 import { getTools, Tool } from '../api/tools'
 import { getRoles } from '../api/users'
 import { getAgentRoles, assignAgentRole, revokeAgentRole, AgentRoleAssignRequest } from '../api/agents'
+import { getRAGSources, getAgentSources, assignSourceToAgent, removeSourceFromAgent, RAGSource } from '../api/rag'
 import Editor from '@monaco-editor/react'
 
 interface TabPanelProps {
@@ -93,6 +94,12 @@ const AgentDetailWorkspace: React.FC = () => {
     const { data: agentRoles } = useQuery(
         ['agentRoles', agentId],
         () => getAgentRoles(agentId!),
+        { enabled: !!agentId }
+    )
+    const { data: allRAGSources } = useQuery<RAGSource[]>('rag-sources', getRAGSources)
+    const { data: assignedRAGSources, refetch: refetchAssignedSources } = useQuery<RAGSource[]>(
+        ['agentRAGSources', agentId],
+        () => getAgentSources(agentId!),
         { enabled: !!agentId }
     )
 
@@ -347,6 +354,42 @@ const AgentDetailWorkspace: React.FC = () => {
         })
     }
 
+    // RAG Source Assignment Mutations
+    const assignRAGSourceMutation = useMutation(
+        (sourceId: string) => assignSourceToAgent(agentId!, sourceId),
+        {
+            onSuccess: () => {
+                refetchAssignedSources()
+                setSnackbar({ open: true, message: 'Source assigned successfully', severity: 'success' })
+            },
+            onError: (error: any) => {
+                setSnackbar({ open: true, message: `Failed to assign source: ${error.message || 'Unknown error'}`, severity: 'error' })
+            }
+        }
+    )
+
+    const removeRAGSourceMutation = useMutation(
+        (sourceId: string) => removeSourceFromAgent(agentId!, sourceId),
+        {
+            onSuccess: () => {
+                refetchAssignedSources()
+                setSnackbar({ open: true, message: 'Source removed successfully', severity: 'success' })
+            },
+            onError: (error: any) => {
+                setSnackbar({ open: true, message: `Failed to remove source: ${error.message || 'Unknown error'}`, severity: 'error' })
+            }
+        }
+    )
+
+    const handleToggleRAGSource = (sourceId: string) => {
+        const isAssigned = assignedRAGSources?.some(s => s.id === sourceId)
+        if (isAssigned) {
+            removeRAGSourceMutation.mutate(sourceId)
+        } else {
+            assignRAGSourceMutation.mutate(sourceId)
+        }
+    }
+
     const getAgentIcon = (type: string) => {
         switch (type?.toUpperCase()) {
             case 'CONVERSATIONAL': return <Psychology sx={{ fontSize: 32 }} />;
@@ -483,6 +526,7 @@ const AgentDetailWorkspace: React.FC = () => {
                     <Tab icon={<Bolt sx={{ fontSize: 18 }} />} iconPosition="start" label="Chat & Test" />
                     <Tab icon={<SettingsIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Configuration" />
                     <Tab icon={<Security sx={{ fontSize: 18 }} />} iconPosition="start" label="Access Control" />
+                    <Tab icon={<MenuBook sx={{ fontSize: 18 }} />} iconPosition="start" label="Knowledge Base" />
                 </Tabs>
             </Box>
 
@@ -1089,6 +1133,145 @@ const AgentDetailWorkspace: React.FC = () => {
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            {/* Knowledge Base Tab */}
+            <TabPanel value={activeTab} index={5}>
+                <Box sx={{ maxWidth: 900, mx: 'auto' }}>
+                    <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Box>
+                            <Typography variant="h6" sx={{ color: '#e1e1e1', mb: 1 }}>
+                                Knowledge Base Sources
+                            </Typography>
+                            <Typography variant="body2" sx={{ color: '#969696' }}>
+                                Assign specific RAG sources to this agent. If no sources are assigned, the agent will have access to all your knowledge base sources when using the knowledge_base tool.
+                            </Typography>
+                        </Box>
+                        <Chip
+                            label={capabilities.knowledge_base_retrieval ? 'Enabled' : 'Disabled'}
+                            color={capabilities.knowledge_base_retrieval ? 'success' : 'default'}
+                            size="small"
+                        />
+                    </Box>
+
+                    {!capabilities.knowledge_base_retrieval && (
+                        <Paper sx={{ p: 3, mb: 3, bgcolor: 'rgba(255, 193, 7, 0.1)', border: '1px solid rgba(255, 193, 7, 0.3)' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                <InfoOutlined sx={{ color: '#ffc107' }} />
+                                <Box>
+                                    <Typography variant="subtitle2" sx={{ color: '#ffc107', fontWeight: 600 }}>
+                                        Knowledge Base Retrieval is Disabled
+                                    </Typography>
+                                    <Typography variant="body2" sx={{ color: '#e2c08d', mt: 0.5 }}>
+                                        Enable it in the Configuration tab to allow this agent to use RAG sources.
+                                    </Typography>
+                                </Box>
+                            </Box>
+                        </Paper>
+                    )}
+
+                    <Card sx={{ bgcolor: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                        <CardContent>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                                    Available Sources ({allRAGSources?.length || 0})
+                                </Typography>
+                                <Typography variant="caption" sx={{ color: '#569cd6' }}>
+                                    {assignedRAGSources?.length || 0} assigned
+                                </Typography>
+                            </Box>
+
+                            {(!allRAGSources || allRAGSources.length === 0) ? (
+                                <Box sx={{ textAlign: 'center', py: 6 }}>
+                                    <MenuBook sx={{ fontSize: 48, color: '#555', mb: 2 }} />
+                                    <Typography variant="body2" sx={{ color: '#969696', mb: 2 }}>
+                                        No RAG sources available
+                                    </Typography>
+                                    <Button
+                                        variant="outlined"
+                                        size="small"
+                                        onClick={() => navigate('/knowledge-base')}
+                                        sx={{ textTransform: 'none' }}
+                                    >
+                                        Go to Knowledge Base
+                                    </Button>
+                                </Box>
+                            ) : (
+                                <List sx={{ maxHeight: 500, overflow: 'auto' }}>
+                                    {allRAGSources.map((source) => {
+                                        const isAssigned = assignedRAGSources?.some(s => s.id === source.id)
+                                        const isProcessing = assignRAGSourceMutation.isLoading || removeRAGSourceMutation.isLoading
+
+                                        return (
+                                            <ListItem
+                                                key={source.id}
+                                                sx={{
+                                                    border: '1px solid rgba(255, 255, 255, 0.05)',
+                                                    borderRadius: '8px',
+                                                    mb: 1,
+                                                    bgcolor: isAssigned ? 'rgba(0, 122, 204, 0.05)' : 'transparent',
+                                                    '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.02)' }
+                                                }}
+                                            >
+                                                <ListItemIcon>
+                                                    <Checkbox
+                                                        edge="start"
+                                                        checked={isAssigned}
+                                                        onChange={() => handleToggleRAGSource(source.id)}
+                                                        disabled={isProcessing}
+                                                        icon={<CheckBoxOutlineBlank />}
+                                                        checkedIcon={<CheckBox sx={{ color: '#007acc' }} />}
+                                                    />
+                                                </ListItemIcon>
+                                                <ListItemText
+                                                    primary={
+                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                            <Typography variant="subtitle2" sx={{ color: '#e1e1e1' }}>
+                                                                {source.name}
+                                                            </Typography>
+                                                            <Chip
+                                                                label={source.source_type}
+                                                                size="small"
+                                                                sx={{
+                                                                    height: 20,
+                                                                    fontSize: '0.65rem',
+                                                                    bgcolor: source.source_type === 'pdf' ? 'rgba(206, 145, 120, 0.2)' : 'rgba(78, 201, 176, 0.2)',
+                                                                    color: source.source_type === 'pdf' ? '#ce9178' : '#4ec9b0'
+                                                                }}
+                                                            />
+                                                            <Chip
+                                                                label={source.status}
+                                                                size="small"
+                                                                color={source.status === 'completed' ? 'success' : source.status === 'failed' ? 'error' : 'default'}
+                                                                sx={{ height: 20, fontSize: '0.65rem' }}
+                                                            />
+                                                        </Box>
+                                                    }
+                                                    secondary={
+                                                        <Typography variant="caption" sx={{ color: '#969696', wordBreak: 'break-all' }}>
+                                                            {source.content_source}
+                                                        </Typography>
+                                                    }
+                                                />
+                                            </ListItem>
+                                        )
+                                    })}
+                                </List>
+                            )}
+
+                            <Divider sx={{ my: 2, borderColor: 'rgba(255, 255, 255, 0.05)' }} />
+
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <InfoOutlined sx={{ fontSize: 16, color: '#569cd6' }} />
+                                <Typography variant="caption" sx={{ color: '#969696' }}>
+                                    <strong>Tip:</strong> If no sources are assigned, the agent can access all your knowledge base sources. Assign specific sources to restrict access.
+                                </Typography>
+                            </Box>
+                        </CardContent>
+                    </Card>
+                </Box>
+            </TabPanel>
+
+            {/* Snackbar for notifications */}
 
             <Snackbar
                 open={snackbar.open}

@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException
 import httpx
 import os
 
-router = APIRouter(prefix="/api/v1/mcp-bridge", tags=["MCP Bridge Discovery"])
+router = APIRouter(prefix="/mcp-bridge", tags=["MCP Bridge Discovery"])
 
 # Get bridge URL from environment or use default
 BRIDGE_URL = os.getenv("MCP_BRIDGE_URL", "http://ai-agent-framework-mcp-bridge:8000")

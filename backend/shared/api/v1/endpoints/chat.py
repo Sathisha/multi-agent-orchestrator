@@ -23,7 +23,7 @@ from shared.api.v1.endpoints.chains import get_chain_orchestrator_service
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/chat", tags=["Chat"])
+router = APIRouter(prefix="/chat", tags=["Chat"])
 
 @router.post("/sessions", response_model=ChatSessionResponse, status_code=status.HTTP_201_CREATED)
 async def create_session(

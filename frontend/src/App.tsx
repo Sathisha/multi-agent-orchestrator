@@ -15,6 +15,7 @@ import UserManagementWorkspace from './workspaces/UserManagementWorkspace'
 import MCPServerListWorkspace from './workspaces/MCPServerListWorkspace'
 import MCPServerDetailWorkspace from './workspaces/MCPServerDetailWorkspace'
 import ChatWorkspace from './workspaces/ChatWorkspace'
+import RAGWorkspace from './workspaces/RAGWorkspace'
 import LoginPage from './components/auth/LoginPage'
 import ProtectedRoute from './routes/ProtectedRoute'
 
@@ -42,6 +43,7 @@ function App() {
           <Route path="/mcp" element={<MCPServerListWorkspace />} />
           <Route path="/mcp/:serverId" element={<MCPServerDetailWorkspace />} />
           <Route path="/chat" element={<ChatWorkspace />} />
+          <Route path="/knowledge" element={<RAGWorkspace />} />
           <Route path="/users" element={<UserManagementWorkspace />} />
         </Route>
       </Route>

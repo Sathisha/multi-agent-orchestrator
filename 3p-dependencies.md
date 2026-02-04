@@ -2,9 +2,17 @@
 
 This document tracks all third-party libraries, frameworks, and Docker images used in the AI Agent Framework project.
 
-**Last Updated:** January 18, 2026
+**Last Updated:** January 21, 2026
 
 ## Recent Changes
+
+### January 21, 2026 - RAG System & MCP Integration
+- **Backend**: Added RAG (Retrieval-Augmented Generation) system with ChromaDB vector database
+- **Backend**: Added PDF processing dependencies (PyPDF2, pdfplumber) for document ingestion
+- **Backend**: Added MCP (Model Context Protocol) client integration for dynamic tool discovery
+- **Backend**: Added LangChain PDF loaders and text splitters for document processing
+- **Frontend**: New Knowledge Base workspace with drag-and-drop PDF upload and web scraping
+- **Features**: Multi-tenancy removal completed across all backend and frontend components
 
 ### January 18, 2026 - Architecture Simplification & Google Gemini Integration
 - **Backend**: Added Google Generative AI SDK (`google-genai>=1.0.0`) for Gemini model support
@@ -91,6 +99,7 @@ This document tracks all third-party libraries, frameworks, and Docker images us
 | sentence-transformers | 2.2.2 | backend/requirements.txt | Text embeddings generation | Active | Apache-2.0 | Pre-trained models for semantic similarity and search |
 | numpy | 1.24.4 | backend/requirements.txt | Numerical computing for ML | Active | BSD-3-Clause | Core dependency for embeddings and vector operations |
 | huggingface-hub | 0.19.4 | backend/requirements.txt | HuggingFace model hub client | Active | Apache-2.0 | Download and manage pre-trained models |
+| mcp | latest | backend/requirements.txt | Model Context Protocol client | Active | MIT | Dynamic tool and resource discovery from MCP servers |
 
 ## Built-in Tools Dependencies (Backend)
 
@@ -100,6 +109,15 @@ This document tracks all third-party libraries, frameworks, and Docker images us
 | beautifulsoup4 | 4.12.3 | backend/requirements.txt | HTML parsing for web scraping | Active | MIT | Parse and extract data from HTML/XML documents |
 | pytz | 2024.1 | backend/requirements.txt | Timezone support for datetime tool | Active | MIT | Accurate timezone handling for datetime operations |
 | jsonschema | 4.21.0 | backend/requirements.txt | JSON Schema validation for tools | Active | MIT | Validate tool inputs and outputs against schemas |
+
+## RAG & Document Processing Dependencies (Backend)
+
+| Name | Version | Location | Purpose | EOL Date | License | Notes |
+|------|---------|----------|---------|----------|---------|-------|
+| PyPDF2 | 3.0.1 | backend/requirements.txt | PDF text extraction | Active | BSD-3-Clause | Extract text content from PDF documents for RAG |
+| pdfplumber | 0.11.0 | backend/requirements.txt | Advanced PDF parsing | Active | MIT | Extract tables and structured data from PDFs |
+| langchain | 0.1.0 | backend/requirements.txt | LLM application framework | Active | MIT | Text splitting and document loaders for RAG |
+| langchain-community | 0.0.10 | backend/requirements.txt | Community integrations | Active | MIT | Additional document loaders and utilities |
 
 ## Frontend Dependencies (Node.js/React)
 
@@ -250,3 +268,9 @@ This document tracks all third-party libraries, frameworks, and Docker images us
 33. Internal workflow orchestration engine replaces Camunda/Zeebe BPMN for simplified architecture
 34. Google Gemini SDK enables integration with Google's latest language models
 35. Built-in tools (requests, beautifulsoup4, pytz, jsonschema) provide core functionality for web scraping, datetime operations, and validation
+36. RAG system integrates ChromaDB with PDF and web content ingestion for knowledge-augmented agent responses
+37. PyPDF2 and pdfplumber enable comprehensive PDF document processing and text extraction
+38. LangChain provides document loaders and text splitters for efficient RAG pipeline
+39. MCP client integration enables dynamic discovery of tools, resources, and prompts from external MCP servers
+40. Multi-tenancy has been completely removed for simplified deployment and single-organization use cases
+41. Configurable embedding providers support both OpenAI and local SentenceTransformers models

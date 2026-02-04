@@ -14,6 +14,7 @@ import {
   People as PeopleIcon,
   Extension as MCPIcon,
   Chat as ChatIcon,
+  LibraryBooks as KnowledgeIcon,
 } from '@mui/icons-material'
 import { PermissionGuard } from '../PermissionGuard'
 
@@ -45,6 +46,7 @@ const ActivityBar: React.FC<ActivityBarProps> = ({
     { id: 'tools', icon: ToolsIcon, label: 'Tools', path: '/tools' },
     { id: 'models', icon: LLMIcon, label: 'LLM Models', path: '/models' },
     { id: 'mcp', icon: MCPIcon, label: 'MCP Servers', path: '/mcp' },
+    { id: 'rag', icon: KnowledgeIcon, label: 'Knowledge Base', path: '/knowledge' },
     { id: 'chat', icon: ChatIcon, label: 'Chat', path: '/chat' },
     { id: 'vision-test', icon: VisionIcon, label: 'Vision Test', path: '/vision-test', role: 'standard_user' },
     { id: 'monitoring', icon: MonitoringIcon, label: 'Monitoring', path: '/monitoring', role: 'standard_user' },
