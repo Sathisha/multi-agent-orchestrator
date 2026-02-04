@@ -29,6 +29,7 @@ import { useQuery, useMutation, useQueryClient } from 'react-query'
 import { getAgents, createAgent, deleteAgent, updateAgent, CreateAgentRequest, UpdateAgentRequest, Agent, getAgentTemplates, AgentTemplate } from '../api/agents'
 import { getModels, discoverOllamaModels, LLMModel, OllamaModel } from '../api/llmModels'
 import { useNavigate } from 'react-router-dom'
+import { assignSourceToAgent } from '../api/rag'
 import AgentCreationWizard from '../components/wizards/AgentCreationWizard'
 
 const AgentWorkspace: React.FC = () => {
@@ -142,8 +143,28 @@ const AgentWorkspace: React.FC = () => {
     }
   }, [agents])
 
-  const handleWizardCreate = (agentData: any) => {
-    createMutation.mutate(agentData)
+  const handleWizardCreate = async (agentData: any) => {
+    // Extract rag_sources if present
+    const { rag_sources, ...createRequest } = agentData
+
+    try {
+      const agent = await createMutation.mutateAsync(createRequest)
+
+      // Assign RAG sources if selected
+      if (rag_sources && rag_sources.length > 0 && agent && agent.id) {
+        try {
+          await Promise.all(rag_sources.map((sourceId: string) =>
+            assignSourceToAgent(agent.id, sourceId)
+          ))
+          // Optionally show success toast for RAG attachment?
+        } catch (error) {
+          console.error("Error attaching RAG sources:", error)
+          // RAG attachment failed but agent was created.
+        }
+      }
+    } catch (error) {
+      console.error("Agent creation failed:", error)
+    }
   }
 
   const handleCreateFromTemplate = (template: AgentTemplate) => {

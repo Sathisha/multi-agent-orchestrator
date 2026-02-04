@@ -71,7 +71,8 @@ async def execute_agent(
     agent_id: UUID,
     request: ExecuteAgentRequest,
     background_tasks: BackgroundTasks,
-    session: AsyncSession = Depends(get_async_db)
+    session: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Execute an agent asynchronously."""
     executor = lifecycle_manager.get_executor(session)
@@ -82,7 +83,7 @@ async def execute_agent(
             input_data=request.input_data,
             session_id=request.session_id,
             timeout_seconds=request.timeout_seconds,
-            created_by=None  # Use None for system actions
+            created_by=str(current_user.id)
         )
         
         return ExecuteAgentResponse(

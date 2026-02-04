@@ -17,6 +17,8 @@ import {
 } from '@mui/icons-material'
 import { useMutation, useQuery } from 'react-query'
 import { getModels, LLMModel } from '../../api/llmModels'
+import { getRAGSources, RAGSource } from '../../api/rag'
+import { MenuBook } from '@mui/icons-material'
 
 interface TabPanelProps {
     children?: React.ReactNode
@@ -79,11 +81,13 @@ const AgentCreationWizard: React.FC<AgentWizardProps> = ({
     const [guardrailsEnabled, setGuardrailsEnabled] = useState(false)
 
     // Test
-    const [testInput, setTestInput] = useState('')
-    const [testOutput, setTestOutput] = useState('')
-    const [testing, setTesting] = useState(false)
+
+
+    // RAG Sources
+    const [selectedRagSources, setSelectedRagSources] = useState<string[]>([])
 
     const { data: models } = useQuery('llmModels', getModels)
+    const { data: ragSources } = useQuery('ragSources', getRAGSources)
 
     const availableTools = ['calculator', 'web_search', 'code_executor'] // TODO: Load from API
 
@@ -110,7 +114,7 @@ const AgentCreationWizard: React.FC<AgentWizardProps> = ({
             case 0: return !!(name && type)
             case 1: return !!llmModelId
             case 2: return true // Tools are optional
-            case 3: return true // Test is optional
+            case 3: return true // Knowledge is optional
             default: return false
         }
     }
@@ -150,86 +154,7 @@ const AgentCreationWizard: React.FC<AgentWizardProps> = ({
         }
     }
 
-    const handleTest = async () => {
-        if (!testInput || !llmModelId) {
-            alert('Please enter a test message and select an LLM model.');
-            return;
-        }
 
-        setTesting(true)
-        setTestOutput('')
-
-        try {
-            // Create a temporary agent config for testing
-            const testAgentData = {
-                name: name || 'Test Agent',
-                description: description || 'Testing configuration',
-                type,
-                status: 'draft',
-                llm_model_id: llmModelId,
-                system_prompt: systemPrompt,
-                config: {
-                    temperature,
-                    max_tokens: maxTokens,
-                    top_p: topP !== '' ? topP : undefined,
-                    top_k: topK !== '' ? topK : undefined,
-                    stop_sequences: stopSequences ? stopSequences.split(',').map(s => s.trim()).filter(s => s) : undefined,
-                    tools: selectedTools,
-                    memory_enabled: memoryEnabled,
-                    guardrails_enabled: guardrailsEnabled
-                }
-            }
-
-            // First create a temporary agent
-            const createResponse = await fetch('/api/v1/agents', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(testAgentData)
-            })
-
-            if (!createResponse.ok) {
-                throw new Error(`Failed to create test agent: ${createResponse.statusText}`)
-            }
-
-            const agent = await createResponse.json()
-
-            try {
-                // Execute the agent with test input
-                const executeResponse = await fetch(`/api/v1/agents/${agent.id}/execute`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        input_data: { message: testInput }
-                    })
-                })
-
-                if (!executeResponse.ok) {
-                    throw new Error(`Failed to execute agent: ${executeResponse.statusText}`)
-                }
-
-                const execution = await executeResponse.json()
-
-                // Display the output
-                if (execution.output_data && execution.output_data.response) {
-                    setTestOutput(execution.output_data.response)
-                } else if (execution.output_data) {
-                    setTestOutput(JSON.stringify(execution.output_data, null, 2))
-                } else {
-                    setTestOutput('Agent executed but returned no output')
-                }
-            } finally {
-                // Clean up: delete the temporary agent
-                await fetch(`/api/v1/agents/${agent.id}`, {
-                    method: 'DELETE'
-                })
-            }
-        } catch (error) {
-            console.error('Test failed:', error)
-            setTestOutput('Error: ' + (error instanceof Error ? error.message : 'Unknown error'))
-        } finally {
-            setTesting(false)
-        }
-    }
 
     const handleCreate = () => {
         const stopSeqArray = stopSequences
@@ -252,7 +177,8 @@ const AgentCreationWizard: React.FC<AgentWizardProps> = ({
                 tools: selectedTools,
                 memory_enabled: memoryEnabled,
                 guardrails_enabled: guardrailsEnabled
-            }
+            },
+            rag_sources: selectedRagSources
         })
     }
 
@@ -273,8 +199,7 @@ const AgentCreationWizard: React.FC<AgentWizardProps> = ({
         setSelectedTools([])
         setMemoryEnabled(false)
         setGuardrailsEnabled(false)
-        setTestInput('')
-        setTestOutput('')
+        setSelectedRagSources([])
         onClose()
     }
 
@@ -343,7 +268,7 @@ const AgentCreationWizard: React.FC<AgentWizardProps> = ({
                         disabled={!canProceedToTab(2)}
                     />
                     <Tab
-                        label="Test"
+                        label="Knowledge"
                         disabled={!canProceedToTab(3)}
                     />
                 </Tabs>
@@ -577,44 +502,90 @@ const AgentCreationWizard: React.FC<AgentWizardProps> = ({
                     </Stack>
                 </TabPanel>
 
-                {/* Tab 3: Test */}
+                {/* Tab 3: Knowledge Base */}
                 <TabPanel value={activeTab} index={3}>
                     <Stack spacing={3}>
-                        <Alert severity="info" sx={{ bgcolor: 'rgba(86, 156, 214, 0.1)', color: '#569cd6' }}>
-                            Test your agent configuration before creating it
-                        </Alert>
+                        <Box>
+                            <Typography variant="subtitle1" sx={{ color: '#cccccc', mb: 1 }}>
+                                Knowledge Base Sources
+                            </Typography>
+                            <Typography variant="body2" sx={{ color: '#969696' }}>
+                                Connect RAG sources to give your agent access to specific documents or websites.
+                            </Typography>
+                        </Box>
 
-                        <TextField
-                            label="Test Input"
-                            fullWidth
-                            multiline
-                            rows={4}
-                            value={testInput}
-                            onChange={(e) => setTestInput(e.target.value)}
-                            placeholder="Enter a test message for your agent..."
+                        <List sx={{ maxHeight: 400, overflow: 'auto' }}>
+                            {ragSources && ragSources.length > 0 ? (
+                                ragSources.map((source: RAGSource) => (
+                                    <ListItem
+                                        key={source.id}
+                                        button
+                                        onClick={() => {
+                                            setSelectedRagSources(prev =>
+                                                prev.includes(source.id)
+                                                    ? prev.filter(id => id !== source.id)
+                                                    : [...prev, source.id]
+                                            )
+                                        }}
+                                        sx={{
+                                            bgcolor: '#252526',
+                                            mb: 1,
+                                            borderRadius: 1,
+                                            border: selectedRagSources.includes(source.id) ? '1px solid #007acc' : '1px solid #2d2d30'
+                                        }}
+                                    >
+                                        <ListItemIcon>
+                                            {selectedRagSources.includes(source.id) ? (
+                                                <CheckCircleIcon sx={{ color: '#4ec9b0' }} />
+                                            ) : (
+                                                <UncheckIcon sx={{ color: '#969696' }} />
+                                            )}
+                                        </ListItemIcon>
+                                        <ListItemText
+                                            primary={source.name}
+                                            secondary={`${source.source_type} • ${source.status}`}
+                                            primaryTypographyProps={{ color: '#cccccc' }}
+                                            secondaryTypographyProps={{ color: '#969696' }}
+                                        />
+                                        <Chip
+                                            label={source.source_type}
+                                            size="small"
+                                            sx={{
+                                                bgcolor: 'rgba(255, 255, 255, 0.1)',
+                                                color: '#ccc',
+                                                height: 24
+                                            }}
+                                        />
+                                    </ListItem>
+                                ))
+                            ) : (
+                                <Box sx={{ p: 4, textAlign: 'center', bgcolor: '#252526', borderRadius: 1 }}>
+                                    <MenuBook sx={{ fontSize: 40, color: '#555', mb: 2 }} />
+                                    <Typography variant="body2" color="text.secondary">
+                                        No knowledge base sources found.
+                                    </Typography>
+                                </Box>
+                            )}
+                        </List>
+
+                        <FormControlLabel
+                            control={
+                                <Checkbox
+                                    checked={selectedRagSources.length > 0}
+                                    disabled={true}
+                                    sx={{ color: '#007acc', '&.Mui-disabled': { color: selectedRagSources.length > 0 ? '#007acc' : '#555' } }}
+                                />
+                            }
+                            label={
+                                <Typography variant="body2" sx={{ color: '#969696' }}>
+                                    {selectedRagSources.length} source(s) selected
+                                </Typography>
+                            }
                         />
-
-                        <Button
-                            variant="contained"
-                            onClick={handleTest}
-                            disabled={!testInput || testing}
-                            sx={{ bgcolor: '#007acc' }}
-                        >
-                            {testing ? <CircularProgress size={24} /> : 'Test Agent'}
-                        </Button>
-
-                        {testOutput && (
-                            <Box sx={{ bgcolor: '#252526', p: 2, borderRadius: 1, border: '1px solid #2d2d30' }}>
-                                <Typography variant="subtitle2" sx={{ color: '#4ec9b0', mb: 1 }}>
-                                    Agent Response:
-                                </Typography>
-                                <Typography sx={{ color: '#cccccc', whiteSpace: 'pre-wrap' }}>
-                                    {testOutput}
-                                </Typography>
-                            </Box>
-                        )}
                     </Stack>
                 </TabPanel>
+
+
             </DialogContent>
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', p: 2, bgcolor: '#252526', borderTop: '1px solid #2d2d30' }}>

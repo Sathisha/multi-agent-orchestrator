@@ -6,13 +6,14 @@ import {
     Alert, CircularProgress, Paper, Divider, List, ListItem, Tooltip,
     Avatar, Fade, Zoom, Breadcrumbs, Link, Switch, FormControlLabel,
     InputAdornment, Grid, Dialog, DialogTitle, DialogContent, DialogActions,
-    Checkbox, ListItemText, ListItemIcon
+    Checkbox, ListItemText, ListItemIcon, Stack
 } from '@mui/material'
 import {
     ArrowBack, Save, PlayArrow, Stop, Send, Settings as SettingsIcon,
     AutoGraph, Code, Description, Psychology, History, Extension,
     ContentCopy, Delete, Share, OpenInNew, MoreVert, InfoOutlined,
-    Done, Refresh, Bolt, Build, Close, CheckBox, CheckBoxOutlineBlank, Security, Add as AddIcon, MenuBook
+    Done, Refresh, Bolt, Build, Close, CheckBox, CheckBoxOutlineBlank, Security, Add as AddIcon, MenuBook,
+    AutoAwesome as RefineIcon, CheckCircle as CheckCircleIcon
 } from '@mui/icons-material'
 import { useQuery, useMutation, useQueryClient } from 'react-query'
 import {
@@ -71,6 +72,10 @@ const AgentDetailWorkspace: React.FC = () => {
     const [isToolDialogOpen, setIsToolDialogOpen] = useState(false)
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' })
+    // Refinement State
+    const [refiningPrompt, setRefiningPrompt] = useState(false)
+    const [refinementData, setRefinementData] = useState<{ refined_prompt: string, improvements: string[] } | null>(null)
+    const [showRefinementReview, setShowRefinementReview] = useState(false)
 
     // Chat state
     const [chatMessages, setChatMessages] = useState<Array<{ role: string, content: string, status?: string }>>([])
@@ -220,6 +225,58 @@ const AgentDetailWorkspace: React.FC = () => {
             },
             available_tools: selectedTools
         })
+    }
+
+    const handleRefinePrompt = async () => {
+        if (!systemPrompt || !model) {
+            alert('Please select an LLM model and enter a system prompt first.');
+            return;
+        }
+
+        setRefiningPrompt(true)
+        try {
+            // Determine provider
+            let selectedProvider = 'ollama'; // Default
+            const foundModel = availableModels.find(m => m.value === model);
+            if (foundModel) {
+                selectedProvider = foundModel.provider;
+            } else {
+                selectedProvider = agent?.config?.llm_provider || 'ollama';
+            }
+
+            // Find full model ID if possible (especially for configured models which might need ID)
+            // For now, passing model name as ID often works or backend handles it.
+            // Ideally we pass the ID from the LLMModel object if we have it.
+            let llmModelId = model;
+            const configModel = configuredModels?.find(m => m.name === model);
+            if (configModel) llmModelId = configModel.id;
+
+
+            const response = await fetch('/api/v1/agents/refine-prompt', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    original_prompt: systemPrompt,
+                    agent_type: agent?.type || 'conversational',
+                    llm_model_id: llmModelId
+                })
+            })
+
+            if (!response.ok) {
+                throw new Error(`Failed to refine prompt: ${response.statusText}`)
+            }
+
+            const result = await response.json()
+            if (result.refined_prompt) {
+                setRefinementData(result)
+                setShowRefinementReview(true)
+            }
+        } catch (error) {
+            console.error('Failed to refine prompt:', error)
+            alert('Failed to refine prompt: ' + (error instanceof Error ? error.message : 'Unknown error'))
+        } finally {
+            setRefiningPrompt(false)
+        }
     }
 
     const scrollToBottom = () => {
@@ -661,6 +718,9 @@ const AgentDetailWorkspace: React.FC = () => {
                                 </Tooltip>
                             </Box>
                             <Box sx={{ display: 'flex', gap: 1 }}>
+                                <Button size="small" variant="text" startIcon={refiningPrompt ? <CircularProgress size={16} /> : <RefineIcon />} sx={{ color: '#007acc', textTransform: 'none' }} onClick={handleRefinePrompt} disabled={refiningPrompt}>
+                                    {refiningPrompt ? 'Refining...' : 'Refine'}
+                                </Button>
                                 <Button size="small" variant="text" startIcon={<ContentCopy />} sx={{ color: '#888', textTransform: 'none' }} onClick={() => {
                                     navigator.clipboard.writeText(systemPrompt)
                                     setSnackbar({ open: true, message: 'Copied to clipboard', severity: 'success' })
@@ -1294,6 +1354,78 @@ const AgentDetailWorkspace: React.FC = () => {
                     {snackbar.message}
                 </Alert>
             </Snackbar>
+            <Dialog
+                open={showRefinementReview}
+                onClose={() => setShowRefinementReview(false)}
+                maxWidth="md"
+                fullWidth
+                PaperProps={{ sx: { bgcolor: '#1e1e1e' } }}
+            >
+                <DialogTitle sx={{ bgcolor: '#252526', color: '#cccccc' }}>
+                    Review Refined Prompt
+                </DialogTitle>
+                <DialogContent sx={{ bgcolor: '#1e1e1e', pt: 3 }} dividers>
+                    <Stack spacing={3}>
+                        <Box>
+                            <Typography variant="subtitle2" sx={{ color: '#4ec9b0', mb: 1 }}>
+                                Improvements Made:
+                            </Typography>
+                            <List dense>
+                                {refinementData?.improvements?.map((imp, i) => (
+                                    <ListItem key={i}>
+                                        <ListItemIcon sx={{ minWidth: 30 }}>
+                                            <CheckCircleIcon sx={{ fontSize: 16, color: '#4ec9b0' }} />
+                                        </ListItemIcon>
+                                        <ListItemText primary={imp} sx={{ color: '#cccccc' }} />
+                                    </ListItem>
+                                ))}
+                            </List>
+                        </Box>
+
+                        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+                            <Box>
+                                <Typography variant="caption" sx={{ color: '#969696', mb: 1, display: 'block' }}>
+                                    Original Prompt
+                                </Typography>
+                                <Box sx={{ p: 2, bgcolor: '#252526', borderRadius: 1, color: '#888', whiteSpace: 'pre-wrap', maxHeight: '300px', overflow: 'auto' }}>
+                                    {systemPrompt}
+                                </Box>
+                            </Box>
+                            <Box>
+                                <Typography variant="caption" sx={{ color: '#4ec9b0', mb: 1, display: 'block' }}>
+                                    Refined Prompt
+                                </Typography>
+                                <Box sx={{ p: 2, bgcolor: '#2d2d30', borderRadius: 1, color: '#fff', whiteSpace: 'pre-wrap', maxHeight: '300px', overflow: 'auto', border: '1px solid #007acc' }}>
+                                    {refinementData?.refined_prompt}
+                                </Box>
+                            </Box>
+                        </Box>
+                    </Stack>
+                </DialogContent>
+                <DialogActions sx={{ bgcolor: '#252526', p: 2 }}>
+                    <Button
+                        onClick={() => setShowRefinementReview(false)}
+                        variant="outlined"
+                        sx={{ color: '#969696' }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={() => {
+                            if (refinementData) {
+                                setSystemPrompt(refinementData.refined_prompt)
+                                setHasUnsavedChanges(true)
+                                setShowRefinementReview(false)
+                            }
+                        }}
+                        variant="contained"
+                        sx={{ bgcolor: '#007acc' }}
+                        startIcon={<CheckCircleIcon />}
+                    >
+                        Accept Refine
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     )
 }

@@ -101,6 +101,7 @@ class AgentExecutionContext(BaseModel):
     config: Dict[str, Any]
     started_at: datetime
     timeout_seconds: int = 300
+    user_id: Optional[str] = None
     
     class Config:
         arbitrary_types_allowed = True
@@ -221,7 +222,8 @@ class AgentExecutorService(BaseService):
             input_data=input_data,
             config=agent.config or {},
             started_at=datetime.utcnow(),
-            timeout_seconds=timeout_seconds
+            timeout_seconds=timeout_seconds,
+            user_id=created_by
         )
         
         self.lifecycle.active_executions[execution_id] = context
@@ -385,6 +387,52 @@ class AgentExecutorService(BaseService):
             if not agent:
                 raise ValueError(f"Agent {context.agent_id} not found")
             logger.debug(f"[EXEC-LOGIC] Agent {context.agent_id} found: {agent.name}")
+
+            # RAG Context Retrieval
+            rag_context_str = ""
+            if context.user_id:
+                try:
+                    # Import here to avoid circular dependencies
+                    from .rag_service import RAGService
+                    # Use a new session for RAG service to ensure thread safety if needed, or reuse current
+                    # Since we are in _execute_agent_logic (async), self.session is active.
+                    
+                    # Ensure memory_manager is passed correctly
+                    memory_manager = None
+                    if self.memory_service and hasattr(self.memory_service, 'memory_manager'):
+                        memory_manager = self.memory_service.memory_manager
+                        
+                    rag_service = RAGService(self.session, memory_manager)
+                    
+                    query_text = ""
+                    if isinstance(context.input_data, dict):
+                        query_text = str(context.input_data.get("message", "")) or str(context.input_data)
+                    else:
+                        query_text = str(context.input_data)
+                        
+                    if query_text:
+                        # Convert string UUIDs to UUID objects if necessary
+                        owner_uuid = uuid.UUID(context.user_id)
+                        agent_uuid = uuid.UUID(context.agent_id)
+                        
+                        results = await rag_service.query(
+                            query_text=query_text,
+                            owner_id=owner_uuid,
+                            limit=5,
+                            agent_id=agent_uuid
+                        )
+                        
+                        if results:
+                            rag_entries = []
+                            for item in results:
+                                source_name = item.get('metadata', {}).get('source_name', 'Unknown Source')
+                                content = item.get('content', '')
+                                rag_entries.append(f"Source: {source_name}\nContent: {content}")
+                            
+                            rag_context_str = "\n\n".join(rag_entries)
+                            logger.info(f"[EXEC-LOGIC] Retrieved {len(results)} RAG items for execution {context.execution_id}")
+                except Exception as e:
+                    logger.error(f"[EXEC-LOGIC] Error retrieving RAG context: {e}")
 
             # Guardrails, Memory... (Simplified logic for brevity but preserving key flows)
             memory_context = []
@@ -552,6 +600,11 @@ class AgentExecutorService(BaseService):
             logger.info(f"[EXEC-LOGIC] Phase 2: Final Response Generation for {context.execution_id}")
             
             system_prompt = agent.system_prompt or "You are a helpful assistant."
+            
+            # Inject RAG Context
+            if rag_context_str:
+                system_prompt += f"\n\n### RELEVANT KNOWLEDGE BASE CONTEXT ###\nUse the following information to answer the user's request if relevant.\n\n{rag_context_str}\n"
+
             if memory_context:
                 system_prompt += f"\nContext from memory: {', '.join(memory_context)}"
             
