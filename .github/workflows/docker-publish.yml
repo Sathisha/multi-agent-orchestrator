@@ -40,6 +40,14 @@ jobs:
             context: ./frontend
             dockerfile: Dockerfile
             image_suffix: -frontend
+          - service: ollama
+            context: ./infrastructure/docker/ollama
+            dockerfile: Dockerfile
+            image_suffix: -ollama
+          - service: mcp-bridge
+            context: ./infrastructure/docker/mcp-bridge
+            dockerfile: Dockerfile
+            image_suffix: -mcp-bridge
 
     steps:
       - name: Checkout repository

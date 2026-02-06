@@ -1,0 +1,83 @@
+# Core FastAPI and web framework
+fastapi==0.109.1
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+
+# Database and ORM
+sqlalchemy==2.0.23
+alembic==1.12.1
+psycopg2-binary==2.9.9
+asyncpg==0.29.0
+aiosqlite==0.19.0
+
+# Data validation and serialization
+pydantic==2.5.0
+pydantic-settings==2.1.0
+email-validator==2.1.0
+
+# Authentication and security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt,argon2]==1.7.4
+argon2-cffi==23.1.0
+python-keycloak==3.7.0
+casbin==1.36.2
+casbin-sqlalchemy-adapter==1.4.0
+
+# Redis for caching and sessions
+redis==5.0.1
+aioredis==2.0.1
+
+# HTTP client for external integrations
+httpx==0.28.1
+aiohttp==3.9.1
+lxml==4.9.3
+
+# Logging and monitoring
+structlog==23.2.0
+prometheus-client==0.19.0
+
+# Environment and configuration
+python-dotenv==1.0.0
+
+# Development and testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+black==23.11.0
+isort==5.12.0
+flake8==6.1.0
+mypy==1.7.1
+
+# Property-based testing
+hypothesis==6.92.1
+
+# LLM Provider integrations
+openai==1.40.0
+anthropic==0.40.0
+google-genai==1.5.0
+
+# Additional utilities for LLM integration
+tiktoken==0.5.2
+tenacity==8.2.3
+
+# Vector database and embeddings for memory management - simplified version
+numpy==1.24.4
+chromadb==0.4.18
+sentence-transformers==2.2.2
+
+# HuggingFace hub for model downloads
+huggingface-hub==0.19.4
+
+# Enhanced Monitoring and Observability
+python-json-logger==2.0.7
+psutil==5.9.6
+
+# Workflow orchestration
+
+# Built-in Tools Dependencies
+requests==2.31.0  # HTTP requests for web tools
+beautifulsoup4==4.12.3  # HTML parsing for web scraping
+pytz==2024.1  # Timezone support for datetime tool
+jsonschema==4.21.0  # JSON Schema validation for tools
+mcp==1.1.2
+pypdf==3.17.4

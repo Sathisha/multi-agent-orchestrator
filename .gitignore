@@ -186,8 +186,8 @@ redis-data/
 chroma-data/
 
 # Alembic
-/backend/alembic/versions/*.py
-!/backend/alembic/versions/__init__.py
+# Migrations should be tracked in git
+/backend/alembic/versions/__pycache__/
 
 # Monitoring and metrics
 prometheus-data/
@@ -434,6 +434,7 @@ backend/verify_gemini_rest.py
 !LICENSE
 !SECURITY.md
 !API.md
+!**/requirements.txt
 backend/reports/
 backend/broken_tests/
 staged_files_list.staged
