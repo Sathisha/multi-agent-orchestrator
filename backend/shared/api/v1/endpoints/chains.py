@@ -520,6 +520,16 @@ async def execute_chain(
     Starts asynchronous execution of the chain with the provided input data.
     """
     try:
+        # Extract user_id from current_user_or_key
+        # current_user_or_key can be a User or APIKey object
+        user_id = None
+        if hasattr(current_user_or_key, "user_id"):
+            # APIKey object
+            user_id = current_user_or_key.user_id
+        elif hasattr(current_user_or_key, "id"):
+            # User object
+            user_id = current_user_or_key.id
+
         # Create execution record
         execution = await orchestrator.create_execution(
             session=session,
@@ -528,7 +538,8 @@ async def execute_chain(
             execution_name=request.execution_name,
             variables=request.variables,
             correlation_id=request.correlation_id,
-            model_override=request.model_override
+            model_override=request.model_override,
+            user_id=user_id
         )
         
         # Schedule background execution

@@ -65,7 +65,7 @@ const ChainWorkspace: React.FC = () => {
                 setNewChainName('')
                 setNewChainDescription('')
                 // Navigate to the new chain
-                navigate(`/ chains / ${newChain.id} `)
+                navigate(`/chains/${newChain.id}`)
             },
         }
     )
@@ -206,7 +206,7 @@ const ChainWorkspace: React.FC = () => {
                                     key={chain.id}
                                     hover
                                     sx={{ cursor: 'pointer' }}
-                                    onClick={() => navigate(`/ chains / ${chain.id} `)}
+                                    onClick={() => navigate(`/chains/${chain.id}`)}
                                 >
                                     <TableCell>
                                         <Typography variant="body1" fontWeight="medium">
@@ -248,7 +248,7 @@ const ChainWorkspace: React.FC = () => {
                                         />
                                         <IconButton
                                             size="small"
-                                            onClick={() => navigate(`/ chains / ${chain.id} `)}
+                                            onClick={() => navigate(`/chains/${chain.id}`)}
                                             title="View/Edit"
                                         >
                                             <EditIcon fontSize="small" />

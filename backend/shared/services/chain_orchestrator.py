@@ -360,7 +360,8 @@ class ChainOrchestratorService(BaseService):
         execution_name: Optional[str] = None,
         variables: Optional[Dict[str, Any]] = None,
         correlation_id: Optional[str] = None,
-        model_override: Optional[Dict[str, Any]] = None
+        model_override: Optional[Dict[str, Any]] = None,
+        user_id: Optional[UUID] = None
     ) -> ChainExecution:
         """Create execution record without running it."""
         # Validate chain first
@@ -387,7 +388,8 @@ class ChainOrchestratorService(BaseService):
             completed_nodes=[],
             active_edges=[],
             edge_results={},
-            correlation_id=correlation_id
+            correlation_id=correlation_id,
+            triggered_by=user_id
         )
         session.add(execution)
         await session.commit()
@@ -443,13 +445,14 @@ class ChainOrchestratorService(BaseService):
         variables: Optional[Dict[str, Any]] = None,
         correlation_id: Optional[str] = None,
         model_override: Optional[Dict[str, Any]] = None,
-        timeout_seconds: int = 300
+        timeout_seconds: int = 300,
+        user_id: Optional[UUID] = None
     ) -> ChainExecution:
         """Execute chain synchronously (legacy/backward compatibility)."""
         logger.info(f"Starting synchronous chain execution for chain {chain_id}")
         
         execution = await self.create_execution(
-            session, chain_id, input_data, execution_name, variables, correlation_id, model_override
+            session, chain_id, input_data, execution_name, variables, correlation_id, model_override, user_id
         )
         
         # Load components for execution
@@ -572,7 +575,8 @@ class ChainOrchestratorService(BaseService):
         context = {
             'input': initial_input,
             'variables': execution.variables.copy() if execution.variables else {},
-            'node_outputs': {}
+            'node_outputs': {},
+            'user_id': str(execution.triggered_by) if execution.triggered_by else None
         }
         
         # 3. Identify Initial Ready Nodes
@@ -929,6 +933,16 @@ class ChainOrchestratorService(BaseService):
                 path = value[2:-2].strip().split('.')
                 if len(path) == 2:
                     node_id, field = path
+                    
+                    # Handle special prefixes
+                    if node_id == "input":
+                        if isinstance(context['input'], dict):
+                            return context['input'].get(field)
+                        return context['input'] if not field else None
+                    
+                    if node_id == "variables":
+                        return context['variables'].get(field)
+
                     # Check node_outputs first
                     node_output = context['node_outputs'].get(node_id, {})
                     if isinstance(node_output, dict):
@@ -1105,7 +1119,8 @@ class ChainOrchestratorService(BaseService):
         execution_result = await local_agent_executor.execute_agent(
             agent_id=str(agent.id),
             input_data=processed_input,
-            config=execution_config
+            config=execution_config,
+            user_id=context.get('user_id')
         )
         
         logger.info(f"[CHAIN] Agent execution completed. Status: {execution_result.status}")

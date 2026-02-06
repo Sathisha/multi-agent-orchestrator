@@ -31,6 +31,8 @@ const SidePanel: React.FC<SidePanelProps> = ({ activeView, onClose }) => {
         return 'MONITORING'
       case 'users':
         return 'USERS'
+      case 'mcp':
+        return 'MCP SERVERS'
       default:
         return 'EXPLORER'
     }
@@ -59,6 +61,8 @@ const SidePanel: React.FC<SidePanelProps> = ({ activeView, onClose }) => {
             </Typography>
           </Box>
         )
+      case 'mcp':
+        return <ToolsExplorer />
       default:
         return <AgentExplorer />
     }

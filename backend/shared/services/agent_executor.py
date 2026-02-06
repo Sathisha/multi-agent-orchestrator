@@ -239,7 +239,7 @@ class AgentExecutorService(BaseService):
         logger.info(f"Started agent execution {execution_id}")
         return execution_id
     
-    async def execute_agent(self, agent_id: str, input_data: Dict[str, Any], config: Optional[Dict[str, Any]] = None) -> AgentExecutionResult:
+    async def execute_agent(self, agent_id: str, input_data: Dict[str, Any], config: Optional[Dict[str, Any]] = None, user_id: Optional[str] = None) -> AgentExecutionResult:
         """Execute agent synchronously/inline and return result."""
         execution_id = str(uuid.uuid4())
         context = AgentExecutionContext(
@@ -247,7 +247,8 @@ class AgentExecutorService(BaseService):
             agent_id=agent_id,
             input_data=input_data,
             config=config or {},
-            started_at=datetime.utcnow()
+            started_at=datetime.utcnow(),
+            user_id=user_id
         )
         
         # Track it

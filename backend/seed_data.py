@@ -146,70 +146,8 @@ You do not add other conversation text or next steps outside the JSON data.""",
                 created_by=user_id,
                 updated_by=user_id
             ),
-            # --- Scenario 1: Smartphone Recommendation Agents ---
-            Agent(
-                id=uuid.uuid4(),
-                name="Tech Trends Researcher",
-                description="Specializes in finding the latest smartphone specifications, reviews, and market trends.",
-                type=AgentType.TASK,
-                status=AgentStatus.ACTIVE,
-                version="1.0",
-                system_prompt="You are a Tech Trends Researcher. Your goal is to fetch the latest data on smartphones, matching specific user criteria like camera quality, battery life, and ecosystem.",
-                config={"model": "gpt-4", "temperature": 0.3},
-                available_tools=["Internet Search", "Wikipedia Search"],
-                tags=["tech", "research", "smartphones"],
-                created_by=user_id,
-                updated_by=user_id
-            ),
-            Agent(
-                id=uuid.uuid4(),
-                name="Consumer Advisor",
-                description="Interacts with the user to understand their lifestyle, preferences, and budget for a new phone.",
-                type=AgentType.CONVERSATIONAL,
-                status=AgentStatus.ACTIVE,
-                version="1.0",
-                system_prompt="""You are a Consumer Advisor. Your goal is to help users find the perfect smartphone.
-Ask targeted questions about the user's current ecosystem (iOS/Android), usage patterns (gaming, photography), and budget to build a profile.
+            # --- Scenario 1: Agents removed (smartphone related) ---
 
-### RESPONSE FORMAT
-You MUST respond in valid JSON format using the Standard Agent Communication Protocol.
-
-{
-    "thought": "Reasoning about what to ask or say next...",
-    "status": "success",
-    "message": "The user-friendly message you want the user to see. e.g. 'What is your budget?'",
-    "data": {
-        // Any structured data collected so far
-        "budget": 1000,
-        "use_case": "gaming",
-        "ready_for_routing": false 
-    }
-}
-
-CRITICAL: 
-- Put the text you want the user to read in the "message" field.
-- Do NOT output raw JSON to the user directly as continuous text. The system will parse your JSON and show only the "message" field to the user.
-- If you have collected all necessary information (Budget, Use Case, Brand, Features), set "ready_for_routing": true in "data" and provide a summary in "message".
-""",
-                config={"model": "gpt-4", "temperature": 0.7, "use_standard_response_format": True},
-                tags=["advisory", "consumer", "smartphones"],
-                created_by=user_id,
-                updated_by=user_id
-            ),
-            Agent(
-                id=uuid.uuid4(),
-                name="Deal Finder",
-                description="Searches for the best current pricing and deals for specific smartphone models.",
-                type=AgentType.TASK,
-                status=AgentStatus.ACTIVE,
-                version="1.0",
-                system_prompt="You are a Deal Finder. Given a list of smartphone models, find the best current prices and active deals.",
-                config={"model": "gpt-3.5-turbo", "temperature": 0.2},
-                available_tools=["Internet Search", "Calculator"],
-                tags=["shopping", "deals", "smartphones"],
-                created_by=user_id,
-                updated_by=user_id
-            ),
             
             # --- Scenario 2: Software Architecture Advisory Agents ---
             Agent(
@@ -338,43 +276,8 @@ async def create_sample_workflows(user_id: uuid.UUID):
             print("✓ Sample workflows already exist")
             return
         
-        workflows = [
-            Workflow(
-                id=uuid.uuid4(),
-                name="Customer Onboarding",
-                description="Automated workflow for onboarding new customers",
-                version="1.0",
-                status=WorkflowStatus.ACTIVE,
-                category="customer_management",
-                tags=["onboarding", "automation"],
-                input_schema={"type": "object", "properties": {"customer_email": {"type": "string"}}},
-                output_schema={"type": "object", "properties": {"status": {"type": "string"}}},
-                created_by=user_id,
-                updated_by=user_id
-            ),
-            Workflow(
-                id=uuid.uuid4(),
-                name="Content Review Pipeline",
-                description="Multi-stage content review and approval workflow",
-                version="1.0",
-                status=WorkflowStatus.DRAFT,
-                category="content",
-                tags=["review", "content"],
-                created_by=user_id,
-                updated_by=user_id
-            ),
-            Workflow(
-                id=uuid.uuid4(),
-                name="Data Processing Pipeline",
-                description="ETL workflow for processing and analyzing data",
-                version="1.0",
-                status=WorkflowStatus.ACTIVE,
-                category="data",
-                tags=["etl", "analytics"],
-                created_by=user_id,
-                updated_by=user_id
-            ),
-        ]
+        workflows = []
+
         
         for workflow in workflows:
             session.add(workflow)
@@ -409,107 +312,11 @@ async def create_sample_chains(user_id: uuid.UUID):
             
         chains_data = []
         
-        # --- Chain 1: SmartPhone Buying Guide ---
-        if all(k in agents_map for k in ["Consumer Advisor", "Tech Trends Researcher", "Deal Finder"]):
-            chain_id = uuid.uuid4()
-            chain = Chain(
-                id=chain_id,
-                name="Smartphone Buying Guide",
-                description="Interactive guide to help users choose the perfect smartphone, researching trends and finding deals.",
-                status=ChainStatus.ACTIVE,
-                category="shopping",
-                tags=["consumer", "mobile", "guide"],
-                input_schema={"type": "object", "properties": {"user_query": {"type": "string"}}},
-                created_by=user_id,
-                updated_by=user_id
-            )
-            
-            nodes = [
-                ChainNode(chain_id=chain_id, node_id="start", node_type=ChainNodeType.START, label="Start", position_x=100, position_y=300, order_index=0),
-                ChainNode(chain_id=chain_id, node_id="advisor", node_type=ChainNodeType.AGENT, agent_id=agents_map["Consumer Advisor"], label="Consumer Advisor", position_x=300, position_y=300, order_index=1),
-                ChainNode(chain_id=chain_id, node_id="researcher", node_type=ChainNodeType.AGENT, agent_id=agents_map["Tech Trends Researcher"], label="Tech Trends Researcher", position_x=500, position_y=300, order_index=2),
-                ChainNode(chain_id=chain_id, node_id="deal_finder", node_type=ChainNodeType.AGENT, agent_id=agents_map["Deal Finder"], label="Deal Finder", position_x=700, position_y=300, order_index=3),
-                ChainNode(chain_id=chain_id, node_id="end", node_type=ChainNodeType.END, label="End", position_x=900, position_y=300, order_index=4)
-            ]
-            
-            edges = [
-                ChainEdge(chain_id=chain_id, edge_id="e1", source_node_id="start", target_node_id="advisor"),
-                ChainEdge(chain_id=chain_id, edge_id="e2", source_node_id="advisor", target_node_id="researcher"),
-                ChainEdge(chain_id=chain_id, edge_id="e3", source_node_id="researcher", target_node_id="deal_finder"),
-                ChainEdge(chain_id=chain_id, edge_id="e4", source_node_id="deal_finder", target_node_id="end")
-            ]
-            
-            chains_data.append((chain, nodes, edges))
+        # Chain 1: Removed (Smartphone Buying Guide)
 
-        # --- Chain 2: Enterprise Architecture Planner ---
-        if all(k in agents_map for k in ["System Architect", "Cloud Infrastructure Specialist", "Database Expert", "DevOps Engineer"]):
-            chain_id = uuid.uuid4()
-            chain = Chain(
-                id=chain_id,
-                name="Enterprise Architecture Planner",
-                description="End-to-end software architecture planning, from high-level design to cloud infra and DevOps strategy.",
-                status=ChainStatus.ACTIVE,
-                category="engineering",
-                tags=["architecture", "design", "enterprise"],
-                input_schema={"type": "object", "properties": {"requirements": {"type": "string"}}},
-                created_by=user_id,
-                updated_by=user_id
-            )
-            
-            nodes = [
-                ChainNode(chain_id=chain_id, node_id="start", node_type=ChainNodeType.START, label="Start", position_x=100, position_y=300, order_index=0),
-                ChainNode(chain_id=chain_id, node_id="architect", node_type=ChainNodeType.AGENT, agent_id=agents_map["System Architect"], label="System Architect", position_x=300, position_y=300, order_index=1),
-                ChainNode(chain_id=chain_id, node_id="cloud_spec", node_type=ChainNodeType.AGENT, agent_id=agents_map["Cloud Infrastructure Specialist"], label="Cloud Specialist", position_x=500, position_y=200, order_index=2),
-                ChainNode(chain_id=chain_id, node_id="db_expert", node_type=ChainNodeType.AGENT, agent_id=agents_map["Database Expert"], label="DB Expert", position_x=500, position_y=400, order_index=2),
-                ChainNode(chain_id=chain_id, node_id="devops", node_type=ChainNodeType.AGENT, agent_id=agents_map["DevOps Engineer"], label="DevOps Engineer", position_x=700, position_y=300, order_index=3),
-                ChainNode(chain_id=chain_id, node_id="end", node_type=ChainNodeType.END, label="End", position_x=900, position_y=300, order_index=4)
-            ]
-            
-            edges = [
-                ChainEdge(chain_id=chain_id, edge_id="e1", source_node_id="start", target_node_id="architect"),
-                ChainEdge(chain_id=chain_id, edge_id="e2", source_node_id="architect", target_node_id="cloud_spec"),
-                ChainEdge(chain_id=chain_id, edge_id="e3", source_node_id="architect", target_node_id="db_expert"),
-                ChainEdge(chain_id=chain_id, edge_id="e4", source_node_id="cloud_spec", target_node_id="devops"),
-                ChainEdge(chain_id=chain_id, edge_id="e5", source_node_id="db_expert", target_node_id="devops"),
-                ChainEdge(chain_id=chain_id, edge_id="e6", source_node_id="devops", target_node_id="end")
-            ]
-            
-            chains_data.append((chain, nodes, edges))
-            
-        # --- Chain 3: Career Path Optimizer ---
-        if all(k in agents_map for k in ["Career Coach", "Skill Assessor", "Job Market Analyst", "Resume Polisher"]):
-            chain_id = uuid.uuid4()
-            chain = Chain(
-                id=chain_id,
-                name="Career Path Optimizer",
-                description="Comprehensive career guidance analyzing skills, market trends, and resume optimization.",
-                status=ChainStatus.ACTIVE,
-                category="career",
-                tags=["career", "growth", "hr"],
-                input_schema={"type": "object", "properties": {"user_profile": {"type": "string"}}},
-                created_by=user_id,
-                updated_by=user_id
-            )
-            
-            nodes = [
-                ChainNode(chain_id=chain_id, node_id="start", node_type=ChainNodeType.START, label="Start", position_x=100, position_y=300, order_index=0),
-                ChainNode(chain_id=chain_id, node_id="coach", node_type=ChainNodeType.AGENT, agent_id=agents_map["Career Coach"], label="Career Coach", position_x=300, position_y=300, order_index=1),
-                ChainNode(chain_id=chain_id, node_id="assessor", node_type=ChainNodeType.AGENT, agent_id=agents_map["Skill Assessor"], label="Skill Assessor", position_x=500, position_y=200, order_index=2),
-                ChainNode(chain_id=chain_id, node_id="analyst", node_type=ChainNodeType.AGENT, agent_id=agents_map["Job Market Analyst"], label="Market Analyst", position_x=500, position_y=400, order_index=2),
-                ChainNode(chain_id=chain_id, node_id="polisher", node_type=ChainNodeType.AGENT, agent_id=agents_map["Resume Polisher"], label="Resume Polisher", position_x=700, position_y=300, order_index=3),
-                ChainNode(chain_id=chain_id, node_id="end", node_type=ChainNodeType.END, label="End", position_x=900, position_y=300, order_index=4)
-            ]
-            
-            edges = [
-                ChainEdge(chain_id=chain_id, edge_id="e1", source_node_id="start", target_node_id="coach"),
-                ChainEdge(chain_id=chain_id, edge_id="e2", source_node_id="coach", target_node_id="assessor"),
-                ChainEdge(chain_id=chain_id, edge_id="e3", source_node_id="coach", target_node_id="analyst"),
-                ChainEdge(chain_id=chain_id, edge_id="e4", source_node_id="assessor", target_node_id="polisher"),
-                ChainEdge(chain_id=chain_id, edge_id="e5", source_node_id="analyst", target_node_id="polisher"),
-                ChainEdge(chain_id=chain_id, edge_id="e6", source_node_id="polisher", target_node_id="end")
-            ]
-            
-            chains_data.append((chain, nodes, edges))
+
+        # Chains 2 and 3: Removed (Architect and Career Path Optimizer - Pro versions are created via scripts)
+
 
         # Commit all chains
         for chain, nodes, edges in chains_data:
@@ -1458,265 +1265,7 @@ async def wait_for_database():
                 raise
 
 
-async def create_interactive_smartphone_guide(admin_id: uuid.UUID):
-    """Create interactive smartphone buying guide with specialized agents and workflow."""
-    async with AsyncSessionLocal() as session:
-        print("Creating Interactive Smartphone Buying Guide...")
-        
-        # Check if already exists
-        result = await session.execute(
-            select(Agent).where(Agent.name == "Smartphone Qualifier")
-        )
-        if result.scalar_one_or_none():
-            print("  ✓ Interactive agents already exist")
-            return
-        
-        model_config = {
-            "model_name": "llama3.2",
-            "llm_provider": "ollama",
-            "temperature": 0.7,
-            "max_tokens": 500
-        }
-        
-        # 1. Qualifier Agent
-        qualifier = Agent(
-            name="Smartphone Qualifier",
-            description="Asks clarifying questions to understand user needs",
-            type=AgentType.CONVERSATIONAL,
-            status=AgentStatus.ACTIVE,
-            system_prompt="""You are a friendly smartphone shopping assistant. Your goal is to gather information, NOT to recommend phones yet.
-
-PHASE 1: GATHER INFO
-Ask questions ONE AT A TIME. Wait for the user's answer before asking the next one.
-1. "Hi! I'd be happy to help you find the perfect smartphone. To start, what's your approximate budget?"
-2. "Great! What will you mainly use the phone for? (e.g., photography, gaming, business, general use)"
-3. "Do you have a preferred brand, or are you open to suggestions?"
-4. "Any specific features you need? (e.g., 5G, long battery, small size)"
-
-Do NOT output JSON during this phase. Just chat normally.
-
-PHASE 2: HANDOFF
-ONLY after you have answers for ALL 4 questions, output strictly this JSON object to proceed to the next step:
-
-{
-  "budget_max": 1000,
-  "use_case": "photography",
-  "brand_preference": "Samsung",
-  "must_have_features": ["good camera", "fast charging"],
-  "ready_for_routing": true
-}""",
-            config=model_config.copy(),
-            created_by=admin_id
-        )
-        session.add(qualifier)
-        
-        # 2. Router Agent
-        router = Agent(
-            name="Smartphone Router",
-            description="Routes users to appropriate specialist based on needs",
-            type=AgentType.CONVERSATIONAL,
-            status=AgentStatus.ACTIVE,
-            system_prompt="""You are a routing agent. Analyze user preferences and route silently.
-
-Input: User preferences JSON
-Output: ONLY this JSON (no explanation):
-
-{
-  "route_to": "camera_specialist",
-  "user_summary": "Budget: $1000, wants great camera, prefers Samsung, needs fast charging"
-}
-
-Routing rules:
-- "camera_specialist" if use_case mentions photography/camera
-- "gaming_specialist" if use_case mentions gaming
-- "business_specialist" if use_case mentions work/business/productivity
-- "budget_specialist" if budget < $600 or they emphasize value/price
-
-Keep user_summary brief and natural.""",
-            config={**model_config, "temperature": 0.3, "max_tokens": 300},
-            created_by=admin_id
-        )
-        session.add(router)
-        
-        # 3-6. Specialist Agents
-        specialists = [
-            ("Budget Phone Specialist", "Recommends best value smartphones within budget", "budget"),
-            ("Camera Phone Specialist", "Recommends smartphones with best camera capabilities", "camera"),
-            ("Gaming Phone Specialist", "Recommends smartphones optimized for gaming", "gaming"),
-            ("Business Phone Specialist", "Recommends smartphones for business and productivity", "business")
-        ]
-        
-        specialist_prompt_template = """You are a {specialty} phone expert. Give direct, helpful recommendations based on what the user told us.
-
-You'll receive: User's budget, preferences, and requirements
-
-Your response should be conversational and helpful:
-
-"Based on what you're looking for, here are my top 3 {specialty} phone recommendations:
-
-**1. [Phone Name] - $[Price]**
-This is my top pick for you because [why it matches their needs]. {key_features}. You can find it at [retailer] for $[price].
-
-**2. [Phone Name] - $[Price]**
-Great alternative with [key feature]. [Why it's good for them].
-
-**3. [Phone Name] - $[Price]**
-Budget-friendly option that still delivers [key benefit].
-
-My recommendation: Go with the [#1 phone] - it hits all your requirements and {specialty_benefit}."
-
-Keep it natural, friendly, and focused on THEIR needs. No follow-up questions."""
-        
-        for name, desc, specialty in specialists:
-            agent = Agent(
-                name=name,
-                description=desc,
-                type=AgentType.CONVERSATIONAL,
-                status=AgentStatus.ACTIVE,
-                system_prompt=specialist_prompt_template.format(
-                    specialty=specialty,
-                    key_features="The camera system features" if specialty == "camera" else "Key specs",
-                    specialty_benefit="the camera quality is outstanding" if specialty == "camera" else "delivers great performance"
-                ),
-                config={**model_config, "max_tokens": 1000},
-                available_tools=["web_search"],
-                created_by=admin_id
-            )
-            session.add(agent)
-        
-        # 7. Summarizer Agent
-        summarizer = Agent(
-            name="Recommendation Summarizer",
-            description="Compiles specialist recommendations into final advice",
-            type=AgentType.CONVERSATIONAL,
-            status=AgentStatus.ACTIVE,
-            system_prompt="""You are wrapping up the conversation with a final, friendly recommendation.
-
-You'll receive: Specialist's recommendations
-
-Your job: Present the TOP choice in a warm, conversational way:
-
-"Perfect! Based on everything you've told me, I'd recommend the **[Phone Name]** for $[price].
-
-Here's why it's perfect for you:
-✓ [Reason 1 specific to their needs]
-✓ [Reason 2 specific to their needs]  
-✓ [Reason 3 specific to their needs]
-
-You can grab it at [retailer] - they currently have [deal if any].
-
-If that's a bit over budget, the [Alternative] at $[price] is also excellent and gives you [key benefit].
-
-Want me to tell you more about any of these phones?"
-
-Keep it friendly, concise, and action-oriented. Make them feel confident in the choice.""",
-            config={**model_config, "max_tokens": 800},
-            created_by=admin_id
-        )
-        session.add(summarizer)
-        
-        await session.flush()
-        
-        # Get agent IDs for workflow
-        result = await session.execute(
-            select(Agent).where(Agent.name.in_([
-                "Smartphone Qualifier", "Smartphone Router",
-                "Budget Phone Specialist", "Camera Phone Specialist",
-                "Gaming Phone Specialist", "Business Phone Specialist",
-                "Recommendation Summarizer"
-            ]))
-        )
-        agents_dict = {agent.name: agent for agent in result.scalars().all()}
-        
-        # Create the workflow/chain
-        chain = Chain(
-            name="Interactive Smartphone Buying Guide",
-            description="An interactive, conversational smartphone buying guide that asks questions and routes to specialized agents",
-            status=ChainStatus.ACTIVE,
-            category="Shopping Assistant",
-            tags=["smartphone", "shopping", "interactive", "conversational"],
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "message": {"type": "string", "description": "User's message"}
-                }
-            },
-            created_by=admin_id
-        )
-        session.add(chain)
-        await session.flush()
-        
-        # Create nodes
-        positions = {
-            "start": (100, 300), "qualifier": (300, 300), "router": (500, 300),
-            "budget": (700, 100), "camera": (700, 200), "gaming": (700, 400),
-            "business": (700, 500), "summarizer": (900, 300), "end": (1100, 300)
-        }
-        
-        nodes = {}
-        node_configs = [
-            ("start", ChainNodeType.START, None, "Start", 0),
-            ("qualifier", ChainNodeType.AGENT, agents_dict["Smartphone Qualifier"].id, "Ask Questions", 1),
-            ("router", ChainNodeType.AGENT, agents_dict["Smartphone Router"].id, "Route to Specialist", 2),
-            ("budget", ChainNodeType.AGENT, agents_dict["Budget Phone Specialist"].id, "Budget Specialist", 3),
-            ("camera", ChainNodeType.AGENT, agents_dict["Camera Phone Specialist"].id, "Camera Specialist", 3),
-            ("gaming", ChainNodeType.AGENT, agents_dict["Gaming Phone Specialist"].id, "Gaming Specialist", 3),
-            ("business", ChainNodeType.AGENT, agents_dict["Business Phone Specialist"].id, "Business Specialist", 3),
-            ("summarizer", ChainNodeType.AGENT, agents_dict["Recommendation Summarizer"].id, "Compile Recommendation", 4),
-            ("end", ChainNodeType.END, None, "End", 5)
-        ]
-        
-        for node_id, node_type, agent_id, label, order in node_configs:
-            node = ChainNode(
-                chain_id=chain.id,
-                node_id=node_id,
-                node_type=node_type,
-                agent_id=agent_id,
-                label=label,
-                position_x=positions[node_id][0],
-                position_y=positions[node_id][1],
-                order_index=order,
-                created_by=admin_id
-            )
-            session.add(node)
-            nodes[node_id] = node
-        
-        await session.flush()
-        
-        # Create edges with conditional routing
-        edges = [
-            ("start_to_qualifier", "start", "qualifier", "Begin", None),
-            ("qualifier_to_router", "qualifier", "router", "Preferences Gathered",
-             {"type": "json_contains", "field": "ready_for_routing", "value": True}),
-            ("router_to_budget", "router", "budget", "Budget Priority",
-             {"type": "json_contains", "field": "route_to", "value": "budget_specialist"}),
-            ("router_to_camera", "router", "camera", "Camera Priority",
-             {"type": "json_contains", "field": "route_to", "value": "camera_specialist"}),
-            ("router_to_gaming", "router", "gaming", "Gaming Priority",
-             {"type": "json_contains", "field": "route_to", "value": "gaming_specialist"}),
-            ("router_to_business", "router", "business", "Business Priority",
-             {"type": "json_contains", "field": "route_to", "value": "business_specialist"}),
-            ("budget_to_summarizer", "budget", "summarizer", "Recommendations", None),
-            ("camera_to_summarizer", "camera", "summarizer", "Recommendations", None),
-            ("gaming_to_summarizer", "gaming", "summarizer", "Recommendations", None),
-            ("business_to_summarizer", "business", "summarizer", "Recommendations", None),
-            ("summarizer_to_end", "summarizer", "end", "Final Advice", None)
-        ]
-        
-        for edge_id, source, target, label, condition in edges:
-            edge = ChainEdge(
-                chain_id=chain.id,
-                edge_id=edge_id,
-                source_node_id=source,
-                target_node_id=target,
-                label=label,
-                condition=condition,
-                created_by=admin_id
-            )
-            session.add(edge)
-        
-        await session.commit()
-        print("  ✓ Created 7 specialized agents and interactive workflow")
+# create_interactive_smartphone_guide removed
 
 
 
@@ -1736,13 +1285,13 @@ async def main():
         await create_sample_chains(admin_user.id)
         await create_sample_tools(admin_user.id)
         await create_sample_mcp_servers(admin_user.id)
-        await create_interactive_smartphone_guide(admin_user.id)
-        
-        # Import and create enhanced workflows
         from scripts.create_architecture_planner import create_enterprise_architecture_planner
         from scripts.create_career_optimizer import create_career_path_optimizer
+        from scripts.create_research_review_workflow import create_research_review_workflow
         await create_enterprise_architecture_planner(admin_user.id)
         await create_career_path_optimizer(admin_user.id)
+        await create_research_review_workflow(admin_user.id)
+
         
         print("\n✅ Database seeding completed successfully!")
         print("\n📝 Login credentials:")
