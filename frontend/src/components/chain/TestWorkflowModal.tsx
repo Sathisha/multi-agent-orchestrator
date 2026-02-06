@@ -38,6 +38,7 @@ import {
 } from '@mui/icons-material';
 import { Node, Edge } from 'reactflow';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
+import ReactMarkdown from 'react-markdown';
 
 import { executeChain, getExecution, getExecutionLogs, cancelExecution } from '../../api/chains';
 import { getModels } from '../../api/llmModels';
@@ -48,14 +49,6 @@ interface TestWorkflowModalProps {
     open: boolean;
     onClose: () => void;
     chain: Chain;
-}
-
-interface LogEntry {
-    timestamp: string;
-    level: string;
-    message: string;
-    node_id?: string;
-    metadata?: any;
 }
 
 const TestWorkflowModal: React.FC<TestWorkflowModalProps> = ({ open, onClose, chain }) => {
@@ -141,6 +134,7 @@ const TestWorkflowModal: React.FC<TestWorkflowModalProps> = ({ open, onClose, ch
         {
             onSuccess: (data: ChainExecution) => {
                 setExecutionId(data.id);
+                setActiveTab(1); // Navigate to Execution tab
             },
             onError: (error: any) => {
                 const msg = error.response?.data?.detail || error.message || 'Execution failed';
@@ -249,13 +243,72 @@ const TestWorkflowModal: React.FC<TestWorkflowModalProps> = ({ open, onClose, ch
         // Reset visuals done by useEffect
     };
 
+    const formatDisplayContent = (content: any) => {
+        if (!content) return null;
+
+        // Recursive helper to clean strings and objects
+        const extractMainContent = (val: any): any => {
+            if (typeof val === 'string') {
+                const trimmed = val.trim();
+                // Check if it's a stringified JSON
+                if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+                    try {
+                        const parsed = JSON.parse(val);
+                        return extractMainContent(parsed);
+                    } catch (e) {
+                        return val; // Keep as string if parsing fails
+                    }
+                }
+                return val;
+            }
+
+            if (typeof val === 'object' && val !== null) {
+                // If the object has a clear 'content' field, prioritize it
+                if (val.content) return extractMainContent(val.content);
+                if (val.text) return extractMainContent(val.text);
+                if (val.message) return extractMainContent(val.message);
+                if (val.summary && typeof val.summary === 'string') return val.summary;
+
+                // Return a cleaned version of the object
+                const cleaned: any = Array.isArray(val) ? [] : {};
+                for (const key in val) {
+                    cleaned[key] = extractMainContent(val[key]);
+                }
+                return cleaned;
+            }
+            return val;
+        };
+
+        const cleaned = extractMainContent(content);
+
+        if (typeof cleaned === 'string') {
+            return (
+                <Box sx={{ color: '#1a1a1a', lineHeight: 1.6 }}>
+                    <ReactMarkdown>{cleaned}</ReactMarkdown>
+                </Box>
+            );
+        }
+
+        return (
+            <Box component="pre" sx={{ m: 0, whiteSpace: 'pre-wrap', color: '#1a1a1a', fontSize: '0.85rem' }}>
+                {JSON.stringify(cleaned, null, 2)}
+            </Box>
+        );
+    };
+
     // Render Node Outputs Helper
     const renderNodeOutputs = () => {
         if (!status?.node_results || Object.keys(status.node_results).length === 0) {
             return null;
         }
 
-        const nodeEntries = Object.entries(status.node_results).filter(([nodeId]) => nodeId !== '__states__');
+        const nodeEntries = Object.entries(status.node_results)
+            .filter(([nodeId]) => nodeId !== '__states__')
+            .sort((a, b) => {
+                const timeA = new Date(a[1].timestamp || 0).getTime();
+                const timeB = new Date(b[1].timestamp || 0).getTime();
+                return timeA - timeB;
+            });
 
         if (nodeEntries.length === 0) return null;
 
@@ -278,15 +331,14 @@ const TestWorkflowModal: React.FC<TestWorkflowModalProps> = ({ open, onClose, ch
                                             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
                                                 Input:
                                             </Typography>
-                                            <Box component="pre" sx={{
-                                                whiteSpace: 'pre-wrap',
+                                            <Box sx={{
                                                 bgcolor: '#f5f5f5',
-                                                p: 1,
+                                                p: 2,
                                                 borderRadius: 1,
                                                 mt: 0.5,
-                                                m: 0
+                                                border: '1px solid #e0e0e0'
                                             }}>
-                                                {JSON.stringify(result.input, null, 2)}
+                                                {formatDisplayContent(result.input)}
                                             </Box>
                                         </Box>
                                     )}
@@ -295,17 +347,17 @@ const TestWorkflowModal: React.FC<TestWorkflowModalProps> = ({ open, onClose, ch
                                             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
                                                 Output:
                                             </Typography>
-                                            <Box component="pre" sx={{
-                                                whiteSpace: 'pre-wrap',
+                                            <Box sx={{
                                                 bgcolor: '#e8f5e9',
-                                                p: 1,
+                                                p: 2,
                                                 borderRadius: 1,
                                                 mt: 0.5,
-                                                m: 0
+                                                border: '1px solid #c8e6c9',
+                                                '& pre': { m: 0 },
+                                                '& p': { m: 0, mb: 1 },
+                                                '& p:last-child': { mb: 0 }
                                             }}>
-                                                {typeof result.output === 'string'
-                                                    ? result.output
-                                                    : JSON.stringify(result.output, null, 2)}
+                                                {formatDisplayContent(result.output)}
                                             </Box>
                                         </Box>
                                     )}
@@ -419,7 +471,7 @@ const TestWorkflowModal: React.FC<TestWorkflowModalProps> = ({ open, onClose, ch
                 {/* Body */}
                 <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
                     {/* Left: Canvas */}
-                    <Box sx={{ flex: 2, borderRight: '1px solid #ddd', position: 'relative' }}>
+                    <Box sx={{ flex: 0.8, borderRight: '1px solid #ddd', position: 'relative' }}>
                         <ChainCanvas
                             nodes={nodes}
                             edges={edges}
@@ -428,10 +480,10 @@ const TestWorkflowModal: React.FC<TestWorkflowModalProps> = ({ open, onClose, ch
                     </Box>
 
                     {/* Right: Controls & Logs */}
-                    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', bgcolor: 'white' }}>
+                    <Box sx={{ flex: 1.2, display: 'flex', flexDirection: 'column', bgcolor: 'white' }}>
                         <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ borderBottom: 1, borderColor: 'divider' }}>
                             <Tab label="Input & Config" />
-                            <Tab label="Logs & Output" />
+                            <Tab label="Execution" />
                         </Tabs>
 
                         <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
